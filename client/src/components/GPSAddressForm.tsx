@@ -58,6 +58,18 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: G
             }
 
             const addressData = await response.json();
+            
+            // Check if the address is in Germany
+            if (addressData.country && addressData.country.toLowerCase() !== 'deutschland' && addressData.country.toLowerCase() !== 'germany') {
+              toast({
+                variant: 'destructive',
+                title: t('gps.error'),
+                description: t('gps.germanyOnly'),
+              });
+              setLoading(false);
+              return;
+            }
+            
             setAddress(addressData);
             setDetected(true);
             onAddressDetected?.(addressData);
@@ -190,36 +202,13 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: G
           </div>
         </div>
         
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label htmlFor="postal" className="text-sm font-medium">{t('address.postal')}</Label>
-            <Input
-              id="postal"
-              value={address.postal}
-              onChange={(e) => setAddress({ ...address, postal: e.target.value })}
-              data-testid="input-postal"
-              className="mt-1.5 min-h-11"
-            />
-          </div>
-          <div>
-            <Label htmlFor="city" className="text-sm font-medium">{t('address.city')}</Label>
-            <Input
-              id="city"
-              value={address.city}
-              onChange={(e) => setAddress({ ...address, city: e.target.value })}
-              data-testid="input-city"
-              className="mt-1.5 min-h-11"
-            />
-          </div>
-        </div>
-
         <div>
-          <Label htmlFor="country" className="text-sm font-medium">{t('address.country')}</Label>
+          <Label htmlFor="postal" className="text-sm font-medium">{t('address.postal')}</Label>
           <Input
-            id="country"
-            value={address.country}
-            onChange={(e) => setAddress({ ...address, country: e.target.value })}
-            data-testid="input-country"
+            id="postal"
+            value={address.postal}
+            onChange={(e) => setAddress({ ...address, postal: e.target.value })}
+            data-testid="input-postal"
             className="mt-1.5 min-h-11"
           />
         </div>
