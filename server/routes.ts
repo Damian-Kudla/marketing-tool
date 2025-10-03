@@ -304,6 +304,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Diagnostic endpoint to check Google Sheets configuration
+  app.get("/api/sheets-config", async (req, res) => {
+    try {
+      const sheetsKey = process.env.GOOGLE_SHEETS_KEY || '{}';
+      
+      if (!sheetsKey.startsWith('{')) {
+        return res.json({
+          configured: false,
+          message: "GOOGLE_SHEETS_KEY is not a valid JSON service account key"
+        });
+      }
+
+      const credentials = JSON.parse(sheetsKey);
+      res.json({
+        configured: true,
+        clientEmail: credentials.client_email || 'NOT FOUND',
+        projectId: credentials.project_id || 'NOT FOUND',
+        hasPrivateKey: !!credentials.private_key,
+        spreadsheetId: '1IF9ieZQ_irKs9XU7XZmDuBaT4XqQrtm0EmfKbA3zB4s',
+        message: `Share the Google Sheet with this email: ${credentials.client_email}`
+      });
+    } catch (error) {
+      res.status(500).json({
+        configured: false,
+        error: "Failed to parse GOOGLE_SHEETS_KEY"
+      });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
