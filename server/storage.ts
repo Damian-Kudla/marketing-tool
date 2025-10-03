@@ -63,21 +63,25 @@ export class GoogleSheetsStorage implements IStorage {
 
   private async fetchCustomersFromSheet(): Promise<Customer[]> {
     if (!this.initialized) {
-      // Return empty array if Sheets is not initialized
+      console.log('Google Sheets not initialized, returning empty customer list');
       return [];
     }
 
     if (this.isCacheValid() && this.cache.customers) {
+      console.log(`Using cached customer data (${this.cache.customers.length} customers)`);
       return this.cache.customers;
     }
 
     try {
+      console.log('Fetching customers from Google Sheets...');
       const response = await this.sheetsClient.spreadsheets.values.get({
         spreadsheetId: this.SPREADSHEET_ID,
         range: `${this.SHEET_NAME}!A2:D`, // Skip header row, columns: Name, Straße, Hausnummer, Postleitzahl
       });
 
       const rows = response.data.values || [];
+      console.log(`Fetched ${rows.length} rows from Google Sheets`);
+      
       const customers: Customer[] = rows
         .filter((row: any[]) => row[0]) // Must have a name
         .map((row: any[]) => ({
@@ -88,6 +92,13 @@ export class GoogleSheetsStorage implements IStorage {
           postalCode: row[3] || null,
           isExisting: true, // All customers in the sheet are existing
         }));
+
+      console.log(`Parsed ${customers.length} customers:`, customers.map(c => ({ 
+        name: c.name, 
+        street: c.street, 
+        houseNumber: c.houseNumber, 
+        postalCode: c.postalCode 
+      })));
 
       this.cache.customers = customers;
       this.cache.timestamp = Date.now();
