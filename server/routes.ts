@@ -137,12 +137,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const detections = result.textAnnotations;
       const fullVisionResponse = result;
 
+      // Even if no text detected, we still want to show customers at the address
       if (!detections || detections.length === 0) {
+        const allCustomersAtAddress = await storage.getCustomersByAddress(address);
         return res.json({
           residentNames: [],
           fullVisionResponse,
           newProspects: [],
           existingCustomers: [],
+          allCustomersAtAddress,
         } as OCRResponse);
       }
 

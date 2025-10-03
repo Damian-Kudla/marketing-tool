@@ -15,61 +15,83 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
   const { t } = useTranslation();
   const { toast } = useToast();
   const [preview, setPreview] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [processing, setProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setSelectedFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+    }
+  };
 
-      setProcessing(true);
+  const processPhoto = async () => {
+    if (!selectedFile) return;
 
-      try {
-        const formData = new FormData();
-        formData.append('image', file);
-        
-        // Add address to request if available
-        if (address) {
-          formData.append('address', JSON.stringify(address));
-        }
+    // Validate address fields
+    if (!address || !address.street || !address.number || !address.postal) {
+      toast({
+        variant: 'destructive',
+        title: t('photo.error'),
+        description: t('photo.addressRequired'),
+      });
+      return;
+    }
 
-        const response = await fetch('/api/ocr', {
-          method: 'POST',
-          body: formData,
+    setProcessing(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('image', selectedFile);
+      formData.append('address', JSON.stringify(address));
+
+      const response = await fetch('/api/ocr', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'OCR processing failed');
+      }
+
+      const result = await response.json();
+      onPhotoProcessed?.(result);
+      
+      const totalNames = result.residentNames?.length || 0;
+      if (totalNames === 0) {
+        toast({
+          title: t('photo.warning'),
+          description: t('photo.noTextExtracted'),
         });
-
-        if (!response.ok) {
-          throw new Error('OCR processing failed');
-        }
-
-        const result = await response.json();
-        onPhotoProcessed?.(result);
-        
-        const totalNames = result.residentNames?.length || 0;
+      } else {
         toast({
           title: t('photo.success'),
           description: `${t('photo.found')} ${totalNames} ${t('photo.names')}`,
         });
-      } catch (error) {
-        console.error('OCR error:', error);
-        toast({
-          variant: 'destructive',
-          title: t('photo.error'),
-          description: t('photo.errorDesc'),
-        });
-      } finally {
-        setProcessing(false);
       }
+    } catch (error) {
+      console.error('OCR error:', error);
+      const errorMessage = error instanceof Error ? error.message : t('photo.errorDesc');
+      toast({
+        variant: 'destructive',
+        title: t('photo.error'),
+        description: errorMessage,
+      });
+    } finally {
+      setProcessing(false);
     }
   };
 
   const clearPhoto = () => {
     setPreview(null);
+    setSelectedFile(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -82,27 +104,45 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
       </CardHeader>
       <CardContent className="space-y-4">
         {preview ? (
-          <div className="relative">
-            <img 
-              src={preview} 
-              alt="Nameplate preview" 
-              className="w-full h-48 object-cover rounded-lg"
-              data-testid="img-preview"
-            />
-            {processing && (
-              <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
-                <Loader2 className="h-8 w-8 text-white animate-spin" />
-              </div>
-            )}
+          <div className="space-y-4">
+            <div className="relative">
+              <img 
+                src={preview} 
+                alt="Nameplate preview" 
+                className="w-full h-48 object-cover rounded-lg"
+                data-testid="img-preview"
+              />
+              {processing && (
+                <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
+                  <Loader2 className="h-8 w-8 text-white animate-spin" />
+                </div>
+              )}
+              <Button
+                variant="destructive"
+                size="icon"
+                onClick={clearPhoto}
+                className="absolute top-2 right-2"
+                data-testid="button-clear-photo"
+                disabled={processing}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
             <Button
-              variant="destructive"
-              size="icon"
-              onClick={clearPhoto}
-              className="absolute top-2 right-2"
-              data-testid="button-clear-photo"
+              onClick={processPhoto}
               disabled={processing}
+              size="lg"
+              className="w-full min-h-12 gap-2"
+              data-testid="button-process-photo"
             >
-              <X className="h-4 w-4" />
+              {processing ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  {t('photo.processing')}
+                </>
+              ) : (
+                t('photo.process')
+              )}
             </Button>
           </div>
         ) : (
@@ -124,12 +164,8 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
               className="w-full min-h-11 gap-2"
               data-testid="button-take-photo"
             >
-              {processing ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <Camera className="h-5 w-5" />
-              )}
-              {processing ? t('photo.processing') : t('photo.take')}
+              <Camera className="h-5 w-5" />
+              {t('photo.take')}
             </Button>
             <Button
               onClick={() => {

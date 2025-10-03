@@ -1,0 +1,22 @@
+Thank you!
+
+When entering the address:
+- Street: Mengelbergstr.
+- House number: 2
+- Postal code: 51067
+and uploading the first test image (klingelschild-mit-mueller-meier-und-schneider-schmidt-klingelschilder-mit-mueller-meier-und-schneide_1759518156261.jpg, which extracts ["müller meier", "schneider schmidt"]),
+the result shows 2 new prospects: "müller meier" and "schneider schmidt". müller meier should be recognised as existing customer.
+
+The Google Sheet entry is unchanged: "Damian Kudla Meier" at "Mengelbergstr. 2 51067".
+
+Without the image, "Damian Kudla Meier" is correctly shown as an existing customer. But with the image, "meier" is not recognized as a match, and the existing customers from the address are not displayed.
+
+When trying to upload the photo without an address, the error message is: "Verarbeitung fehlgeschlagen Text konnte nicht aus Bild extrahiert werden...". Please change this to: "Adresse wurde nicht vollständig angegeben." (Address not fully specified).
+
+If no text could be extracted from the image, show: "Es konnten kein Text aus dem Bild extrahiert werden." (No text could be extracted from the image), but still display the existing customers found in the Google Sheet for the entered address.
+
+Additionally:
+- Do not automatically process the image after selection; instead, allow the image to be selected/shot/previewed, and add a new "Verarbeiten" (Process) button to trigger the upload, OCR, and matching.
+- After an error message appears and the address is then entered, the error persists despite a complete address—only reloading the page fixes it. Ensure all fields (Street, House number, Postal code) are required and validated before processing, and clear errors dynamically when fields are filled.
+
+It still doesn't work as expected. Please fix these issues, test the scenarios (address-only, photo with address, photo without address, no text extraction), and confirm. Continue ensuring the page defaults to German with English toggle support, and everything remains on a single page.
