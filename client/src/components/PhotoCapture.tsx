@@ -3,28 +3,60 @@ import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Camera, Upload, Loader2, X } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface PhotoCaptureProps {
-  onPhotoCapture?: (file: File) => void;
+  onPhotoProcessed?: (results: any) => void;
 }
 
-export default function PhotoCapture({ onPhotoCapture }: PhotoCaptureProps) {
+export default function PhotoCapture({ onPhotoProcessed }: PhotoCaptureProps) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [preview, setPreview] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setProcessing(true);
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreview(reader.result as string);
-        setProcessing(false);
-        onPhotoCapture?.(file);
       };
       reader.readAsDataURL(file);
+
+      setProcessing(true);
+
+      try {
+        const formData = new FormData();
+        formData.append('image', file);
+
+        const response = await fetch('/api/ocr', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error('OCR processing failed');
+        }
+
+        const result = await response.json();
+        onPhotoProcessed?.(result);
+        
+        toast({
+          title: 'Processing complete',
+          description: `Found ${result.names.length} name(s)`,
+        });
+      } catch (error) {
+        console.error('OCR error:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Processing failed',
+          description: 'Unable to extract text from image',
+        });
+      } finally {
+        setProcessing(false);
+      }
     }
   };
 
@@ -49,12 +81,18 @@ export default function PhotoCapture({ onPhotoCapture }: PhotoCaptureProps) {
               className="w-full h-48 object-cover rounded-lg"
               data-testid="img-preview"
             />
+            {processing && (
+              <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
+                <Loader2 className="h-8 w-8 text-white animate-spin" />
+              </div>
+            )}
             <Button
               variant="destructive"
               size="icon"
               onClick={clearPhoto}
               className="absolute top-2 right-2"
               data-testid="button-clear-photo"
+              disabled={processing}
             >
               <X className="h-4 w-4" />
             </Button>
@@ -97,6 +135,7 @@ export default function PhotoCapture({ onPhotoCapture }: PhotoCaptureProps) {
               size="lg"
               className="w-full min-h-11 gap-2"
               data-testid="button-upload-photo"
+              disabled={processing}
             >
               <Upload className="h-5 w-5" />
               {t('photo.upload')}

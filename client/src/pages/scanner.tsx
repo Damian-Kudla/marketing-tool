@@ -11,17 +11,12 @@ export default function ScannerPage() {
   const { t } = useTranslation();
   const [results, setResults] = useState<CustomerResult[]>([]);
 
-  const handlePhotoCapture = async (file: File) => {
-    console.log('Photo captured:', file.name);
+  const handlePhotoProcessed = (ocrResult: any) => {
+    console.log('OCR result:', ocrResult);
     
-    setTimeout(() => {
-      const mockResults: CustomerResult[] = [
-        { name: 'Max Müller', isExisting: true },
-        { name: 'Anna Schmidt', isExisting: false },
-        { name: 'Thomas Weber', isExisting: true },
-      ];
-      setResults(mockResults);
-    }, 1500);
+    if (ocrResult.results && ocrResult.results.length > 0) {
+      setResults(ocrResult.results);
+    }
   };
 
   const handleAddressDetected = (address: Address) => {
@@ -30,7 +25,6 @@ export default function ScannerPage() {
 
   const handleReset = () => {
     setResults([]);
-    console.log('Reset triggered');
   };
 
   return (
@@ -46,7 +40,7 @@ export default function ScannerPage() {
 
       <main className="container mx-auto px-4 py-4 space-y-4 pb-24">
         <GPSAddressForm onAddressDetected={handleAddressDetected} />
-        <PhotoCapture onPhotoCapture={handlePhotoCapture} />
+        <PhotoCapture onPhotoProcessed={handlePhotoProcessed} />
         <ResultsDisplay results={results} />
       </main>
 
@@ -67,6 +61,7 @@ export default function ScannerPage() {
               size="lg"
               className="flex-1 min-h-12"
               data-testid="button-save"
+              onClick={() => console.log('Save triggered', results)}
             >
               {t('action.save')}
             </Button>

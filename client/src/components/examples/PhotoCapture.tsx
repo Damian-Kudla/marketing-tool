@@ -5,7 +5,7 @@ import PhotoCapture from '../PhotoCapture';
 export default function PhotoCaptureExample() {
   return (
     <I18nextProvider i18n={i18n}>
-      <PhotoCapture onPhotoCapture={(file) => console.log('Photo captured:', file.name)} />
+      <PhotoCapture onPhotoProcessed={(result) => console.log('Photo processed:', result)} />
     </I18nextProvider>
   );
 }

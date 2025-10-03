@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MapPin, Loader2, Check } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface GPSAddressFormProps {
   onAddressDetected?: (address: Address) => void;
@@ -20,6 +21,7 @@ export interface Address {
 
 export default function GPSAddressForm({ onAddressDetected }: GPSAddressFormProps) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [detected, setDetected] = useState(false);
   const [address, setAddress] = useState<Address>({
@@ -37,26 +39,54 @@ export default function GPSAddressForm({ onAddressDetected }: GPSAddressFormProp
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
-          const mockAddress: Address = {
-            street: 'Hauptstraße',
-            number: '123',
-            city: 'Berlin',
-            postal: '10115',
-            country: 'Deutschland'
-          };
-          
-          setTimeout(() => {
-            setAddress(mockAddress);
+          try {
+            const response = await fetch('/api/geocode', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+              }),
+            });
+
+            if (!response.ok) {
+              throw new Error('Geocoding failed');
+            }
+
+            const addressData = await response.json();
+            setAddress(addressData);
             setDetected(true);
+            onAddressDetected?.(addressData);
+          } catch (error) {
+            console.error('Geocoding error:', error);
+            toast({
+              variant: 'destructive',
+              title: t('gps.error'),
+              description: 'Unable to detect address from location',
+            });
+          } finally {
             setLoading(false);
-            onAddressDetected?.(mockAddress);
-          }, 1000);
+          }
         },
-        () => {
+        (error) => {
           setLoading(false);
-          console.log('Location permission denied');
+          console.error('Geolocation error:', error);
+          toast({
+            variant: 'destructive',
+            title: t('gps.error'),
+            description: 'Location permission denied',
+          });
         }
       );
+    } else {
+      setLoading(false);
+      toast({
+        variant: 'destructive',
+        title: t('gps.error'),
+        description: 'Geolocation not supported',
+      });
     }
   };
 
