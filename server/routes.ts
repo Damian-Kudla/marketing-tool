@@ -142,7 +142,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         for (const pattern of namePatterns) {
           const match = cleanedLine.match(pattern);
           if (match) {
-            const name = (match[1] || match[0]).trim();
+            // Normalize name: convert to lowercase
+            const name = (match[1] || match[0]).trim().toLowerCase();
             if (name.length > 3 && !residentNames.includes(name)) {
               residentNames.push(name);
             }

@@ -65,7 +65,7 @@ const resources = {
       "address.city": "Stadt",
       "address.postal": "Postleitzahl",
       "address.country": "Land",
-      "photo.title": "Typenschild Foto",
+      "photo.title": "Klingelschild Foto",
       "photo.upload": "Foto hochladen",
       "photo.take": "Foto aufnehmen",
       "photo.processing": "Bild wird verarbeitet...",
