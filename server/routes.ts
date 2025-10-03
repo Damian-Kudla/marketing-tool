@@ -111,14 +111,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Parse address from request body if provided
+      // Parse address from request body - REQUIRED
       let address: Address | undefined;
       if (req.body.address) {
         try {
           address = JSON.parse(req.body.address);
         } catch (e) {
           console.error("Failed to parse address:", e);
+          return res.status(400).json({ error: "Invalid address format" });
         }
+      }
+      
+      // Address is required for photo upload
+      if (!address || (!address.postal && !address.street && !address.number)) {
+        return res.status(400).json({ 
+          error: "Address is required for photo upload. Please enter at least postal code, street, or house number." 
+        });
       }
 
       // Perform text detection
@@ -188,7 +196,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Search for matching customers
+      // Get all customers at this address first
+      const allCustomersAtAddress = await storage.getCustomersByAddress(address);
+      
+      // Search for matching customers (name matching within address-filtered customers)
       const existingCustomers: Customer[] = [];
       const newProspects: string[] = [];
 
@@ -209,6 +220,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fullVisionResponse,
         newProspects,
         existingCustomers,
+        allCustomersAtAddress,
       };
 
       res.json(response);
@@ -221,6 +233,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/ocr-correct", async (req, res) => {
     try {
       const { residentNames, address } = ocrCorrectionRequestSchema.parse(req.body);
+
+      // Address is required
+      if (!address || (!address.postal && !address.street && !address.number)) {
+        return res.status(400).json({ 
+          error: "Address is required. Please enter at least postal code, street, or house number." 
+        });
+      }
+
+      // Get all customers at this address first
+      const allCustomersAtAddress = await storage.getCustomersByAddress(address);
 
       const existingCustomers: Customer[] = [];
       const newProspects: string[] = [];
@@ -240,6 +262,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fullVisionResponse: null,
         newProspects,
         existingCustomers,
+        allCustomersAtAddress,
       };
 
       res.json(response);
@@ -253,50 +276,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const address = addressSchema.partial().parse(req.body);
       
-      // Normalize German characters (ß -> ss, remove dots/periods)
-      const normalizeGerman = (str: string) => {
-        return str.toLowerCase().trim()
-          .replace(/ß/g, 'ss')
-          .replace(/\./g, '')
-          .replace(/\s+/g, ' ');
-      };
-      
-      // Search for all customers at this address
-      const allCustomers = await storage.getAllCustomers();
-      
-      let matches = allCustomers;
-      
-      // Filter by postal code (most important and most unique)
-      if (address.postal) {
-        const searchPostal = address.postal.toLowerCase().trim();
-        matches = matches.filter(customer => 
-          customer.postalCode?.toLowerCase().trim() === searchPostal
-        );
-      }
-      
-      // Optionally filter by street (partial match, normalized)
-      if (address.street) {
-        const searchStreet = normalizeGerman(address.street);
-        matches = matches.filter(customer => {
-          if (!customer.street) return false;
-          const customerStreet = normalizeGerman(customer.street);
-          return customerStreet.includes(searchStreet) || searchStreet.includes(customerStreet);
-        });
-      }
-      
-      // Optionally filter by house number (flexible matching)
-      if (address.number) {
-        const searchNumber = address.number.toLowerCase().trim();
-        matches = matches.filter(customer => {
-          if (!customer.houseNumber) return false;
-          const customerNumber = customer.houseNumber.toLowerCase().trim();
-          // Match if search number is prefix of customer number or exact match
-          // This handles cases like "2" matching "2", "2A", "2a", etc.
-          return customerNumber === searchNumber || 
-                 customerNumber.startsWith(searchNumber) ||
-                 searchNumber.startsWith(customerNumber);
-        });
-      }
+      // Use the storage method with fuzzy matching
+      const matches = await storage.getCustomersByAddress(address);
       
       res.json(matches);
     } catch (error) {

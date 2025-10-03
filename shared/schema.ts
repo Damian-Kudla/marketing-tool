@@ -68,6 +68,14 @@ export const ocrResponseSchema = z.object({
     postalCode: z.string().nullable().optional(),
     isExisting: z.boolean(),
   })),
+  allCustomersAtAddress: z.array(z.object({
+    id: z.string().optional(),
+    name: z.string(),
+    street: z.string().nullable().optional(),
+    houseNumber: z.string().nullable().optional(),
+    postalCode: z.string().nullable().optional(),
+    isExisting: z.boolean(),
+  })).optional(),
 });
 
 export type OCRResponse = z.infer<typeof ocrResponseSchema>;

@@ -22,6 +22,7 @@ export default function ScannerPage() {
         residentNames: result.residentNames,
         existingCustomers: result.existingCustomers || [],
         newProspects: result.newProspects || [],
+        allCustomersAtAddress: result.allCustomersAtAddress || [],
       });
       setShowCorrection(false);
     }
@@ -52,6 +53,7 @@ export default function ScannerPage() {
         residentNames: result.residentNames,
         existingCustomers: result.existingCustomers || [],
         newProspects: result.newProspects || [],
+        allCustomersAtAddress: result.allCustomersAtAddress || [],
       });
       setShowCorrection(false);
     }

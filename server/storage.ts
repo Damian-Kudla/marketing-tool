@@ -1,6 +1,7 @@
 import { type User, type InsertUser, type Customer, type InsertCustomer, type Address } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { google } from "googleapis";
+import leven from "leven";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -12,6 +13,7 @@ export interface IStorage {
   createCustomer(customer: InsertCustomer): Promise<Customer>;
   getAllCustomers(): Promise<Customer[]>;
   searchCustomers(name: string, address?: Partial<Address>): Promise<Customer[]>;
+  getCustomersByAddress(address: Partial<Address>): Promise<Customer[]>;
 }
 
 export class GoogleSheetsStorage implements IStorage {
@@ -27,6 +29,50 @@ export class GoogleSheetsStorage implements IStorage {
     this.users = new Map();
     this.cache = { customers: null, timestamp: null };
     this.initializeSheets();
+  }
+
+  /**
+   * Normalize street name for fuzzy matching
+   * - Convert to lowercase
+   * - Remove special characters (hyphens, periods, spaces)
+   * - Replace common abbreviations
+   */
+  private normalizeStreet(street: string): string {
+    return street
+      .toLowerCase()
+      .trim()
+      // Replace abbreviations
+      .replace(/\bstr\b\.?/g, 'strasse')
+      .replace(/straße/g, 'strasse')
+      .replace(/ß/g, 'ss')
+      // Remove special characters and spaces
+      .replace(/[-\.\s]/g, '');
+  }
+
+  /**
+   * Calculate similarity between two streets using Levenshtein distance
+   * Returns similarity percentage (0-100)
+   */
+  private calculateStreetSimilarity(street1: string, street2: string): number {
+    const normalized1 = this.normalizeStreet(street1);
+    const normalized2 = this.normalizeStreet(street2);
+    
+    const maxLength = Math.max(normalized1.length, normalized2.length);
+    if (maxLength === 0) return 100; // Both empty strings
+    
+    const distance = leven(normalized1, normalized2);
+    const similarity = (1 - distance / maxLength) * 100;
+    
+    return similarity;
+  }
+
+  /**
+   * Check if two streets match using fuzzy matching
+   * Returns true if similarity >= 95%
+   */
+  private streetsMatch(street1: string, street2: string): boolean {
+    const similarity = this.calculateStreetSimilarity(street1, street2);
+    return similarity >= 95;
   }
 
   private initializeSheets() {
@@ -137,12 +183,62 @@ export class GoogleSheetsStorage implements IStorage {
     return customers[0];
   }
 
-  async searchCustomers(name: string, address?: Partial<Address>): Promise<Customer[]> {
+  async getCustomersByAddress(address: Partial<Address>): Promise<Customer[]> {
     const customers = await this.fetchCustomersFromSheet();
+    
+    let matches = customers;
+    
+    // Filter by postal code (most important and most unique) - EXACT match
+    if (address.postal) {
+      const searchPostal = address.postal.toLowerCase().trim();
+      matches = matches.filter(customer => 
+        customer.postalCode?.toLowerCase().trim() === searchPostal
+      );
+    }
+    
+    // Filter by street using fuzzy matching (>=95% similarity)
+    if (address.street) {
+      const searchStreet = address.street;
+      matches = matches.filter(customer => {
+        if (!customer.street) return false;
+        return this.streetsMatch(searchStreet, customer.street);
+      });
+    }
+    
+    // Filter by house number (flexible matching - prefix match)
+    if (address.number) {
+      const searchNumber = address.number.toLowerCase().trim();
+      matches = matches.filter(customer => {
+        if (!customer.houseNumber) return false;
+        const customerNumber = customer.houseNumber.toLowerCase().trim();
+        // Match if search number is prefix of customer number or exact match
+        // This handles cases like "2" matching "2", "2A", "2a", etc.
+        return customerNumber === searchNumber || 
+               customerNumber.startsWith(searchNumber) ||
+               searchNumber.startsWith(customerNumber);
+      });
+    }
+    
+    return matches;
+  }
+
+  async searchCustomers(name: string, address?: Partial<Address>): Promise<Customer[]> {
+    // If address is provided, FIRST filter customers by address
+    let customersToSearch: Customer[];
+    
+    if (address && (address.postal || address.street || address.number)) {
+      // Filter by address FIRST
+      customersToSearch = await this.getCustomersByAddress(address);
+    } else {
+      // No address provided, search all customers
+      customersToSearch = await this.fetchCustomersFromSheet();
+    }
+    
+    // Now search names ONLY within the address-filtered customers
     const normalizedSearchName = name.toLowerCase().trim();
     const searchWords = normalizedSearchName.split(/\s+/);
 
-    let matches = customers.filter(customer => {
+    const matches = customersToSearch.filter(customer => {
       const customerNameWords = customer.name.toLowerCase().trim().split(/\s+/);
       
       // Check if any word in the search name matches any word in the customer name
@@ -152,33 +248,6 @@ export class GoogleSheetsStorage implements IStorage {
         )
       );
     });
-
-    // If address is provided, filter by address fields
-    if (address) {
-      matches = matches.filter(customer => {
-        let addressMatch = true;
-
-        if (address.street && customer.street) {
-          const normalizedStreet = address.street.toLowerCase().trim();
-          const customerStreet = customer.street.toLowerCase().trim();
-          addressMatch = addressMatch && customerStreet.includes(normalizedStreet);
-        }
-
-        if (address.number && customer.houseNumber) {
-          const normalizedNumber = address.number.toLowerCase().trim();
-          const customerNumber = customer.houseNumber.toLowerCase().trim();
-          addressMatch = addressMatch && customerNumber === normalizedNumber;
-        }
-
-        if (address.postal && customer.postalCode) {
-          const normalizedPostal = address.postal.toLowerCase().trim();
-          const customerPostal = customer.postalCode.toLowerCase().trim();
-          addressMatch = addressMatch && customerPostal === normalizedPostal;
-        }
-
-        return addressMatch;
-      });
-    }
 
     return matches;
   }
