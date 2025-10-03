@@ -24,9 +24,16 @@ try {
   // Check if it's a valid JSON (service account key)
   if (visionKey.startsWith('{')) {
     const credentials = JSON.parse(visionKey);
-    visionClient = new vision.ImageAnnotatorClient({ credentials });
-    visionEnabled = true;
-    console.log('Google Cloud Vision API initialized successfully');
+    
+    // Validate that it's a proper service account key with required fields
+    if (!credentials.client_email || !credentials.private_key) {
+      console.warn('GOOGLE_CLOUD_VISION_KEY does not contain valid service account credentials (missing client_email or private_key). OCR disabled.');
+      console.warn('To enable OCR, provide a complete JSON service account key with Vision API access.');
+    } else {
+      visionClient = new vision.ImageAnnotatorClient({ credentials });
+      visionEnabled = true;
+      console.log('Google Cloud Vision API initialized successfully');
+    }
   } else {
     console.warn('GOOGLE_CLOUD_VISION_KEY is not a valid JSON service account key. OCR disabled.');
     console.warn('To enable OCR, provide a JSON service account key with Vision API access.');
