@@ -2,180 +2,38 @@
 
 ## Overview
 
-This is a mobile-first web application designed for energy provider sales representatives to capture customer information in the field. The tool combines GPS-based address detection with OCR (Optical Character Recognition) technology to extract names from nameplate photos, helping sales reps quickly identify existing customers versus potential prospects.
-
-The application is optimized for one-handed mobile operation and provides a streamlined workflow for field data capture, similar to professional mobile scanning applications like CamScanner or Adobe Scan.
-
-**Current Status**: Fully functional MVP with GPS geocoding, OCR text extraction, customer database lookup, and bilingual support (German/English).
+This mobile-first web application helps energy provider sales representatives capture customer information in the field. It uses GPS to detect addresses and OCR to extract names from nameplate photos, distinguishing between existing customers and potential prospects. The tool is optimized for one-handed mobile operation and offers a streamlined workflow with manual correction capabilities. Its primary purpose is to enhance efficiency in field data capture and lead generation.
 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
 
-## Recent Changes (October 2025)
-
-### Implemented Features
-1. **GPS Address Detection**: Real-time geolocation with Google Geocoding API integration for automatic address detection
-2. **Photo Capture & OCR**: Mobile camera integration with Tesseract.js for German text extraction from nameplate photos
-3. **Customer Database**: In-memory storage with customer lookup to identify existing customers vs prospects
-4. **Bilingual Support**: Complete German/English internationalization with i18next
-5. **Mobile-Optimized UI**: Single-screen interface with large touch targets, sticky action buttons, and responsive design
-
-### Technical Implementation
-- Backend APIs for `/api/geocode` and `/api/ocr` processing
-- Real-time customer matching against seeded database
-- German name extraction with regex patterns for titles (Herr/Frau) and capitalized names
-- Color-coded status badges (green for existing customers, yellow for prospects)
-- Complete error handling with toast notifications
-
 ## System Architecture
 
-### Frontend Architecture
+The application is built as a mobile-first web application with a focus on a single-screen, intuitive user experience.
 
-**Technology Stack:**
-- **Framework**: React 18 with TypeScript
-- **Routing**: Wouter (lightweight client-side routing)
-- **State Management**: TanStack React Query v5 for server state
-- **UI Framework**: Shadcn/ui components built on Radix UI primitives
-- **Styling**: Tailwind CSS with custom design tokens
-- **Internationalization**: i18next for English/German language support
+### Frontend
+- **Technology Stack**: React 18, TypeScript, Wouter for routing, TanStack React Query for state, Shadcn/ui (Radix UI) for components, Tailwind CSS for styling, i18next for German/English internationalization.
+- **UI/UX Decisions**: Optimized for one-handed mobile use with large touch targets. Features a professional blue primary color, green for existing customers, yellow for prospects, and high-contrast text for outdoor readability. Full dark mode support is included.
 
-**Design Pattern:**
-- Mobile-first, single-page application (SPA)
-- Component-based architecture with clear separation of concerns
-- Utility-first CSS approach with Tailwind
-- Design system based on professional mobile scanning apps
-- Responsive design optimized for touch interfaces with 44px minimum touch targets
+### Backend
+- **Technology Stack**: Node.js with Express.js, TypeScript.
+- **API Design**: RESTful JSON API with comprehensive error handling.
+- **Key Endpoints**:
+    - `POST /api/geocode`: Converts GPS coordinates to physical addresses using Google Geocoding API.
+    - `POST /api/ocr`: Processes nameplate photos with Google Cloud Vision API for German text extraction, parses names, and matches against the customer database.
+    - `POST /api/ocr-correct`: Resubmits manually corrected names for customer lookup.
+    - `GET /api/customers`: Fetches all customers from Google Sheets.
+- **Data Storage**: Google Sheets serves as the primary customer database with a 5-minute in-memory cache. The system is designed with an interface-based storage abstraction for potential migration to PostgreSQL.
+- **Customer Matching Logic**: Employs word-level, case-insensitive matching for names, with optional address filtering (street, house number, postal code) to categorize existing customers versus new prospects.
 
-**Key UI Components:**
-- `GPSAddressForm`: Handles geolocation detection and address display with Google Geocoding API
-- `PhotoCapture`: Camera interface for nameplate photo capture with real-time OCR processing
-- `ResultsDisplay`: Shows OCR-extracted customer information with status badges
-- `LanguageToggle`: Switches between English and German
+## External Dependencies
 
-**Color System:**
-- Primary: Professional Blue (#0066CC / 207 100% 40%) for main actions
-- Success: Green (#28A745 / 134 61% 41%) for existing customers
-- Warning: Yellow (#FFC107 / 45 100% 51%) for prospects
-- Neutral backgrounds with high-contrast text for outdoor readability
-- Full dark mode support with CSS custom properties
-
-### Backend Architecture
-
-**Technology Stack:**
-- **Runtime**: Node.js with Express.js
-- **Language**: TypeScript (ESNext modules)
-- **Database ORM**: Drizzle ORM (configured but using in-memory storage)
-- **Database**: PostgreSQL (via Neon serverless) - schema defined, in-memory implementation active
-- **File Upload**: Multer for multipart form handling
-- **OCR Engine**: Tesseract.js for server-side German text extraction
-
-**API Design:**
-- RESTful JSON API structure
-- Session-based architecture (connect-pg-simple for session storage)
-- Error handling middleware with standardized responses
-- Request/response logging for debugging
-
-**Key Endpoints:**
-- `POST /api/geocode`: Converts GPS coordinates to physical addresses using Google Geocoding API
-- `POST /api/ocr`: Processes nameplate photos and extracts customer names with Tesseract.js
-- `GET /api/customers`: Retrieves all customers from storage
-
-**Data Storage Strategy:**
-- In-memory storage implementation (`MemStorage`) for development/demo
-- Interface-based storage abstraction (`IStorage`) allowing easy swap to PostgreSQL
-- Seeded customer data: Max Müller, Anna Schmidt, Thomas Weber, Maria Fischer, Klaus Meyer
-- Customer matching: Case-insensitive name lookup with automatic prospect creation
-
-### External Dependencies
-
-**Third-Party Services:**
-1. **Google Geocoding API**
-   - Purpose: Convert GPS coordinates to structured addresses
-   - Configuration: Requires `GOOGLE_GEOCODING_API_KEY` environment variable
-   - Language: German locale support (`language=de`)
-   - Returns: Street, number, city, postal code, country
-
-2. **Tesseract.js (OCR)**
-   - Purpose: Extract German text from nameplate photos
-   - Implementation: Server-side text recognition with German language model ('deu')
-   - Processing: Multi-pattern name extraction (capitalized names + honorific titles)
-   - Returns: Extracted text, identified names, customer match results
-
-**Database:**
-- PostgreSQL via Neon serverless driver (schema defined, not actively used)
-- Connection: `DATABASE_URL` environment variable available
-- Schema management: Drizzle Kit with migrations in `/migrations` directory
-- Tables defined:
-  - `users`: Authentication (username, hashed password)
-  - `customers`: Customer records (name, isExisting flag)
-
-**UI Component Library:**
-- Radix UI primitives (headless, accessible components)
-- Shadcn/ui pattern (customizable component library)
-- Lucide React for icons
-
-**Build Tools:**
-- Vite for frontend bundling and development server
-- esbuild for backend bundling
-- TypeScript compiler for type checking
-- PostCSS with Tailwind CSS processing
-
-**Development Tools:**
-- Replit-specific plugins for error overlay and dev banner
-- Hot Module Replacement (HMR) in development
-- Custom Vite middleware integration with Express
-
-**Font Resources:**
-- Google Fonts (Inter as primary typeface)
-- SF Pro Display fallback for iOS devices
-
-## Data Models
-
-### Customer Schema
-```typescript
-{
-  id: string (UUID)
-  name: string
-  isExisting: boolean (default: false for new prospects)
-}
-```
-
-### Address Schema
-```typescript
-{
-  street: string
-  number: string
-  city: string
-  postal: string
-  country: string
-}
-```
-
-## Environment Variables
-
-Required:
-- `GOOGLE_GEOCODING_API_KEY`: Google Geocoding API key for address detection
-- `SESSION_SECRET`: Express session secret (pre-configured)
-- `DATABASE_URL`: PostgreSQL connection string (available, not actively used)
-
-## Known Limitations
-
-1. **Toast Notifications**: Some error messages are hard-coded in English and not fully localized
-2. **Safe Area**: Main content could benefit from iOS safe-area padding for devices with notches
-3. **OCR Accuracy**: German name extraction relies on regex patterns and may miss non-standard formats
-4. **Storage**: Currently using in-memory storage; data resets on server restart
-
-## Future Enhancements
-
-Potential improvements identified:
-- Tesseract worker caching/reuse to reduce cold-start latency
-- Geocoding response logging for component coverage monitoring
-- Extended OCR name parsing tests for diacritics and honorific variations
-- Complete toast notification localization
-- Persistent database migration from in-memory to PostgreSQL
-- Photo history and session management
-- Offline mode with data sync
-- Sales rep dashboard with statistics
-- Batch export for CRM integration
-- Geofencing alerts for nearby prospects
+1.  **Google Geocoding API**: Used for converting GPS coordinates to structured addresses.
+2.  **Google Cloud Vision API**: Utilized for highly accurate German text extraction from nameplate photos (OCR). Requires a JSON service account key.
+3.  **Google Sheets API**: Integrates with Google Sheets as the customer database, enabling real-time syncing and data storage. Requires a JSON service account key and sharing the sheet with the service account.
+4.  **Radix UI / Shadcn/ui**: Component libraries for building the user interface.
+5.  **Lucide React**: Icon library.
+6.  **Vite**: Frontend bundling.
+7.  **esbuild**: Backend bundling.
+8.  **i18next**: Internationalization library for English and German.

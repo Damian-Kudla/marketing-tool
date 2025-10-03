@@ -14,6 +14,28 @@ import {
 
 const upload = multer({ storage: multer.memoryStorage() });
 
+// Initialize Vision client once at startup
+let visionClient: any = null;
+let visionEnabled = false;
+
+try {
+  const visionKey = process.env.GOOGLE_CLOUD_VISION_KEY || '{}';
+  
+  // Check if it's a valid JSON (service account key)
+  if (visionKey.startsWith('{')) {
+    const credentials = JSON.parse(visionKey);
+    visionClient = new vision.ImageAnnotatorClient({ credentials });
+    visionEnabled = true;
+    console.log('Google Cloud Vision API initialized successfully');
+  } else {
+    console.warn('GOOGLE_CLOUD_VISION_KEY is not a valid JSON service account key. OCR disabled.');
+    console.warn('To enable OCR, provide a JSON service account key with Vision API access.');
+  }
+} catch (error) {
+  console.error('Failed to initialize Google Cloud Vision client:', error);
+  console.warn('OCR functionality disabled.');
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   
   app.post("/api/geocode", async (req, res) => {
@@ -64,6 +86,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No image file provided" });
       }
 
+      // Check if Vision API is enabled
+      if (!visionEnabled || !visionClient) {
+        return res.status(503).json({ 
+          error: "OCR service not available. Google Cloud Vision API requires a valid JSON service account key." 
+        });
+      }
+
       // Parse address from request body if provided
       let address: Address | undefined;
       if (req.body.address) {
@@ -73,12 +102,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Failed to parse address:", e);
         }
       }
-
-      // Initialize Google Cloud Vision client
-      const credentials = JSON.parse(process.env.GOOGLE_CLOUD_VISION_KEY || '{}');
-      const visionClient = new vision.ImageAnnotatorClient({
-        credentials,
-      });
 
       // Perform text detection
       const [result] = await visionClient.textDetection({
@@ -102,7 +125,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Parse resident names from text
       // Split by line breaks and filter for names
-      const lines = fullText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+      const lines = fullText.split('\n').map((line: string) => line.trim()).filter((line: string) => line.length > 0);
       
       const residentNames: string[] = [];
       const namePatterns = [

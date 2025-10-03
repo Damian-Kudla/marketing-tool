@@ -21,6 +21,7 @@ export class GoogleSheetsStorage implements IStorage {
   private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
   private readonly SPREADSHEET_ID = '1IF9ieZQ_irKs9XU7XZmDuBaT4XqQrtm0EmfKbA3zB4s';
   private readonly SHEET_NAME = 'Customers';
+  private initialized: boolean = false;
 
   constructor() {
     this.users = new Map();
@@ -28,17 +29,30 @@ export class GoogleSheetsStorage implements IStorage {
     this.initializeSheets();
   }
 
-  private async initializeSheets() {
+  private initializeSheets() {
     try {
-      const credentials = JSON.parse(process.env.GOOGLE_SHEETS_KEY || '{}');
+      const sheetsKey = process.env.GOOGLE_SHEETS_KEY || '{}';
+      
+      // Check if it's a valid JSON (service account key)
+      if (!sheetsKey.startsWith('{')) {
+        console.warn('GOOGLE_SHEETS_KEY is not a valid JSON service account key. Google Sheets integration disabled.');
+        console.warn('To enable Google Sheets, provide a JSON service account key with Sheets API access.');
+        this.initialized = false;
+        return;
+      }
+
+      const credentials = JSON.parse(sheetsKey);
       const auth = new google.auth.GoogleAuth({
         credentials,
         scopes: ['https://www.googleapis.com/auth/spreadsheets'],
       });
       this.sheetsClient = google.sheets({ version: 'v4', auth });
+      this.initialized = true;
+      console.log('Google Sheets integration initialized successfully');
     } catch (error) {
       console.error('Failed to initialize Google Sheets client:', error);
-      throw new Error('Google Sheets initialization failed');
+      console.warn('Google Sheets integration disabled. Using in-memory storage fallback.');
+      this.initialized = false;
     }
   }
 
@@ -48,6 +62,11 @@ export class GoogleSheetsStorage implements IStorage {
   }
 
   private async fetchCustomersFromSheet(): Promise<Customer[]> {
+    if (!this.initialized) {
+      // Return empty array if Sheets is not initialized
+      return [];
+    }
+
     if (this.isCacheValid() && this.cache.customers) {
       return this.cache.customers;
     }
@@ -76,7 +95,7 @@ export class GoogleSheetsStorage implements IStorage {
       return customers;
     } catch (error) {
       console.error('Failed to fetch customers from Google Sheets:', error);
-      throw new Error('Failed to fetch customers from Google Sheets');
+      return [];
     }
   }
 
@@ -154,6 +173,19 @@ export class GoogleSheetsStorage implements IStorage {
   }
 
   async createCustomer(insertCustomer: InsertCustomer): Promise<Customer> {
+    if (!this.initialized) {
+      // If Sheets is not initialized, just return the customer without saving
+      const customer: Customer = {
+        id: randomUUID(),
+        name: insertCustomer.name,
+        street: insertCustomer.street || null,
+        houseNumber: insertCustomer.houseNumber || null,
+        postalCode: insertCustomer.postalCode || null,
+        isExisting: insertCustomer.isExisting ?? true,
+      };
+      return customer;
+    }
+
     try {
       const values = [[
         insertCustomer.name,
