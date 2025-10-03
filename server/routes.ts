@@ -81,12 +81,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       // Validate that the address is in Germany
-      const countryLower = address.country.toLowerCase();
-      if (countryLower !== 'deutschland' && countryLower !== 'germany') {
-        return res.status(400).json({ 
-          error: "This service is only available for addresses in Germany",
-          errorCode: "NON_GERMAN_ADDRESS"
-        });
+      if (address.country) {
+        const countryLower = address.country.toLowerCase();
+        if (countryLower !== 'deutschland' && countryLower !== 'germany') {
+          return res.status(400).json({ 
+            error: "This service is only available for addresses in Germany",
+            errorCode: "NON_GERMAN_ADDRESS"
+          });
+        }
       }
 
       res.json(address);

@@ -43,9 +43,9 @@ export type GeocodingRequest = z.infer<typeof geocodingRequestSchema>;
 export const addressSchema = z.object({
   street: z.string(),
   number: z.string(),
-  city: z.string(),
+  city: z.string().optional(),
   postal: z.string(),
-  country: z.string(),
+  country: z.string().optional(),
 });
 
 export type Address = z.infer<typeof addressSchema>;

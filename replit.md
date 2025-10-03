@@ -15,17 +15,20 @@ The application is built as a mobile-first web application with a focus on a sin
 ### Frontend
 - **Technology Stack**: React 18, TypeScript, Wouter for routing, TanStack React Query for state, Shadcn/ui (Radix UI) for components, Tailwind CSS for styling, i18next for German/English internationalization.
 - **UI/UX Decisions**: Optimized for one-handed mobile use with large touch targets. Features a professional blue primary color, green for existing customers, yellow for prospects, and high-contrast text for outdoor readability. Full dark mode support is included.
+- **Address Form**: Simplified to show only Street (Straße), Number (Nummer), and Postal Code (Postleitzahl) fields. City and Country are handled automatically by GPS detection but are not shown to users.
 
 ### Backend
 - **Technology Stack**: Node.js with Express.js, TypeScript.
 - **API Design**: RESTful JSON API with comprehensive error handling.
 - **Key Endpoints**:
-    - `POST /api/geocode`: Converts GPS coordinates to physical addresses using Google Geocoding API.
-    - `POST /api/ocr`: Processes nameplate photos with Google Cloud Vision API for German text extraction, parses names, and matches against the customer database.
+    - `POST /api/geocode`: Converts GPS coordinates to physical addresses using Google Geocoding API. **Validates that addresses are in Germany** (returns 400 for non-German locations).
+    - `POST /api/ocr`: Processes nameplate photos with Google Cloud Vision API for German text extraction, parses names (handling periods, hyphens, and short names/initials), and matches against the customer database.
     - `POST /api/ocr-correct`: Resubmits manually corrected names for customer lookup.
+    - `POST /api/search-address`: **Address-only search** - searches customer database by address without requiring photo upload. Supports partial street matching with German character normalization (ß/ss) and flexible house number matching.
     - `GET /api/customers`: Fetches all customers from Google Sheets.
 - **Data Storage**: Google Sheets serves as the primary customer database with a 5-minute in-memory cache. The system is designed with an interface-based storage abstraction for potential migration to PostgreSQL.
-- **Customer Matching Logic**: Employs word-level, case-insensitive matching for names, with optional address filtering (street, house number, postal code) to categorize existing customers versus new prospects.
+- **Customer Matching Logic**: Employs word-level, case-insensitive matching for names (with period/hyphen normalization to spaces), with optional address filtering (street, house number, postal code) to categorize existing customers versus new prospects.
+- **Germany-Only Service**: Both frontend and backend enforce that this service is only available for German addresses. Frontend displays error message; backend validates and rejects non-German GPS coordinates.
 
 ## External Dependencies
 
