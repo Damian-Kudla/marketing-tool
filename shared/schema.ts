@@ -20,7 +20,10 @@ export type User = typeof users.$inferSelect;
 export const customers = pgTable("customers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
-  isExisting: boolean("is_existing").notNull().default(false),
+  street: text("street"),
+  houseNumber: text("house_number"),
+  postalCode: text("postal_code"),
+  isExisting: boolean("is_existing").notNull().default(true),
 });
 
 export const insertCustomerSchema = createInsertSchema(customers).omit({
@@ -54,8 +57,24 @@ export const ocrRequestSchema = z.object({
 export type OCRRequest = z.infer<typeof ocrRequestSchema>;
 
 export const ocrResponseSchema = z.object({
-  extractedText: z.string(),
-  names: z.array(z.string()),
+  residentNames: z.array(z.string()),
+  fullVisionResponse: z.any(),
+  newProspects: z.array(z.string()),
+  existingCustomers: z.array(z.object({
+    id: z.string().optional(),
+    name: z.string(),
+    street: z.string().nullable().optional(),
+    houseNumber: z.string().nullable().optional(),
+    postalCode: z.string().nullable().optional(),
+    isExisting: z.boolean(),
+  })),
 });
 
 export type OCRResponse = z.infer<typeof ocrResponseSchema>;
+
+export const ocrCorrectionRequestSchema = z.object({
+  residentNames: z.array(z.string()),
+  address: addressSchema.optional(),
+});
+
+export type OCRCorrectionRequest = z.infer<typeof ocrCorrectionRequestSchema>;
