@@ -4,12 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Camera, Upload, Loader2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import type { Address } from '@/components/GPSAddressForm';
 
 interface PhotoCaptureProps {
   onPhotoProcessed?: (results: any) => void;
+  address?: Address | null;
 }
 
-export default function PhotoCapture({ onPhotoProcessed }: PhotoCaptureProps) {
+export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCaptureProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [preview, setPreview] = useState<string | null>(null);
@@ -30,6 +32,11 @@ export default function PhotoCapture({ onPhotoProcessed }: PhotoCaptureProps) {
       try {
         const formData = new FormData();
         formData.append('image', file);
+        
+        // Add address to request if available
+        if (address) {
+          formData.append('address', JSON.stringify(address));
+        }
 
         const response = await fetch('/api/ocr', {
           method: 'POST',
@@ -43,16 +50,17 @@ export default function PhotoCapture({ onPhotoProcessed }: PhotoCaptureProps) {
         const result = await response.json();
         onPhotoProcessed?.(result);
         
+        const totalNames = result.residentNames?.length || 0;
         toast({
-          title: 'Processing complete',
-          description: `Found ${result.names.length} name(s)`,
+          title: t('photo.success'),
+          description: `${t('photo.found')} ${totalNames} ${t('photo.names')}`,
         });
       } catch (error) {
         console.error('OCR error:', error);
         toast({
           variant: 'destructive',
-          title: 'Processing failed',
-          description: 'Unable to extract text from image',
+          title: t('photo.error'),
+          description: t('photo.errorDesc'),
         });
       } finally {
         setProcessing(false);

@@ -2,30 +2,59 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import GPSAddressForm, { type Address } from '@/components/GPSAddressForm';
 import PhotoCapture from '@/components/PhotoCapture';
-import ResultsDisplay, { type CustomerResult } from '@/components/ResultsDisplay';
+import ResultsDisplay, { type OCRResult } from '@/components/ResultsDisplay';
+import OCRCorrection from '@/components/OCRCorrection';
 import LanguageToggle from '@/components/LanguageToggle';
 import { Button } from '@/components/ui/button';
-import { RotateCcw } from 'lucide-react';
+import { RotateCcw, Edit } from 'lucide-react';
 
 export default function ScannerPage() {
   const { t } = useTranslation();
-  const [results, setResults] = useState<CustomerResult[]>([]);
+  const [address, setAddress] = useState<Address | null>(null);
+  const [ocrResult, setOcrResult] = useState<OCRResult | null>(null);
+  const [showCorrection, setShowCorrection] = useState(false);
 
-  const handlePhotoProcessed = (ocrResult: any) => {
-    console.log('OCR result:', ocrResult);
+  const handlePhotoProcessed = (result: any) => {
+    console.log('OCR result:', result);
     
-    if (ocrResult.results && ocrResult.results.length > 0) {
-      setResults(ocrResult.results);
+    if (result.residentNames) {
+      setOcrResult({
+        residentNames: result.residentNames,
+        existingCustomers: result.existingCustomers || [],
+        newProspects: result.newProspects || [],
+      });
+      setShowCorrection(false);
     }
   };
 
-  const handleAddressDetected = (address: Address) => {
-    console.log('Address detected:', address);
+  const handleAddressDetected = (detectedAddress: Address) => {
+    console.log('Address detected:', detectedAddress);
+    setAddress(detectedAddress);
+  };
+
+  const handleCorrectionComplete = (result: any) => {
+    console.log('Correction result:', result);
+    
+    if (result.residentNames) {
+      setOcrResult({
+        residentNames: result.residentNames,
+        existingCustomers: result.existingCustomers || [],
+        newProspects: result.newProspects || [],
+      });
+      setShowCorrection(false);
+    }
   };
 
   const handleReset = () => {
-    setResults([]);
+    setOcrResult(null);
+    setShowCorrection(false);
   };
+
+  const handleCorrect = () => {
+    setShowCorrection(true);
+  };
+
+  const hasResults = ocrResult && (ocrResult.existingCustomers.length > 0 || ocrResult.newProspects.length > 0);
 
   return (
     <div className="min-h-screen bg-background">
@@ -40,11 +69,21 @@ export default function ScannerPage() {
 
       <main className="container mx-auto px-4 py-4 space-y-4 pb-24">
         <GPSAddressForm onAddressDetected={handleAddressDetected} />
-        <PhotoCapture onPhotoProcessed={handlePhotoProcessed} />
-        <ResultsDisplay results={results} />
+        <PhotoCapture onPhotoProcessed={handlePhotoProcessed} address={address} />
+        
+        {showCorrection ? (
+          <OCRCorrection 
+            initialNames={ocrResult?.residentNames || []}
+            address={address}
+            onCorrectionComplete={handleCorrectionComplete}
+            onCancel={() => setShowCorrection(false)}
+          />
+        ) : (
+          <ResultsDisplay result={ocrResult} />
+        )}
       </main>
 
-      {results.length > 0 && (
+      {hasResults && !showCorrection && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t safe-area-bottom">
           <div className="container mx-auto flex gap-2">
             <Button
@@ -58,10 +97,20 @@ export default function ScannerPage() {
               {t('action.reset')}
             </Button>
             <Button
+              variant="outline"
+              size="lg"
+              onClick={handleCorrect}
+              className="flex-1 min-h-12 gap-2"
+              data-testid="button-correct"
+            >
+              <Edit className="h-4 w-4" />
+              {t('action.correct')}
+            </Button>
+            <Button
               size="lg"
               className="flex-1 min-h-12"
               data-testid="button-save"
-              onClick={() => console.log('Save triggered', results)}
+              onClick={() => console.log('Save triggered', ocrResult)}
             >
               {t('action.save')}
             </Button>
