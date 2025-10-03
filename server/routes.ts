@@ -80,6 +80,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         country: getComponent(["country"])
       };
 
+      // Validate that the address is in Germany
+      const countryLower = address.country.toLowerCase();
+      if (countryLower !== 'deutschland' && countryLower !== 'germany') {
+        return res.status(400).json({ 
+          error: "This service is only available for addresses in Germany",
+          errorCode: "NON_GERMAN_ADDRESS"
+        });
+      }
+
       res.json(address);
     } catch (error) {
       console.error("Geocoding error:", error);
@@ -301,35 +310,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching customers:", error);
       res.status(500).json({ error: "Failed to fetch customers" });
-    }
-  });
-
-  // Diagnostic endpoint to check Google Sheets configuration
-  app.get("/api/sheets-config", async (req, res) => {
-    try {
-      const sheetsKey = process.env.GOOGLE_SHEETS_KEY || '{}';
-      
-      if (!sheetsKey.startsWith('{')) {
-        return res.json({
-          configured: false,
-          message: "GOOGLE_SHEETS_KEY is not a valid JSON service account key"
-        });
-      }
-
-      const credentials = JSON.parse(sheetsKey);
-      res.json({
-        configured: true,
-        clientEmail: credentials.client_email || 'NOT FOUND',
-        projectId: credentials.project_id || 'NOT FOUND',
-        hasPrivateKey: !!credentials.private_key,
-        spreadsheetId: '1IF9ieZQ_irKs9XU7XZmDuBaT4XqQrtm0EmfKbA3zB4s',
-        message: `Share the Google Sheet with this email: ${credentials.client_email}`
-      });
-    } catch (error) {
-      res.status(500).json({
-        configured: false,
-        error: "Failed to parse GOOGLE_SHEETS_KEY"
-      });
     }
   });
 
