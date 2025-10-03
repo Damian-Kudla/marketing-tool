@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -33,6 +33,11 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: G
     postal: '',
     country: ''
   });
+
+  // Notify parent component whenever address changes (including manual edits)
+  useEffect(() => {
+    onAddressDetected?.(address);
+  }, [address, onAddressDetected]);
 
   const detectLocation = async () => {
     setLoading(true);

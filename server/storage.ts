@@ -229,7 +229,6 @@ export class GoogleSheetsStorage implements IStorage {
     if (address && (address.postal || address.street || address.number)) {
       // Filter by address FIRST
       customersToSearch = await this.getCustomersByAddress(address);
-      console.log(`[searchCustomers] After address filter: ${customersToSearch.length} customers`);
     } else {
       // No address provided, search all customers
       customersToSearch = await this.fetchCustomersFromSheet();
@@ -238,31 +237,18 @@ export class GoogleSheetsStorage implements IStorage {
     // Now search names ONLY within the address-filtered customers
     const normalizedSearchName = name.toLowerCase().trim();
     const searchWords = normalizedSearchName.split(/\s+/);
-    
-    console.log(`[searchCustomers] Searching for name: "${name}"`);
-    console.log(`[searchCustomers] Search words:`, searchWords);
 
     const matches = customersToSearch.filter(customer => {
       const customerNameWords = customer.name.toLowerCase().trim().split(/\s+/);
       
-      console.log(`[searchCustomers] Checking customer: "${customer.name}" with words:`, customerNameWords);
-      
       // Check if any word in the search name matches any word in the customer name
-      const matched = searchWords.some(searchWord => 
-        customerNameWords.some(customerWord => {
-          const match = customerWord.includes(searchWord) || searchWord.includes(customerWord);
-          if (match) {
-            console.log(`  MATCH: "${searchWord}" matches "${customerWord}"`);
-          }
-          return match;
-        })
+      return searchWords.some(searchWord => 
+        customerNameWords.some(customerWord => 
+          customerWord.includes(searchWord) || searchWord.includes(customerWord)
+        )
       );
-      
-      console.log(`  Result: ${matched ? 'MATCHED' : 'NO MATCH'}`);
-      return matched;
     });
     
-    console.log(`[searchCustomers] Found ${matches.length} matches`);
     return matches;
   }
 

@@ -37,6 +37,7 @@ export default function ScannerPage() {
     console.log('Address search result:', customers);
     
     // Show results as existing customers (since all customers at an address are existing)
+    // For address-only search, don't show allCustomersAtAddress section (would be redundant)
     setOcrResult({
       residentNames: [],
       existingCustomers: customers,
