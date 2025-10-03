@@ -135,26 +135,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const lines = fullText.split('\n').map((line: string) => line.trim()).filter((line: string) => line.length > 0);
       
       const residentNames: string[] = [];
-      const namePatterns = [
-        // Match full names with capitalized words (2+ words)
-        /^([A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)+)$/,
-        // Match names with titles
-        /^(?:Herr|Frau|Hr\.|Fr\.)\s+([A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)*)$/i,
-      ];
-
+      
+      // Common words to exclude (not names)
+      const excludeWords = ['qg', 'eg', 'og', 'dg', 'apartment', 'wohnung', 'haus', 'street', 'strasse', 'str'];
+      
       for (const line of lines) {
-        // Replace hyphens with spaces for better matching
-        const cleanedLine = line.replace(/-/g, ' ').trim();
+        // Replace hyphens and periods with spaces, then normalize whitespace
+        const cleanedLine = line.replace(/[-\.]/g, ' ').replace(/\s+/g, ' ').trim();
         
-        for (const pattern of namePatterns) {
-          const match = cleanedLine.match(pattern);
-          if (match) {
-            // Normalize name: convert to lowercase
-            const name = (match[1] || match[0]).trim().toLowerCase();
-            if (name.length > 3 && !residentNames.includes(name)) {
-              residentNames.push(name);
-            }
-            break;
+        // Skip empty lines or very short lines
+        if (cleanedLine.length === 0) continue;
+        
+        // More flexible matching - accept various name formats:
+        // - Full names (multiple words with capital letters): "Müller Meier"
+        // - Initials: "T.H.", "S.M.", "D3"
+        // - Single names with capitals: "Mister", "Anonym"
+        // - Mixed formats: "H Münster", "F Rudert"
+        
+        // Check if line contains at least one letter or digit
+        if (!/[a-zA-ZäöüÄÖÜß0-9]/.test(cleanedLine)) continue;
+        
+        // Check if it's an excluded word
+        const lowerLine = cleanedLine.toLowerCase();
+        if (excludeWords.some(word => lowerLine === word)) continue;
+        
+        // Accept the line as a potential name if:
+        // 1. It has at least one uppercase letter OR number
+        // 2. It's not too long (likely not a sentence)
+        // 3. It doesn't contain too many special characters
+        
+        const hasUpperOrNumber = /[A-ZÄÖÜ0-9]/.test(line);
+        const notTooLong = cleanedLine.length <= 30;
+        const notTooManySpecialChars = (line.match(/[^a-zA-ZäöüÄÖÜß0-9\s]/g) || []).length <= 3;
+        
+        if (hasUpperOrNumber && notTooLong && notTooManySpecialChars) {
+          // Normalize name: convert to lowercase
+          const name = cleanedLine.toLowerCase();
+          if (name.length >= 1 && !residentNames.includes(name)) {
+            residentNames.push(name);
           }
         }
       }
