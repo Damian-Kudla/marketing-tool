@@ -1,0 +1,34 @@
+Update the existing sales acquisition tool backend to incorporate the following changes, while keeping the overall structure (Express.js with routes.ts, index.ts, storage.ts, vite.ts, and schema.ts). The goal is to improve OCR accuracy, make customer data flexible and editable externally, and adjust the API responses for better frontend integration. Do not change the frontend unless specified.
+
+1. Replace Tesseract.js OCR with Google Cloud Vision API for text detection:
+   - Install the '@google-cloud/vision' package via npm.
+   - Require a new environment secret: GOOGLE_CLOUD_VISION_KEY (a JSON service account key from Google Cloud Console, enabling Vision API).
+   - In routes.ts, for the /api/ocr endpoint:
+     - Use Vision's textDetection on the uploaded image buffer (req.file.buffer).
+     - Extract the full text and use the existing regex patterns to parse names.
+     - Include the full Vision response in the output for debugging (e.g., add 'fullVisionResponse' to the JSON).
+   - Keep multer for image upload.
+
+2. Replace the in-memory storage with Google Sheets integration for customer data:
+   - Install the 'googleapis' package via npm.
+   - Require a new environment secret: GOOGLE_SHEETS_KEY (JSON service account key with Sheets API enabled and shared access to a specific sheet).
+   - Assume a Google Sheet with ID provided as secret GOOGLE_SHEETS_ID, and worksheet 'Customers' with columns: Name (string), IsExisting (boolean), Address (optional string for future address linking).
+   - Remove the MemStorage class in storage.ts. Instead, implement IStorage methods to query/update the Sheet via google.sheets v4 API on each call (e.g., use spreadsheets.values.get for reading all customers, append for creating new).
+   - For getCustomerByName: Search in the fetched data (case-insensitive).
+   - For createCustomer: Append a new row to the Sheet.
+   - Seed/initial data: No hardcoding; assume the user manages data in Sheets.
+   - For efficiency: Cache results in-memory for 5 minutes if needed, but keep it simple.
+
+3. Adjust API responses and add address integration:
+   - Modify /api/ocr to optionally accept 'address' in the request body (as JSON alongside the image multipart).
+   - In the response: { extractedText: string, fullVisionResponse: object, names: string[], newProspects: string[] (names where no matching customer with isExisting=true), existingCustomers: Customer[] (matching customers, filtered by address if provided and if customers have address field) }.
+   - Remove creating new customers automatically; only report prospects.
+   - Keep /api/geocode as is.
+   - Update /api/customers to fetch from Sheets.
+
+4. Add frontend support for OCR correction:
+   - In the scanner.tsx (or main frontend page): After receiving OCR response, display the 'names' as editable text inputs.
+   - Add a "Correct and Resubmit" button that sends a new POST to /api/ocr-correct (new endpoint in routes.ts) with corrected names and address.
+   - The /api/ocr-correct endpoint: Takes { names: string[], address?: Address }, performs the customer lookup (from Sheets), and returns the same format as /api/ocr but without OCR (skip Vision).
+
+Ensure bilingual support (German/English) remains. Test the full flow: GPS to address, photo upload to OCR, correction, and customer lookup. Provide updated documentation in replit.md.
