@@ -75,6 +75,11 @@
   --chart-3: 45 100% 45%;
   --chart-4: 280 65% 40%;
   --chart-5: 25 90% 48%;
+  
+  --success: 134 61% 41%;
+  --success-foreground: 0 0% 100%;
+  --warning: 45 100% 51%;
+  --warning-foreground: 210 11% 15%;
 
   --font-sans: SF Pro Display, Inter, Open Sans, sans-serif;
   --font-serif: Georgia, serif;
@@ -193,6 +198,11 @@
   --chart-3: 45 100% 65%;
   --chart-4: 280 65% 65%;
   --chart-5: 25 90% 62%;
+  
+  --success: 134 61% 45%;
+  --success-foreground: 0 0% 100%;
+  --warning: 45 100% 55%;
+  --warning-foreground: 210 11% 15%;
 
   --shadow-2xs: 0px 1px 2px 0px hsl(210 14% 5% / 0.30);
   --shadow-xs: 0px 1px 3px 0px hsl(210 14% 5% / 0.40);

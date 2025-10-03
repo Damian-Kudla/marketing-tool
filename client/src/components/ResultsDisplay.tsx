@@ -49,7 +49,7 @@ export default function ResultsDisplay({ results = [] }: ResultsDisplayProps) {
                 </div>
                 <Badge
                   variant={result.isExisting ? "default" : "secondary"}
-                  className={result.isExisting ? "bg-success text-white" : "bg-warning text-foreground"}
+                  className={result.isExisting ? "bg-success text-success-foreground" : "bg-warning text-warning-foreground"}
                   data-testid={`badge-status-${index}`}
                 >
                   {result.isExisting ? t('results.existing') : t('results.prospect')}
