@@ -2,12 +2,14 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import multer from "multer";
-import { createWorker } from "tesseract.js";
+import vision from "@google-cloud/vision";
 import { 
   geocodingRequestSchema, 
   addressSchema, 
+  ocrCorrectionRequestSchema,
   type Address,
-  type Customer 
+  type Customer,
+  type OCRResponse
 } from "@shared/schema";
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -62,55 +64,128 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No image file provided" });
       }
 
-      const worker = await createWorker("deu");
-      const { data } = await worker.recognize(req.file.buffer);
-      await worker.terminate();
+      // Parse address from request body if provided
+      let address: Address | undefined;
+      if (req.body.address) {
+        try {
+          address = JSON.parse(req.body.address);
+        } catch (e) {
+          console.error("Failed to parse address:", e);
+        }
+      }
 
-      const extractedText = data.text;
+      // Initialize Google Cloud Vision client
+      const credentials = JSON.parse(process.env.GOOGLE_CLOUD_VISION_KEY || '{}');
+      const visionClient = new vision.ImageAnnotatorClient({
+        credentials,
+      });
+
+      // Perform text detection
+      const [result] = await visionClient.textDetection({
+        image: { content: req.file.buffer },
+      });
+
+      const detections = result.textAnnotations;
+      const fullVisionResponse = result;
+
+      if (!detections || detections.length === 0) {
+        return res.json({
+          residentNames: [],
+          fullVisionResponse,
+          newProspects: [],
+          existingCustomers: [],
+        } as OCRResponse);
+      }
+
+      // Extract full text
+      const fullText = detections[0]?.description || '';
+
+      // Parse resident names from text
+      // Split by line breaks and filter for names
+      const lines = fullText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
       
+      const residentNames: string[] = [];
       const namePatterns = [
-        /([A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)+)/g,
-        /(?:Herr|Frau|Hr\.|Fr\.)\s+([A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)*)/gi
+        // Match full names with capitalized words (2+ words)
+        /^([A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)+)$/,
+        // Match names with titles
+        /^(?:Herr|Frau|Hr\.|Fr\.)\s+([A-ZÄÖÜ][a-zäöüß]+(?:\s+[A-ZÄÖÜ][a-zäöüß]+)*)$/i,
       ];
 
-      const foundNames = new Set<string>();
-      
-      for (const pattern of namePatterns) {
-        const matches = Array.from(extractedText.matchAll(pattern));
-        for (const match of matches) {
-          const name = (match[1] || match[0]).trim();
-          if (name.length > 3 && name.split(/\s+/).length >= 2) {
-            foundNames.add(name);
+      for (const line of lines) {
+        // Replace hyphens with spaces for better matching
+        const cleanedLine = line.replace(/-/g, ' ').trim();
+        
+        for (const pattern of namePatterns) {
+          const match = cleanedLine.match(pattern);
+          if (match) {
+            const name = (match[1] || match[0]).trim();
+            if (name.length > 3 && !residentNames.includes(name)) {
+              residentNames.push(name);
+            }
+            break;
           }
         }
       }
 
-      const names = Array.from(foundNames);
+      // Search for matching customers
+      const existingCustomers: Customer[] = [];
+      const newProspects: string[] = [];
 
-      const customers = await storage.getAllCustomers();
-      const results: Customer[] = [];
-
-      for (const name of names) {
-        const existingCustomer = await storage.getCustomerByName(name);
-        if (existingCustomer) {
-          results.push(existingCustomer);
+      for (const residentName of residentNames) {
+        const matches = await storage.searchCustomers(residentName, address);
+        
+        if (matches.length > 0) {
+          // Add all matches to existing customers
+          existingCustomers.push(...matches);
         } else {
-          const newCustomer = await storage.createCustomer({
-            name,
-            isExisting: false
-          });
-          results.push(newCustomer);
+          // No match found - this is a prospect
+          newProspects.push(residentName);
         }
       }
 
-      res.json({
-        extractedText,
-        names,
-        results
-      });
+      const response: OCRResponse = {
+        residentNames,
+        fullVisionResponse,
+        newProspects,
+        existingCustomers,
+      };
+
+      res.json(response);
     } catch (error) {
       console.error("OCR error:", error);
       res.status(500).json({ error: "OCR processing failed" });
+    }
+  });
+
+  app.post("/api/ocr-correct", async (req, res) => {
+    try {
+      const { residentNames, address } = ocrCorrectionRequestSchema.parse(req.body);
+
+      const existingCustomers: Customer[] = [];
+      const newProspects: string[] = [];
+
+      for (const residentName of residentNames) {
+        const matches = await storage.searchCustomers(residentName, address);
+        
+        if (matches.length > 0) {
+          existingCustomers.push(...matches);
+        } else {
+          newProspects.push(residentName);
+        }
+      }
+
+      const response: OCRResponse = {
+        residentNames,
+        fullVisionResponse: null,
+        newProspects,
+        existingCustomers,
+      };
+
+      res.json(response);
+    } catch (error) {
+      console.error("OCR correction error:", error);
+      res.status(400).json({ error: "Invalid request" });
     }
   });
 
