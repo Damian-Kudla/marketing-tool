@@ -32,6 +32,18 @@ export default function ScannerPage() {
     setAddress(detectedAddress);
   };
 
+  const handleAddressSearch = (customers: any[]) => {
+    console.log('Address search result:', customers);
+    
+    // Show results as existing customers (since all customers at an address are existing)
+    setOcrResult({
+      residentNames: [],
+      existingCustomers: customers,
+      newProspects: [],
+    });
+    setShowCorrection(false);
+  };
+
   const handleCorrectionComplete = (result: any) => {
     console.log('Correction result:', result);
     
@@ -68,7 +80,10 @@ export default function ScannerPage() {
       </header>
 
       <main className="container mx-auto px-4 py-4 space-y-4 pb-24">
-        <GPSAddressForm onAddressDetected={handleAddressDetected} />
+        <GPSAddressForm 
+          onAddressDetected={handleAddressDetected}
+          onAddressSearch={handleAddressSearch}
+        />
         <PhotoCapture onPhotoProcessed={handlePhotoProcessed} address={address} />
         
         {showCorrection ? (
@@ -85,12 +100,12 @@ export default function ScannerPage() {
 
       {hasResults && !showCorrection && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t safe-area-bottom">
-          <div className="container mx-auto flex gap-2">
+          <div className="container mx-auto flex flex-wrap gap-2">
             <Button
               variant="outline"
               size="lg"
               onClick={handleReset}
-              className="flex-1 min-h-12 gap-2"
+              className="flex-1 min-w-[140px] min-h-12 gap-2"
               data-testid="button-reset"
             >
               <RotateCcw className="h-4 w-4" />
@@ -100,19 +115,11 @@ export default function ScannerPage() {
               variant="outline"
               size="lg"
               onClick={handleCorrect}
-              className="flex-1 min-h-12 gap-2"
+              className="flex-1 min-w-[140px] min-h-12 gap-2"
               data-testid="button-correct"
             >
               <Edit className="h-4 w-4" />
               {t('action.correct')}
-            </Button>
-            <Button
-              size="lg"
-              className="flex-1 min-h-12"
-              data-testid="button-save"
-              onClick={() => console.log('Save triggered', ocrResult)}
-            >
-              {t('action.save')}
             </Button>
           </div>
         </div>

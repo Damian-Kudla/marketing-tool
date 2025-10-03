@@ -238,6 +238,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/search-address", async (req, res) => {
+    try {
+      const address = addressSchema.partial().parse(req.body);
+      
+      // Normalize German characters (ß -> ss, remove dots/periods)
+      const normalizeGerman = (str: string) => {
+        return str.toLowerCase().trim()
+          .replace(/ß/g, 'ss')
+          .replace(/\./g, '')
+          .replace(/\s+/g, ' ');
+      };
+      
+      // Search for all customers at this address
+      const allCustomers = await storage.getAllCustomers();
+      
+      let matches = allCustomers;
+      
+      // Filter by postal code (most important and most unique)
+      if (address.postal) {
+        const searchPostal = address.postal.toLowerCase().trim();
+        matches = matches.filter(customer => 
+          customer.postalCode?.toLowerCase().trim() === searchPostal
+        );
+      }
+      
+      // Optionally filter by street (partial match, normalized)
+      if (address.street) {
+        const searchStreet = normalizeGerman(address.street);
+        matches = matches.filter(customer => {
+          if (!customer.street) return false;
+          const customerStreet = normalizeGerman(customer.street);
+          return customerStreet.includes(searchStreet) || searchStreet.includes(customerStreet);
+        });
+      }
+      
+      // Optionally filter by house number (flexible matching)
+      if (address.number) {
+        const searchNumber = address.number.toLowerCase().trim();
+        matches = matches.filter(customer => {
+          if (!customer.houseNumber) return false;
+          const customerNumber = customer.houseNumber.toLowerCase().trim();
+          // Match if search number is prefix of customer number or exact match
+          // This handles cases like "2" matching "2", "2A", "2a", etc.
+          return customerNumber === searchNumber || 
+                 customerNumber.startsWith(searchNumber) ||
+                 searchNumber.startsWith(customerNumber);
+        });
+      }
+      
+      res.json(matches);
+    } catch (error) {
+      console.error("Address search error:", error);
+      res.status(400).json({ error: "Invalid request" });
+    }
+  });
+
   app.get("/api/customers", async (req, res) => {
     try {
       const customers = await storage.getAllCustomers();

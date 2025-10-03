@@ -50,6 +50,11 @@ const resources = {
       "action.reset": "Reset",
       "action.edit": "Edit",
       "action.correct": "Correct",
+      "action.searchAddress": "Search Address",
+      "address.searching": "Searching...",
+      "address.searchSuccess": "Found",
+      "address.searchSuccessDesc": "customer(s) at this address",
+      "address.searchError": "Search failed",
     }
   },
   de: {
@@ -100,6 +105,11 @@ const resources = {
       "action.reset": "Zurücksetzen",
       "action.edit": "Bearbeiten",
       "action.correct": "Korrigieren",
+      "action.searchAddress": "Adresse durchsuchen",
+      "address.searching": "Suche läuft...",
+      "address.searchSuccess": "Gefunden",
+      "address.searchSuccessDesc": "Kunde(n) an dieser Adresse",
+      "address.searchError": "Suche fehlgeschlagen",
     }
   }
 };
