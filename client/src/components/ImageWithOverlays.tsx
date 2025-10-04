@@ -46,6 +46,38 @@ interface ImageWithOverlaysProps {
   onNamesUpdated?: (updatedNames: string[]) => void;
 }
 
+// Normalize name to extract words (remove periods, split on spaces/hyphens/slashes)
+const normalizeToWords = (name: string): string[] => {
+  return name
+    .toLowerCase()
+    .replace(/\./g, '') // Remove periods (e.g., "L." -> "L")
+    .split(/[\s\-\/]+/) // Split on spaces, hyphens, slashes
+    .filter(word => word.length > 1); // Ignore single characters
+};
+
+// Calculate duplicates from a list of names
+const calculateDuplicates = (names: string[]): Set<string> => {
+  const wordToNames = new Map<string, Set<string>>();
+  names.forEach(name => {
+    const words = normalizeToWords(name);
+    words.forEach(word => {
+      if (!wordToNames.has(word)) {
+        wordToNames.set(word, new Set());
+      }
+      wordToNames.get(word)!.add(name.toLowerCase());
+    });
+  });
+
+  const duplicates = new Set<string>();
+  wordToNames.forEach((nameSet, word) => {
+    if (nameSet.size > 1) {
+      nameSet.forEach(name => duplicates.add(name));
+    }
+  });
+  
+  return duplicates;
+};
+
 export default function ImageWithOverlays({
   imageSrc,
   fullVisionResponse,
@@ -160,35 +192,8 @@ export default function ImageWithOverlays({
       }
     });
 
-    // Normalize name to extract words (remove periods, split on spaces/hyphens/slashes)
-    const normalizeToWords = (name: string): string[] => {
-      return name
-        .toLowerCase()
-        .replace(/\./g, '') // Remove periods (e.g., "L." -> "L")
-        .split(/[\s\-\/]+/) // Split on spaces, hyphens, slashes
-        .filter(word => word.length > 1); // Ignore single characters
-    };
-
-    // Build word-to-names mapping to find names sharing common words
-    const wordToNames = new Map<string, Set<string>>();
-    residentNames.forEach(name => {
-      const words = normalizeToWords(name);
-      words.forEach(word => {
-        if (!wordToNames.has(word)) {
-          wordToNames.set(word, new Set());
-        }
-        wordToNames.get(word)!.add(name.toLowerCase());
-      });
-    });
-
-    // Find names that share words - these are duplicates
-    const duplicateNames = new Set<string>();
-    wordToNames.forEach((names, word) => {
-      if (names.size > 1) {
-        // This word appears in multiple names - all those names are duplicates
-        names.forEach(name => duplicateNames.add(name));
-      }
-    });
+    // Calculate duplicates from resident names
+    const duplicateNames = calculateDuplicates(residentNames);
     
     // Track which resident indices have been used to create overlays
     const usedResidentIndices = new Set<number>();
@@ -292,25 +297,25 @@ export default function ImageWithOverlays({
       const editedOverlays = prevOverlays.filter(o => o.isEdited);
       const processedNewOverlays = handleOverlaps(newOverlays);
       
-      // Recalculate duplicate status and existing/prospect status for edited overlays
-      // Use the same word-based duplicate detection logic
-      const currentWordToNames = new Map<string, Set<string>>();
-      residentNames.forEach(name => {
-        const words = normalizeToWords(name);
-        words.forEach(word => {
-          if (!currentWordToNames.has(word)) {
-            currentWordToNames.set(word, new Set());
-          }
-          currentWordToNames.get(word)!.add(name.toLowerCase());
-        });
-      });
+      // Collect all current names (original + edited) for duplicate detection
+      const allCurrentNames: string[] = [];
       
-      const currentDuplicateNames = new Set<string>();
-      currentWordToNames.forEach((names, word) => {
-        if (names.size > 1) {
-          names.forEach(name => currentDuplicateNames.add(name));
+      // Add non-edited original names
+      processedNewOverlays.forEach(overlay => {
+        const existingEdit = editedOverlays.find(e => e.originalIndex === overlay.originalIndex);
+        if (!existingEdit) {
+          allCurrentNames.push(overlay.text);
         }
       });
+      
+      // Add edited names
+      editedOverlays.forEach(edited => {
+        const editedName = edited.editedText || edited.text;
+        allCurrentNames.push(editedName);
+      });
+      
+      // Calculate duplicates from ALL current names (including edited ones)
+      const currentDuplicateNames = calculateDuplicates(allCurrentNames);
       
       const updatedEditedOverlays = editedOverlays.map(edited => {
         const editedName = edited.editedText || edited.text;
@@ -542,14 +547,30 @@ export default function ImageWithOverlays({
 
     const updatedNames = [...residentNames];
     const originalIndex = overlays[editingIndex].originalIndex;
-    updatedNames[originalIndex] = editValue.trim().toLowerCase();
+    const trimmedValue = editValue.trim();
+    updatedNames[originalIndex] = trimmedValue;
 
     // Mark this overlay as edited so it persists
-    setOverlays(prev => prev.map((overlay, idx) => 
-      idx === editingIndex 
-        ? { ...overlay, isEdited: true, editedText: editValue.trim().toLowerCase(), text: editValue.trim().toLowerCase() }
-        : overlay
-    ));
+    setOverlays(prev => {
+      const newOverlays = prev.map((overlay, idx) => 
+        idx === editingIndex 
+          ? { ...overlay, isEdited: true, editedText: trimmedValue, text: trimmedValue }
+          : overlay
+      );
+      
+      // Recalculate duplicate status for all overlays after edit
+      const allNames = newOverlays.map(o => o.editedText || o.text);
+      const duplicates = calculateDuplicates(allNames);
+      
+      return newOverlays.map(overlay => ({
+        ...overlay,
+        isDuplicate: duplicates.has((overlay.editedText || overlay.text).toLowerCase()),
+        isExisting: !newProspects.includes(overlay.editedText || overlay.text),
+        matchedCustomer: !newProspects.includes(overlay.editedText || overlay.text)
+          ? existingCustomers.find(c => c.name.toLowerCase() === (overlay.editedText || overlay.text).toLowerCase())
+          : undefined,
+      }));
+    });
 
     // Notify parent component which will handle the API call
     onNamesUpdated?.(updatedNames);
