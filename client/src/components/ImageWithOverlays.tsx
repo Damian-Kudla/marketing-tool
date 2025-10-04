@@ -29,6 +29,7 @@ interface OverlayBox {
   matchedCustomer?: Customer;
   xOffset?: number;
   yOffset?: number;
+  fontSize?: number;
 }
 
 interface ImageWithOverlaysProps {
@@ -63,6 +64,7 @@ export default function ImageWithOverlays({
   const imageRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const textRefs = useRef<Map<number, HTMLSpanElement>>(new Map());
 
   // Calculate overlays when data changes
   useEffect(() => {
@@ -130,6 +132,38 @@ export default function ImageWithOverlays({
     const processedOverlays = handleOverlaps(newOverlays);
     setOverlays(processedOverlays);
   }, [fullVisionResponse, residentNames, existingCustomers, newProspects]);
+
+  // Calculate optimal font size for text to fit in box without truncation
+  const calculateFontSize = (text: string, boxWidth: number, boxHeight: number): number => {
+    // Start with base font size in pixels
+    let fontSize = 12;
+    const minFontSize = 6;
+    
+    // Estimate character width (approximate, will be refined)
+    // Reduce padding significantly - only 4px total (2px each side)
+    const availableWidth = boxWidth - 4;
+    const availableHeight = boxHeight - 4;
+    
+    // Average character width is approximately 0.6 * fontSize for normal weight font
+    // We'll use thinner font (font-normal) so it's closer to 0.55
+    const avgCharWidthRatio = 0.55;
+    
+    // Calculate required width for text
+    const textLength = text.length;
+    
+    // Binary search for optimal font size
+    while (fontSize > minFontSize) {
+      const estimatedWidth = textLength * fontSize * avgCharWidthRatio;
+      const estimatedHeight = fontSize * 1.2; // line height
+      
+      if (estimatedWidth <= availableWidth && estimatedHeight <= availableHeight) {
+        break;
+      }
+      fontSize -= 0.5;
+    }
+    
+    return Math.max(fontSize, minFontSize);
+  };
 
   // Handle overlapping boxes by downscaling and offsetting
   const handleOverlaps = (boxes: OverlayBox[]): OverlayBox[] => {
@@ -322,6 +356,9 @@ export default function ImageWithOverlays({
             const scaledY = (overlay.y + (overlay.yOffset || 0)) * scaleY;
             const scaledWidth = overlay.width * scaleX * overlay.scale;
             const scaledHeight = overlay.height * scaleY * overlay.scale;
+            
+            // Calculate optimal font size for this overlay
+            const optimalFontSize = calculateFontSize(overlay.text, scaledWidth, scaledHeight);
 
             return (
               <div
@@ -352,7 +389,7 @@ export default function ImageWithOverlays({
               >
                 {/* Overlay box */}
                 <div
-                  className={`w-full h-full flex items-center justify-center text-xs font-semibold rounded border-2 text-black px-1 ${
+                  className={`w-full h-full flex items-center justify-center font-normal rounded border-2 text-black ${
                     overlay.isExisting
                       ? 'bg-success/50 border-success'
                       : 'bg-warning/50 border-warning'
@@ -362,10 +399,11 @@ export default function ImageWithOverlays({
                     backgroundColor: overlay.isExisting 
                       ? 'rgba(34, 197, 94, 0.5)'  // Green with 50% opacity
                       : 'rgba(251, 146, 60, 0.5)', // Orange with 50% opacity
+                    padding: '2px',
                   }}
                 >
                   {isEditing ? (
-                    <div className="flex items-center gap-1 px-1 w-full" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-1 w-full" onClick={(e) => e.stopPropagation()} style={{ padding: '1px' }}>
                       <Input
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
@@ -397,7 +435,17 @@ export default function ImageWithOverlays({
                       </Button>
                     </div>
                   ) : (
-                    <span className="px-1 truncate">{overlay.text}</span>
+                    <span 
+                      className="w-full text-center leading-tight"
+                      style={{
+                        fontSize: `${optimalFontSize}px`,
+                        lineHeight: '1.1',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {overlay.text}
+                    </span>
                   )}
                 </div>
 
