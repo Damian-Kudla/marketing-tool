@@ -1,0 +1,30 @@
+Before making any changes, please create a backup of the entire current app state so I can rollback to exactly this version if needed.
+
+I appreciate your previous suggestions on the architecture—everything made sense, and I'm sold on using CSS absolute positioning for the overlays because I'm interested in interactivity, like making the boxes clickable and editable.
+
+Now, let's move from planning to implementation. Please update the code in my project to add this feature. Specifically, modify the frontend (in the client/src directory, likely in components like PhotoCapture.tsx or a new Results component) to display the original uploaded photo with overlays based on the Vision API bounding boxes.
+
+Here are the clear requirements step by step:
+
+1. **Base Display**: Create or update a component (e.g., ImageWithOverlays.tsx) that shows the original photo in a relative-positioned container. Overlay semi-transparent boxes (50% opacity) at the exact positions from the boundingPoly vertices in the OCR response. Calculate scaling based on the displayed image size vs. original dimensions to ensure accuracy on different screen sizes.
+
+2. **Color Coding**: For each detected name:
+   - If it's an existing customer (matched from the backend response), set the box background and text color to green.
+   - If it's a prospect (not matched), set to orange.
+   - Render the extracted name text inside the box.
+
+3. **Interactivity and Editing**:
+   - Make each overlay box clickable: On a short click/tap, enter edit mode where the user can modify the name text directly in the box (e.g., via an input field that appears).
+   - After editing, trigger a re-match by sending the updated names back to the backend (use the /api/ocr-correct endpoint) to refresh the classifications.
+   - On a long press (or hold, e.g., using onMouseDown/onTouchStart with timeout), show a popup or tooltip with details for existing customers: full name from Google Sheets, street, and house number.
+
+4. **Results Display Below**: Below the overlaid image, only show the list of existing customers (remove or hide the prospects list). Keep any allCustomersAtAddress if relevant, but focus on matched ones.
+
+5. **General Handling and Mobile Optimization** (Important: The app is primarily used on iPhone, so ensure excellent mobile functionality):
+   - Handle edge cases: Overlapping boxes, no detections, image resizing (recalculate positions on window resize).
+   - Ensure the component is responsive and works on mobile (touch events for long press).
+   - Use the full OCR response from the backend, which includes boundingPoly.
+   - For overlays: Make the text boxes approximately the same size as the detected text in the image to minimize overlap likelihood. If overlaps occur, automatically downscale the affected boxes until they no longer overlap.
+   - Preserve the current zoom functionality on the image (e.g., pinch-to-zoom on iPhone) to make editing easier—do not disable or interfere with native browser zooming.
+
+Please implement this by editing the necessary files (e.g., add new component, update API response handling in the results view). Provide the changed code snippets or full files in your response, and explain what you modified and why. If anything is unclear, ask for clarification before proceeding.

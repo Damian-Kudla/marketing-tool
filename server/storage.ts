@@ -32,19 +32,20 @@ export class GoogleSheetsStorage implements IStorage {
   }
 
   /**
-   * Normalize street name for fuzzy matching
+   * Normalize street name by replacing street suffixes at the END with 'strasse' (consistent form for length preservation)
    * - Convert to lowercase
-   * - Remove special characters (hyphens, periods, spaces)
-   * - Replace common abbreviations
+   * - Replace umlauts early
+   * - Replace variants ONLY at the end (no \b to allow attached suffixes)
+   * - Handle more typos and remove special characters/spaces
    */
   private normalizeStreet(street: string): string {
     return street
       .toLowerCase()
       .trim()
-      // Replace abbreviations
-      .replace(/\bstr\b\.?/g, 'strasse')
-      .replace(/straße/g, 'strasse')
+      // Replace umlauts early (ß to ss)
       .replace(/ß/g, 'ss')
+      // Replace variants at the END with 'strasse' (no \b, adjusted for ss)
+      .replace(/(str(asse|.?|eet)?|strasse|st\.?|st|street|strse|strase|strsse)$/g, 'strasse')  // Removed \b, all variants without ß, added 'strsse' for typos
       // Remove special characters and spaces
       .replace(/[-\.\s]/g, '');
   }
@@ -52,27 +53,33 @@ export class GoogleSheetsStorage implements IStorage {
   /**
    * Calculate similarity between two streets using Levenshtein distance
    * Returns similarity percentage (0-100)
+   * Added min length check
    */
   private calculateStreetSimilarity(street1: string, street2: string): number {
     const normalized1 = this.normalizeStreet(street1);
     const normalized2 = this.normalizeStreet(street2);
-    
+
+    // Min length check: If both < 3 chars, require exact match
+    if (normalized1.length < 3 && normalized2.length < 3) {
+      return normalized1 === normalized2 ? 100 : 0;
+    }
+
     const maxLength = Math.max(normalized1.length, normalized2.length);
-    if (maxLength === 0) return 100; // Both empty strings
-    
+    if (maxLength === 0) return 100;
+
     const distance = leven(normalized1, normalized2);
     const similarity = (1 - distance / maxLength) * 100;
-    
+
     return similarity;
   }
 
   /**
    * Check if two streets match using fuzzy matching
-   * Returns true if similarity >= 95%
+   * Returns true if similarity >= 90% (for typo tolerance)
    */
   private streetsMatch(street1: string, street2: string): boolean {
     const similarity = this.calculateStreetSimilarity(street1, street2);
-    return similarity >= 95;
+    return similarity >= 90;
   }
 
   private initializeSheets() {
@@ -205,17 +212,15 @@ export class GoogleSheetsStorage implements IStorage {
       });
     }
     
-    // Filter by house number (flexible matching - prefix match)
+    // Filter by house number (flexible matching - prefix match, improved)
     if (address.number) {
-      const searchNumber = address.number.toLowerCase().trim();
+      const normalizeNumber = (num: string) => num.toLowerCase().trim().replace(/[.-]/g, '');  // Remove dots/hyphens for tolerance
+      const searchNumber = normalizeNumber(address.number);
       matches = matches.filter(customer => {
         if (!customer.houseNumber) return false;
-        const customerNumber = customer.houseNumber.toLowerCase().trim();
-        // Match if search number is prefix of customer number or exact match
-        // This handles cases like "2" matching "2", "2A", "2a", etc.
-        return customerNumber === searchNumber || 
-               customerNumber.startsWith(searchNumber) ||
-               searchNumber.startsWith(customerNumber);
+        const customerNumber = normalizeNumber(customer.houseNumber);
+        // Stricter: Exact match or customer starts with search (avoids search longer than customer)
+        return customerNumber === searchNumber || customerNumber.startsWith(searchNumber);
       });
     }
     
@@ -236,18 +241,16 @@ export class GoogleSheetsStorage implements IStorage {
     
     // Now search names ONLY within the address-filtered customers
     const normalizedSearchName = name.toLowerCase().trim();
-    const searchWords = normalizedSearchName.split(/\s+/);
+    const searchWords = normalizedSearchName.split(/\s+/).filter(word => word.length >= 2);
 
     const matches = customersToSearch.filter(customer => {
       const customerNameWords = customer.name.toLowerCase().trim().split(/\s+/);
       
-      // Check if any word in the search name matches any word in the customer name
-      return searchWords.some(searchWord => 
-        customerNameWords.some(customerWord => 
-          customerWord.includes(searchWord) || searchWord.includes(customerWord)
-        )
-      );
-    });
+      // Neu: Exakter Match - prüfe, ob searchWord exakt in customerNameWords vorkommt
+        return searchWords.some(searchWord => 
+          customerNameWords.includes(searchWord)
+        );
+      });
     
     return matches;
   }
