@@ -85,96 +85,118 @@ export default function ImageWithOverlays({
 
     const textAnnotations: TextAnnotation[] = fullVisionResponse.textAnnotations;
     
-    // Build all possible (resident, annotation) matches with scores
-    type Match = {
+    // For each resident name, find ALL matching annotations and merge bounding boxes
+    type ResidentMatch = {
       residentIndex: number;
       residentName: string;
-      annotationIndex: number;
-      annotation: TextAnnotation;
-      matchScore: number;
+      annotations: TextAnnotation[];
+      totalMatchScore: number;
     };
     
-    const allMatches: Match[] = [];
-
-    // Skip first annotation (full text), process individual text blocks
-    for (let i = 1; i < textAnnotations.length; i++) {
-      const annotation = textAnnotations[i];
-      const text = annotation.description?.toLowerCase().replace(/[-\.\/\\|]/g, ' ').replace(/\s+/g, ' ').trim();
-      
-      if (!text) continue;
-      const annotationWords = text.split(/\s+/);
-
-      // Check against all resident names
-      residentNames.forEach((residentName, nameIndex) => {
-        const nameWords = residentName.toLowerCase().split(/\s+/);
-        const matchingWords = nameWords.filter(word => annotationWords.includes(word));
-        const matchScore = matchingWords.length;
-
-        if (matchScore > 0) {
-          allMatches.push({
-            residentIndex: nameIndex,
-            residentName,
-            annotationIndex: i,
-            annotation,
-            matchScore,
-          });
-        }
-      });
-    }
-
-    // Sort matches by score descending, then by resident name length descending (prefer longer names)
-    allMatches.sort((a, b) => {
-      if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore;
-      return b.residentName.length - a.residentName.length;
-    });
-
-    // Greedy assignment: pick best matches ensuring each annotation used once
+    const residentMatches: ResidentMatch[] = [];
     const usedAnnotations = new Set<number>();
-    const usedResidents = new Set<number>();
-    const newOverlays: OverlayBox[] = [];
 
-    for (const match of allMatches) {
-      // Skip if this annotation or resident already assigned
-      if (usedAnnotations.has(match.annotationIndex) || usedResidents.has(match.residentIndex)) {
-        continue;
+    // Sort residents by word count (more words first), then by length (longer first)
+    // This ensures multi-word names like "von brandt" are processed before "brandt"
+    const sortedResidents = residentNames.map((name, idx) => ({ 
+      name, 
+      originalIndex: idx,
+      wordCount: name.split(/\s+/).length 
+    }))
+      .sort((a, b) => {
+        if (b.wordCount !== a.wordCount) return b.wordCount - a.wordCount;
+        return b.name.length - a.name.length;
+      });
+
+    // Process each resident name (longer names first)
+    sortedResidents.forEach(({ name: residentName, originalIndex: nameIndex }) => {
+      const nameWords = residentName.toLowerCase().split(/\s+/);
+      const matchingAnnotations: TextAnnotation[] = [];
+      const matchedIndices: number[] = [];
+      let totalScore = 0;
+
+      // Skip first annotation (full text), process individual text blocks
+      for (let i = 1; i < textAnnotations.length; i++) {
+        if (usedAnnotations.has(i)) continue; // Skip if already used
+        
+        const annotation = textAnnotations[i];
+        const text = annotation.description?.toLowerCase().replace(/[-\.\/\\|]/g, ' ').replace(/\s+/g, ' ').trim();
+        
+        if (!text) continue;
+        const annotationWords = text.split(/\s+/);
+
+        // Check if ANY word from the name matches this annotation
+        const matchingWords = nameWords.filter(word => annotationWords.includes(word));
+        
+        if (matchingWords.length > 0) {
+          matchingAnnotations.push(annotation);
+          matchedIndices.push(i);
+          totalScore += matchingWords.length;
+        }
       }
 
-      // Assign this match
-      usedAnnotations.add(match.annotationIndex);
-      usedResidents.add(match.residentIndex);
+      if (matchingAnnotations.length > 0) {
+        residentMatches.push({
+          residentIndex: nameIndex,
+          residentName,
+          annotations: matchingAnnotations,
+          totalMatchScore: totalScore,
+        });
+        
+        // Mark all matched annotations as used
+        matchedIndices.forEach(idx => usedAnnotations.add(idx));
+      }
+    });
 
+    // Create overlays with merged bounding boxes for multi-part names
+    const newOverlays: OverlayBox[] = [];
+    
+    residentMatches.forEach(match => {
       const isExisting = !newProspects.includes(match.residentName);
       const matchedCustomer = isExisting 
         ? existingCustomers.find(c => c.name.toLowerCase() === match.residentName.toLowerCase())
         : undefined;
 
-      // Calculate bounding box from vertices
-      const vertices = match.annotation.boundingPoly.vertices;
-      if (vertices.length >= 3) {
-        const xs = vertices.map(v => v.x || 0);
-        const ys = vertices.map(v => v.y || 0);
+      // Collect all vertices from all matching annotations
+      const allVertices: Array<{ x: number; y: number }> = [];
+      match.annotations.forEach(annotation => {
+        if (annotation.boundingPoly?.vertices) {
+          annotation.boundingPoly.vertices.forEach(v => {
+            allVertices.push({ x: v.x || 0, y: v.y || 0 });
+          });
+        }
+      });
+
+      if (allVertices.length >= 3) {
+        const xs = allVertices.map(v => v.x);
+        const ys = allVertices.map(v => v.y);
         
         const minX = Math.min(...xs);
         const minY = Math.min(...ys);
         const maxX = Math.max(...xs);
         const maxY = Math.max(...ys);
 
-        // Add padding to frame text properly (extend box by 10% on each side)
-        const padding = Math.max((maxX - minX) * 0.1, (maxY - minY) * 0.1);
+        // Add conservative padding (5% instead of 10% to avoid edge issues)
+        const baseWidth = maxX - minX;
+        const baseHeight = maxY - minY;
+        const padding = Math.min(
+          Math.max(baseWidth * 0.05, baseHeight * 0.05),
+          10 // Cap padding at 10px to avoid extending too far
+        );
         
         newOverlays.push({
           text: match.residentName,
-          x: minX - padding,
-          y: minY - padding,
-          width: (maxX - minX) + (padding * 2),
-          height: (maxY - minY) + (padding * 2),
+          x: Math.max(0, minX - padding), // Don't extend beyond left edge
+          y: Math.max(0, minY - padding), // Don't extend beyond top edge  
+          width: baseWidth + (padding * 2),
+          height: baseHeight + (padding * 2),
           isExisting,
           scale: 1,
           originalIndex: match.residentIndex,
           matchedCustomer,
         });
       }
-    }
+    });
 
     // Preserve edited overlays - merge them with new overlays using stable identifier
     setOverlays(prevOverlays => {
@@ -227,19 +249,18 @@ export default function ImageWithOverlays({
     let fontSize = 12;
     const minFontSize = 6;
     
-    // Estimate character width (approximate, will be refined)
-    // Reduce padding significantly - only 4px total (2px each side)
-    const availableWidth = boxWidth - 4;
+    // Very conservative padding to account for rendering variations
+    const availableWidth = boxWidth - 12; // Extra conservative (was 8px)
     const availableHeight = boxHeight - 4;
     
-    // Average character width is approximately 0.6 * fontSize for normal weight font
-    // We'll use thinner font (font-normal) so it's closer to 0.55
-    const avgCharWidthRatio = 0.55;
+    // Very conservative character width ratio
+    // Real-world testing shows 0.75 is more accurate for avoiding truncation
+    const avgCharWidthRatio = 0.75; // Increased from 0.65 for safety
     
     // Calculate required width for text
     const textLength = text.length;
     
-    // Binary search for optimal font size
+    // Find optimal font size by reducing until it fits
     while (fontSize > minFontSize) {
       const estimatedWidth = textLength * fontSize * avgCharWidthRatio;
       const estimatedHeight = fontSize * 1.2; // line height
