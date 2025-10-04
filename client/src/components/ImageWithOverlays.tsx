@@ -126,10 +126,10 @@ export default function ImageWithOverlays({
         const annotationWords = text.split(/\s+/);
 
         // For single-word names, only match if annotation is EXACTLY that word
-        // This prevents "scherwan" from matching "scherwan 15" or larger blocks
+        // Only take the FIRST match to prevent oversized boxes from multiple detections
         if (nameWords.length === 1) {
           const singleWord = nameWords[0];
-          if (annotationWords.length === 1 && annotationWords[0] === singleWord) {
+          if (annotationWords.length === 1 && annotationWords[0] === singleWord && matchingAnnotations.length === 0) {
             matchingAnnotations.push(annotation);
             matchedIndices.push(i);
             totalScore += 1;
@@ -465,7 +465,7 @@ export default function ImageWithOverlays({
   return (
     <Card data-testid="card-image-overlays">
       <CardContent className="p-0">
-        <div ref={containerRef} className="relative w-full" style={{ touchAction: 'pan-y' }}>
+        <div ref={containerRef} className="relative w-full" style={{ touchAction: 'auto' }}>
           <img
             ref={imageRef}
             src={imageSrc}
@@ -484,7 +484,8 @@ export default function ImageWithOverlays({
             const scaledHeight = overlay.height * scaleY * overlay.scale;
             
             // Calculate optimal font size for this overlay
-            const optimalFontSize = calculateFontSize(overlay.text, scaledWidth, scaledHeight);
+            // Text area extends 8px on each side (16px total) for better visibility
+            const optimalFontSize = calculateFontSize(overlay.text, scaledWidth + 16, scaledHeight);
 
             return (
               <div
@@ -510,24 +511,33 @@ export default function ImageWithOverlays({
                 }}
                 data-testid={`overlay-box-${index}`}
               >
-                {/* Overlay box */}
+                {/* Background box with rounded corners and border */}
                 <div
-                  className={`w-full h-full flex items-center justify-center font-normal rounded border text-black`}
+                  className="absolute inset-0 rounded border"
                   style={{
-                    backdropFilter: 'blur(2px)',
                     backgroundColor: overlay.isExisting 
-                      ? 'rgba(34, 197, 94, 0.1)'  // Green with 10% opacity
-                      : 'rgba(251, 146, 60, 0.1)', // Orange with 10% opacity
-                    borderColor: overlay.isExisting
                       ? 'rgba(34, 197, 94, 0.3)'  // Green with 30% opacity
                       : 'rgba(251, 146, 60, 0.3)', // Orange with 30% opacity
+                    borderColor: overlay.isExisting
+                      ? 'rgba(34, 197, 94, 0.8)'  // Green with 80% opacity
+                      : 'rgba(251, 146, 60, 0.8)', // Orange with 80% opacity
                     borderWidth: '1px',
-                    padding: '1px',
+                  }}
+                />
+                
+                {/* Text container - extends horizontally to avoid rounded corner clipping */}
+                <div 
+                  className="absolute inset-0 flex items-center justify-center"
+                  style={{
+                    left: '-8px',
+                    right: '-8px',
+                    paddingLeft: '8px',
+                    paddingRight: '8px',
                   }}
                 >
                   {isEditing && windowWidth >= 1000 ? (
                     // Desktop inline editing
-                    <div className="flex items-center gap-1 w-full" onClick={(e) => e.stopPropagation()} style={{ padding: '1px' }}>
+                    <div className="flex items-center gap-1 w-full" onClick={(e) => e.stopPropagation()}>
                       <Input
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
@@ -560,12 +570,11 @@ export default function ImageWithOverlays({
                     </div>
                   ) : (
                     <span 
-                      className="w-full text-center leading-tight"
+                      className="text-center leading-tight text-black font-medium"
                       style={{
                         fontSize: `${optimalFontSize}px`,
                         lineHeight: '1.1',
                         whiteSpace: 'nowrap',
-                        overflow: 'hidden',
                       }}
                     >
                       {overlay.text}
