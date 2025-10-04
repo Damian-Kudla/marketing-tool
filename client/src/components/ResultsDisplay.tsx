@@ -129,20 +129,40 @@ export default function ResultsDisplay({ result, photoImageSrc, address, onNames
 
         {/* Show duplicate names - only if duplicates exist */}
         {(() => {
-          // Detect duplicates
-          const nameCounts = new Map<string, number>();
-          const duplicates: string[] = [];
-          
+          // Normalize name to extract words (remove periods, split on spaces/hyphens/slashes)
+          const normalizeToWords = (name: string): string[] => {
+            return name
+              .toLowerCase()
+              .replace(/\./g, '') // Remove periods (e.g., "L." -> "L")
+              .split(/[\s\-\/]+/) // Split on spaces, hyphens, slashes
+              .filter(word => word.length > 1); // Ignore single characters
+          };
+
+          // Build word-to-names mapping to find names sharing common words
+          const wordToNames = new Map<string, Set<string>>();
           result.residentNames.forEach(name => {
-            const lowerName = name.toLowerCase();
-            const count = (nameCounts.get(lowerName) || 0) + 1;
-            nameCounts.set(lowerName, count);
-            
-            // Only add to duplicates list if this is exactly the second occurrence
-            if (count === 2) {
-              duplicates.push(name);
+            const words = normalizeToWords(name);
+            words.forEach(word => {
+              if (!wordToNames.has(word)) {
+                wordToNames.set(word, new Set());
+              }
+              wordToNames.get(word)!.add(name);
+            });
+          });
+
+          // Find names that share words - these are duplicates
+          const duplicateNamesSet = new Set<string>();
+          wordToNames.forEach((names, word) => {
+            if (names.size > 1) {
+              // This word appears in multiple names - all those names are duplicates
+              names.forEach(name => duplicateNamesSet.add(name));
             }
           });
+          
+          // Convert to array for display (remove exact duplicates)
+          const duplicates = Array.from(new Set(
+            result.residentNames.filter(name => duplicateNamesSet.has(name))
+          ));
           
           if (duplicates.length === 0) return null;
           

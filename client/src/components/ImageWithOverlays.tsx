@@ -160,11 +160,34 @@ export default function ImageWithOverlays({
       }
     });
 
-    // Detect duplicates - names that appear more than once
-    const nameCounts = new Map<string, number>();
+    // Normalize name to extract words (remove periods, split on spaces/hyphens/slashes)
+    const normalizeToWords = (name: string): string[] => {
+      return name
+        .toLowerCase()
+        .replace(/\./g, '') // Remove periods (e.g., "L." -> "L")
+        .split(/[\s\-\/]+/) // Split on spaces, hyphens, slashes
+        .filter(word => word.length > 1); // Ignore single characters
+    };
+
+    // Build word-to-names mapping to find names sharing common words
+    const wordToNames = new Map<string, Set<string>>();
     residentNames.forEach(name => {
-      const lowerName = name.toLowerCase();
-      nameCounts.set(lowerName, (nameCounts.get(lowerName) || 0) + 1);
+      const words = normalizeToWords(name);
+      words.forEach(word => {
+        if (!wordToNames.has(word)) {
+          wordToNames.set(word, new Set());
+        }
+        wordToNames.get(word)!.add(name.toLowerCase());
+      });
+    });
+
+    // Find names that share words - these are duplicates
+    const duplicateNames = new Set<string>();
+    wordToNames.forEach((names, word) => {
+      if (names.size > 1) {
+        // This word appears in multiple names - all those names are duplicates
+        names.forEach(name => duplicateNames.add(name));
+      }
     });
     
     // Track which resident indices have been used to create overlays
@@ -174,7 +197,7 @@ export default function ImageWithOverlays({
     const newOverlays: OverlayBox[] = [];
     
     residentMatches.forEach(match => {
-      const isDuplicate = (nameCounts.get(match.residentName.toLowerCase()) || 0) > 1;
+      const isDuplicate = duplicateNames.has(match.residentName.toLowerCase());
       const isExisting = !newProspects.includes(match.residentName);
       const matchedCustomer = isExisting 
         ? existingCustomers.find(c => c.name.toLowerCase() === match.residentName.toLowerCase())
@@ -231,10 +254,16 @@ export default function ImageWithOverlays({
         if (usedResidentIndices.has(idx)) return; // Already has overlay
         
         const lowerName = name.toLowerCase();
-        const count = nameCounts.get(lowerName) || 0;
-        if (count > 1) {
-          // This is a duplicate that didn't get matched - find the first matched overlay with this name
-          const matchedOverlay = newOverlays.find(o => o.text.toLowerCase() === lowerName);
+        const isDuplicate = duplicateNames.has(lowerName);
+        
+        if (isDuplicate) {
+          // This is a duplicate that didn't get matched - find an overlay that shares a word with this name
+          const nameWords = normalizeToWords(name);
+          const matchedOverlay = newOverlays.find(overlay => {
+            const overlayWords = normalizeToWords(overlay.text);
+            return nameWords.some(word => overlayWords.includes(word));
+          });
+          
           if (matchedOverlay) {
             const isExisting = !newProspects.includes(name);
             const matchedCustomer = isExisting 
@@ -264,15 +293,28 @@ export default function ImageWithOverlays({
       const processedNewOverlays = handleOverlaps(newOverlays);
       
       // Recalculate duplicate status and existing/prospect status for edited overlays
-      const currentNameCounts = new Map<string, number>();
+      // Use the same word-based duplicate detection logic
+      const currentWordToNames = new Map<string, Set<string>>();
       residentNames.forEach(name => {
-        const lowerName = name.toLowerCase();
-        currentNameCounts.set(lowerName, (currentNameCounts.get(lowerName) || 0) + 1);
+        const words = normalizeToWords(name);
+        words.forEach(word => {
+          if (!currentWordToNames.has(word)) {
+            currentWordToNames.set(word, new Set());
+          }
+          currentWordToNames.get(word)!.add(name.toLowerCase());
+        });
+      });
+      
+      const currentDuplicateNames = new Set<string>();
+      currentWordToNames.forEach((names, word) => {
+        if (names.size > 1) {
+          names.forEach(name => currentDuplicateNames.add(name));
+        }
       });
       
       const updatedEditedOverlays = editedOverlays.map(edited => {
         const editedName = edited.editedText || edited.text;
-        const isDuplicate = (currentNameCounts.get(editedName.toLowerCase()) || 0) > 1;
+        const isDuplicate = currentDuplicateNames.has(editedName.toLowerCase());
         const isExisting = !newProspects.includes(editedName);
         const matchedCustomer = isExisting 
           ? existingCustomers.find(c => c.name.toLowerCase() === editedName.toLowerCase())
