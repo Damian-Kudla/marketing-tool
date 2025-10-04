@@ -46,12 +46,12 @@ interface ImageWithOverlaysProps {
   onNamesUpdated?: (updatedNames: string[]) => void;
 }
 
-// Normalize name to extract words (remove periods, split on spaces/hyphens/slashes)
+// Normalize name to extract words (match backend normalization: periods → spaces)
 const normalizeToWords = (name: string): string[] => {
   return name
     .toLowerCase()
-    .replace(/\./g, '') // Remove periods (e.g., "L." -> "L")
-    .split(/[\s\-\/]+/) // Split on spaces, hyphens, slashes
+    .replace(/[-\.\/\\|]/g, ' ') // Replace periods, hyphens, slashes with spaces (match backend)
+    .split(/\s+/) // Split on spaces
     .filter(word => word.length > 1); // Ignore single characters
 };
 

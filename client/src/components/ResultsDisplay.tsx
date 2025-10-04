@@ -129,40 +129,55 @@ export default function ResultsDisplay({ result, photoImageSrc, address, onNames
 
         {/* Show duplicate names - only if duplicates exist */}
         {(() => {
-          // Normalize name to extract words (remove periods, split on spaces/hyphens/slashes)
+          // Normalize name to extract words (match backend normalization: periods → spaces)
           const normalizeToWords = (name: string): string[] => {
             return name
               .toLowerCase()
-              .replace(/\./g, '') // Remove periods (e.g., "L." -> "L")
-              .split(/[\s\-\/]+/) // Split on spaces, hyphens, slashes
+              .replace(/[-\.\/\\|]/g, ' ') // Replace periods, hyphens, slashes with spaces (match backend)
+              .split(/\s+/) // Split on spaces
               .filter(word => word.length > 1); // Ignore single characters
           };
 
-          // Build word-to-names mapping to find names sharing common words
-          const wordToNames = new Map<string, Set<string>>();
+          // Count exact occurrences first (for exact duplicates like "schmidt" appearing twice)
+          const nameCounts = new Map<string, number>();
+          result.residentNames.forEach(name => {
+            const lowerName = name.toLowerCase();
+            nameCounts.set(lowerName, (nameCounts.get(lowerName) || 0) + 1);
+          });
+
+          // Build word-to-names mapping to find word-based duplicates
+          const wordToNames = new Map<string, string[]>();
           result.residentNames.forEach(name => {
             const words = normalizeToWords(name);
             words.forEach(word => {
               if (!wordToNames.has(word)) {
-                wordToNames.set(word, new Set());
+                wordToNames.set(word, []);
               }
-              wordToNames.get(word)!.add(name);
+              wordToNames.get(word)!.push(name.toLowerCase());
             });
           });
 
-          // Find names that share words - these are duplicates
           const duplicateNamesSet = new Set<string>();
-          wordToNames.forEach((names, word) => {
-            if (names.size > 1) {
-              // This word appears in multiple names - all those names are duplicates
-              names.forEach(name => duplicateNamesSet.add(name));
+          
+          // Add exact duplicates (same name appears multiple times)
+          nameCounts.forEach((count, name) => {
+            if (count > 1) {
+              duplicateNamesSet.add(name);
             }
           });
           
-          // Convert to array for display (remove exact duplicates)
-          const duplicates = Array.from(new Set(
-            result.residentNames.filter(name => duplicateNamesSet.has(name))
-          ));
+          // Add word-based duplicates (different names sharing words)
+          wordToNames.forEach((nameList, word) => {
+            const uniqueNames = new Set(nameList);
+            if (uniqueNames.size > 1) {
+              uniqueNames.forEach(name => duplicateNamesSet.add(name));
+            }
+          });
+          
+          // Convert to array for display (preserve duplicates for display)
+          const duplicates = result.residentNames.filter(name => 
+            duplicateNamesSet.has(name.toLowerCase())
+          );
           
           if (duplicates.length === 0) return null;
           
