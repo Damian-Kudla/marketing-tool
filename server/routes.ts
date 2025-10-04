@@ -194,7 +194,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Join filtered words back to name
           name = filteredWords.join(' ');
 
-          if (name.length >= 1 && !residentNames.includes(name)) {
+          // Allow duplicate names (for duplicate detection)
+          if (name.length >= 1) {
             residentNames.push(name);
           }
         }

@@ -224,9 +224,26 @@ export default function ImageWithOverlays({
       const editedOverlays = prevOverlays.filter(o => o.isEdited);
       const processedNewOverlays = handleOverlaps(newOverlays);
       
+      // Recalculate duplicate status and existing/prospect status for edited overlays
+      const currentNameCounts = new Map<string, number>();
+      residentNames.forEach(name => {
+        const lowerName = name.toLowerCase();
+        currentNameCounts.set(lowerName, (currentNameCounts.get(lowerName) || 0) + 1);
+      });
+      
+      const updatedEditedOverlays = editedOverlays.map(edited => {
+        const editedName = edited.editedText || edited.text;
+        const isDuplicate = (currentNameCounts.get(editedName.toLowerCase()) || 0) > 1;
+        const isExisting = !newProspects.includes(editedName);
+        const matchedCustomer = isExisting 
+          ? existingCustomers.find(c => c.name.toLowerCase() === editedName.toLowerCase())
+          : undefined;
+        return { ...edited, isDuplicate, isExisting, matchedCustomer };
+      });
+      
       // Create a map of edited overlays by their originalIndex (stable identifier)
       const editedByIndex = new Map<number, OverlayBox>();
-      editedOverlays.forEach(edited => {
+      updatedEditedOverlays.forEach(edited => {
         editedByIndex.set(edited.originalIndex, edited);
       });
       
@@ -245,9 +262,10 @@ export default function ImageWithOverlays({
             scale: newOverlay.scale,
             xOffset: newOverlay.xOffset,
             yOffset: newOverlay.yOffset,
-            isExisting: newOverlay.isExisting,
-            isDuplicate: newOverlay.isDuplicate,
-            matchedCustomer: newOverlay.matchedCustomer,
+            // Use recalculated status from edited version (not newOverlay)
+            isExisting: editedVersion.isExisting,
+            isDuplicate: editedVersion.isDuplicate,
+            matchedCustomer: editedVersion.matchedCustomer,
           });
           editedByIndex.delete(newOverlay.originalIndex); // Mark as used
         } else {
