@@ -167,6 +167,9 @@ export default function ImageWithOverlays({
       nameCounts.set(lowerName, (nameCounts.get(lowerName) || 0) + 1);
     });
     
+    // Track which resident indices have been used to create overlays
+    const usedResidentIndices = new Set<number>();
+    
     // Create overlays with merged bounding boxes for multi-part names
     const newOverlays: OverlayBox[] = [];
     
@@ -204,10 +207,11 @@ export default function ImageWithOverlays({
           10 // Cap padding at 10px to avoid extending too far
         );
         
+        // Create overlay for this match's resident index
         newOverlays.push({
           text: match.residentName,
-          x: Math.max(0, minX - padding), // Don't extend beyond left edge
-          y: Math.max(0, minY - padding), // Don't extend beyond top edge  
+          x: Math.max(0, minX - padding),
+          y: Math.max(0, minY - padding),
           width: baseWidth + (padding * 2),
           height: baseHeight + (padding * 2),
           isExisting,
@@ -216,8 +220,43 @@ export default function ImageWithOverlays({
           originalIndex: match.residentIndex,
           matchedCustomer,
         });
+        usedResidentIndices.add(match.residentIndex);
       }
     });
+    
+    // For duplicate names where some occurrences didn't get matched to an annotation,
+    // create overlays at the same location as the first matched occurrence
+    if (newOverlays.length > 0) {
+      residentNames.forEach((name, idx) => {
+        if (usedResidentIndices.has(idx)) return; // Already has overlay
+        
+        const lowerName = name.toLowerCase();
+        const count = nameCounts.get(lowerName) || 0;
+        if (count > 1) {
+          // This is a duplicate that didn't get matched - find the first matched overlay with this name
+          const matchedOverlay = newOverlays.find(o => o.text.toLowerCase() === lowerName);
+          if (matchedOverlay) {
+            const isExisting = !newProspects.includes(name);
+            const matchedCustomer = isExisting 
+              ? existingCustomers.find(c => c.name.toLowerCase() === lowerName)
+              : undefined;
+            
+            newOverlays.push({
+              text: name,
+              x: matchedOverlay.x,
+              y: matchedOverlay.y,
+              width: matchedOverlay.width,
+              height: matchedOverlay.height,
+              isExisting,
+              isDuplicate: true,
+              scale: 1,
+              originalIndex: idx,
+              matchedCustomer,
+            });
+          }
+        }
+      });
+    }
 
     // Preserve edited overlays - merge them with new overlays using stable identifier
     setOverlays(prevOverlays => {
