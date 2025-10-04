@@ -7,7 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Address } from '@/components/GPSAddressForm';
 
 interface PhotoCaptureProps {
-  onPhotoProcessed?: (results: any) => void;
+  onPhotoProcessed?: (results: any, imageSrc?: string) => void;
   address?: Address | null;
 }
 
@@ -62,7 +62,7 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
       }
 
       const result = await response.json();
-      onPhotoProcessed?.(result);
+      onPhotoProcessed?.(result, preview || undefined);
       
       const totalNames = result.residentNames?.length || 0;
       if (totalNames === 0) {

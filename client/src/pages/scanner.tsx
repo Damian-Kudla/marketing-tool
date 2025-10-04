@@ -13,17 +13,22 @@ export default function ScannerPage() {
   const [address, setAddress] = useState<Address | null>(null);
   const [ocrResult, setOcrResult] = useState<OCRResult | null>(null);
   const [showCorrection, setShowCorrection] = useState(false);
+  const [photoImageSrc, setPhotoImageSrc] = useState<string | null>(null);
 
-  const handlePhotoProcessed = (result: any) => {
+  const handlePhotoProcessed = (result: any, imageSrc?: string) => {
     console.log('OCR result:', result);
     
-    if (result.residentNames) {
+    if (result.residentNames !== undefined) {
       setOcrResult({
         residentNames: result.residentNames,
         existingCustomers: result.existingCustomers || [],
         newProspects: result.newProspects || [],
         allCustomersAtAddress: result.allCustomersAtAddress || [],
+        fullVisionResponse: result.fullVisionResponse,
       });
+      if (imageSrc) {
+        setPhotoImageSrc(imageSrc);
+      }
       setShowCorrection(false);
     }
   };
@@ -49,12 +54,13 @@ export default function ScannerPage() {
   const handleCorrectionComplete = (result: any) => {
     console.log('Correction result:', result);
     
-    if (result.residentNames) {
+    if (result.residentNames !== undefined) {
       setOcrResult({
         residentNames: result.residentNames,
         existingCustomers: result.existingCustomers || [],
         newProspects: result.newProspects || [],
         allCustomersAtAddress: result.allCustomersAtAddress || [],
+        fullVisionResponse: ocrResult?.fullVisionResponse,
       });
       setShowCorrection(false);
     }
@@ -63,6 +69,49 @@ export default function ScannerPage() {
   const handleReset = () => {
     setOcrResult(null);
     setShowCorrection(false);
+    setPhotoImageSrc(null);
+  };
+
+  const handleNamesUpdated = async (updatedNames: string[]) => {
+    if (!address) return;
+
+    try {
+      const response = await fetch('/api/ocr-correct', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          residentNames: updatedNames,
+          address,
+        }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setOcrResult({
+          residentNames: result.residentNames,
+          existingCustomers: result.existingCustomers || [],
+          newProspects: result.newProspects || [],
+          allCustomersAtAddress: result.allCustomersAtAddress || [],
+          fullVisionResponse: ocrResult?.fullVisionResponse,
+        });
+      } else {
+        // Show error toast if update fails
+        const { toast } = await import('@/hooks/use-toast');
+        toast({
+          variant: 'destructive',
+          title: t('photo.error'),
+          description: t('photo.updateFailed'),
+        });
+      }
+    } catch (error) {
+      console.error('Update error:', error);
+      const { toast } = await import('@/hooks/use-toast');
+      toast({
+        variant: 'destructive',
+        title: t('photo.error'),
+        description: t('photo.updateFailed'),
+      });
+    }
   };
 
   const handleCorrect = () => {
@@ -97,7 +146,12 @@ export default function ScannerPage() {
             onCancel={() => setShowCorrection(false)}
           />
         ) : (
-          <ResultsDisplay result={ocrResult} />
+          <ResultsDisplay 
+            result={ocrResult} 
+            photoImageSrc={photoImageSrc}
+            address={address}
+            onNamesUpdated={handleNamesUpdated}
+          />
         )}
       </main>
 

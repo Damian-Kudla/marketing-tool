@@ -2,6 +2,8 @@ import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { User, AlertCircle, UserCheck, UserPlus } from 'lucide-react';
+import ImageWithOverlays from './ImageWithOverlays';
+import type { Address } from '@/components/GPSAddressForm';
 
 export interface Customer {
   id?: string;
@@ -17,13 +19,17 @@ export interface OCRResult {
   existingCustomers: Customer[];
   newProspects: string[];
   allCustomersAtAddress?: Customer[];
+  fullVisionResponse?: any;
 }
 
 interface ResultsDisplayProps {
   result?: OCRResult | null;
+  photoImageSrc?: string | null;
+  address?: Address | null;
+  onNamesUpdated?: (updatedNames: string[]) => void;
 }
 
-export default function ResultsDisplay({ result }: ResultsDisplayProps) {
+export default function ResultsDisplay({ result, photoImageSrc, address, onNamesUpdated }: ResultsDisplayProps) {
   const { t } = useTranslation();
 
   if (!result || (result.existingCustomers.length === 0 && result.newProspects.length === 0 && (!result.allCustomersAtAddress || result.allCustomersAtAddress.length === 0))) {
@@ -44,6 +50,9 @@ export default function ResultsDisplay({ result }: ResultsDisplayProps) {
     );
   }
 
+  // Show image with overlays if we have photo and vision response
+  const showImageOverlays = photoImageSrc && result.fullVisionResponse && result.residentNames.length > 0;
+
   // Helper to determine what to display in the Bestandskunden section
   // If we have residentNames (photo uploaded), show the photo names that matched
   // If no residentNames (address-only search), show the customer names from database
@@ -62,11 +71,27 @@ export default function ResultsDisplay({ result }: ResultsDisplayProps) {
   const matchedNames = getMatchedNames();
 
   return (
-    <Card data-testid="card-results">
-      <CardHeader>
-        <CardTitle className="text-lg font-semibold">{t('results.title')}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
+    <>
+      {showImageOverlays && (
+        <div className="mb-4">
+          <ImageWithOverlays
+            imageSrc={photoImageSrc!}
+            fullVisionResponse={result.fullVisionResponse}
+            residentNames={result.residentNames}
+            existingCustomers={result.existingCustomers}
+            newProspects={result.newProspects}
+            allCustomersAtAddress={result.allCustomersAtAddress}
+            address={address}
+            onNamesUpdated={onNamesUpdated}
+          />
+        </div>
+      )}
+      
+      <Card data-testid="card-results">
+        <CardHeader>
+          <CardTitle className="text-lg font-semibold">{t('results.title')}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
         {matchedNames.length > 0 && (
           <div className="space-y-3">
             <div className="flex items-center gap-2">
@@ -94,7 +119,8 @@ export default function ResultsDisplay({ result }: ResultsDisplayProps) {
           </div>
         )}
 
-        {result.newProspects.length > 0 && (
+        {/* Only show prospects list if no image overlays (address-only search) */}
+        {!showImageOverlays && result.newProspects.length > 0 && (
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <UserPlus className="h-4 w-4 text-warning" />
@@ -156,5 +182,6 @@ export default function ResultsDisplay({ result }: ResultsDisplayProps) {
         )}
       </CardContent>
     </Card>
+    </>
   );
 }
