@@ -125,13 +125,24 @@ export default function ImageWithOverlays({
         if (!text) continue;
         const annotationWords = text.split(/\s+/);
 
-        // Check if ANY word from the name matches this annotation
-        const matchingWords = nameWords.filter(word => annotationWords.includes(word));
-        
-        if (matchingWords.length > 0) {
-          matchingAnnotations.push(annotation);
-          matchedIndices.push(i);
-          totalScore += matchingWords.length;
+        // For single-word names, only match if annotation is EXACTLY that word
+        // This prevents "scherwan" from matching "scherwan 15" or larger blocks
+        if (nameWords.length === 1) {
+          const singleWord = nameWords[0];
+          if (annotationWords.length === 1 && annotationWords[0] === singleWord) {
+            matchingAnnotations.push(annotation);
+            matchedIndices.push(i);
+            totalScore += 1;
+          }
+        } else {
+          // For multi-word names, check if ANY word from the name matches this annotation
+          const matchingWords = nameWords.filter(word => annotationWords.includes(word));
+          
+          if (matchingWords.length > 0) {
+            matchingAnnotations.push(annotation);
+            matchedIndices.push(i);
+            totalScore += matchingWords.length;
+          }
         }
       }
 
@@ -249,13 +260,12 @@ export default function ImageWithOverlays({
     let fontSize = 12;
     const minFontSize = 6;
     
-    // Very conservative padding to account for rendering variations
-    const availableWidth = boxWidth - 12; // Extra conservative (was 8px)
+    // Account for border (1px each side) and padding (1px each side) = 4px total
+    const availableWidth = boxWidth - 4;
     const availableHeight = boxHeight - 4;
     
-    // Very conservative character width ratio
-    // Real-world testing shows 0.75 is more accurate for avoiding truncation
-    const avgCharWidthRatio = 0.75; // Increased from 0.65 for safety
+    // Conservative character width ratio
+    const avgCharWidthRatio = 0.65;
     
     // Calculate required width for text
     const textLength = text.length;
@@ -502,17 +512,17 @@ export default function ImageWithOverlays({
               >
                 {/* Overlay box */}
                 <div
-                  className={`w-full h-full flex items-center justify-center font-normal rounded border-2 text-black ${
-                    overlay.isExisting
-                      ? 'bg-success/50 border-success'
-                      : 'bg-warning/50 border-warning'
-                  }`}
+                  className={`w-full h-full flex items-center justify-center font-normal rounded border text-black`}
                   style={{
                     backdropFilter: 'blur(2px)',
                     backgroundColor: overlay.isExisting 
-                      ? 'rgba(34, 197, 94, 0.5)'  // Green with 50% opacity
-                      : 'rgba(251, 146, 60, 0.5)', // Orange with 50% opacity
-                    padding: '2px',
+                      ? 'rgba(34, 197, 94, 0.1)'  // Green with 10% opacity
+                      : 'rgba(251, 146, 60, 0.1)', // Orange with 10% opacity
+                    borderColor: overlay.isExisting
+                      ? 'rgba(34, 197, 94, 0.3)'  // Green with 30% opacity
+                      : 'rgba(251, 146, 60, 0.3)', // Orange with 30% opacity
+                    borderWidth: '1px',
+                    padding: '1px',
                   }}
                 >
                   {isEditing && windowWidth >= 1000 ? (
