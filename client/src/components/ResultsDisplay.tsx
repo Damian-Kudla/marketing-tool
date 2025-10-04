@@ -92,61 +92,7 @@ export default function ResultsDisplay({ result, photoImageSrc, address, onNames
           <CardTitle className="text-lg font-semibold">{t('results.title')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-        {matchedNames.length > 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <UserCheck className="h-4 w-4 text-success" />
-              <p className="text-sm font-medium">
-                {t('results.existingCustomers')} ({matchedNames.length})
-              </p>
-            </div>
-            {matchedNames.map((item, index) => (
-              <div
-                key={index}
-                className="flex items-center gap-3 p-3 rounded-lg border bg-card hover-elevate"
-                data-testid={`row-existing-${index}`}
-              >
-                <div className="h-9 w-9 rounded-full bg-success/10 flex items-center justify-center flex-shrink-0">
-                  <User className="h-4 w-4 text-success" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium overflow-x-auto whitespace-nowrap" data-testid={`text-customer-name-${index}`}>
-                    {item.name}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Only show prospects list if no image overlays (address-only search) */}
-        {!showImageOverlays && result.newProspects.length > 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <UserPlus className="h-4 w-4 text-warning" />
-              <p className="text-sm font-medium">
-                {t('results.newProspects')} ({result.newProspects.length})
-              </p>
-            </div>
-            {result.newProspects.map((prospect, index) => (
-              <div
-                key={index}
-                className="flex items-center gap-3 p-3 rounded-lg border bg-card hover-elevate"
-                data-testid={`row-prospect-${index}`}
-              >
-                <div className="h-9 w-9 rounded-full bg-warning/10 flex items-center justify-center flex-shrink-0">
-                  <User className="h-4 w-4 text-warning" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <span className="font-medium overflow-x-auto whitespace-nowrap" data-testid={`text-prospect-name-${index}`}>
-                    {prospect}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
+        {/* Show all customers at address from Google Sheets first */}
         {result.allCustomersAtAddress && result.allCustomersAtAddress.length > 0 && (
           <div className="space-y-3">
             <div className="flex items-center gap-2">
@@ -175,6 +121,90 @@ export default function ResultsDisplay({ result, photoImageSrc, address, onNames
                         .join(' ')}
                     </p>
                   )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Show prospects - always show when image overlays are present */}
+        {showImageOverlays && result.newProspects.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <UserPlus className="h-4 w-4 text-warning" />
+              <p className="text-sm font-medium">
+                {t('results.newProspects')} ({result.newProspects.length})
+              </p>
+            </div>
+            {result.newProspects.map((prospect, index) => (
+              <div
+                key={index}
+                className="flex items-center gap-3 p-3 rounded-lg border bg-card hover-elevate"
+                data-testid={`row-prospect-${index}`}
+              >
+                <div className="h-9 w-9 rounded-full bg-warning/10 flex items-center justify-center flex-shrink-0">
+                  <User className="h-4 w-4 text-warning" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium overflow-x-auto whitespace-nowrap" data-testid={`text-prospect-name-${index}`}>
+                    {prospect}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Show existing customers (matched from photo) */}
+        {matchedNames.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <UserCheck className="h-4 w-4 text-success" />
+              <p className="text-sm font-medium">
+                {t('results.existingCustomers')} ({matchedNames.length})
+              </p>
+            </div>
+            {matchedNames.map((item, index) => (
+              <div
+                key={index}
+                className="flex items-center gap-3 p-3 rounded-lg border bg-card hover-elevate"
+                data-testid={`row-existing-${index}`}
+              >
+                <div className="h-9 w-9 rounded-full bg-success/10 flex items-center justify-center flex-shrink-0">
+                  <User className="h-4 w-4 text-success" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium overflow-x-auto whitespace-nowrap" data-testid={`text-customer-name-${index}`}>
+                    {item.name}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Show prospects if no image overlays (address-only search) */}
+        {!showImageOverlays && result.newProspects.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <UserPlus className="h-4 w-4 text-warning" />
+              <p className="text-sm font-medium">
+                {t('results.newProspects')} ({result.newProspects.length})
+              </p>
+            </div>
+            {result.newProspects.map((prospect, index) => (
+              <div
+                key={index}
+                className="flex items-center gap-3 p-3 rounded-lg border bg-card hover-elevate"
+                data-testid={`row-prospect-${index}`}
+              >
+                <div className="h-9 w-9 rounded-full bg-warning/10 flex items-center justify-center flex-shrink-0">
+                  <User className="h-4 w-4 text-warning" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium overflow-x-auto whitespace-nowrap" data-testid={`text-prospect-name-${index}`}>
+                    {prospect}
+                  </span>
                 </div>
               </div>
             ))}

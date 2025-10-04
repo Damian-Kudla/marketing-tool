@@ -110,12 +110,15 @@ export default function ImageWithOverlays({
       const maxX = Math.max(...xs);
       const maxY = Math.max(...ys);
 
+      // Add padding to frame text properly (extend box by 10% on each side)
+      const padding = Math.max((maxX - minX) * 0.1, (maxY - minY) * 0.1);
+      
       newOverlays.push({
         text: matchedName,
-        x: minX,
-        y: minY,
-        width: maxX - minX,
-        height: maxY - minY,
+        x: minX - padding,
+        y: minY - padding,
+        width: (maxX - minX) + (padding * 2),
+        height: (maxY - minY) + (padding * 2),
         isExisting,
         scale: 1,
         originalIndex: matchedNameIndex,
@@ -330,23 +333,35 @@ export default function ImageWithOverlays({
                   width: `${scaledWidth}px`,
                   height: `${scaledHeight}px`,
                 }}
-                onClick={() => !isEditing && handleOverlayClick(index)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (!isEditing) handleOverlayClick(index);
+                }}
                 onMouseDown={(e) => handleLongPressStart(index, e)}
                 onMouseUp={handleLongPressEnd}
                 onMouseLeave={handleLongPressEnd}
-                onTouchStart={(e) => handleLongPressStart(index, e)}
-                onTouchEnd={handleLongPressEnd}
+                onTouchStart={(e) => {
+                  e.preventDefault();
+                  handleLongPressStart(index, e);
+                }}
+                onTouchEnd={(e) => {
+                  e.preventDefault();
+                  handleLongPressEnd();
+                }}
                 data-testid={`overlay-box-${index}`}
               >
                 {/* Overlay box */}
                 <div
-                  className={`w-full h-full flex items-center justify-center text-xs font-medium rounded border-2 ${
+                  className={`w-full h-full flex items-center justify-center text-xs font-semibold rounded border-2 text-black px-1 ${
                     overlay.isExisting
-                      ? 'bg-success/50 border-success text-success'
-                      : 'bg-warning/50 border-warning text-warning'
+                      ? 'bg-success/50 border-success'
+                      : 'bg-warning/50 border-warning'
                   }`}
                   style={{
                     backdropFilter: 'blur(2px)',
+                    backgroundColor: overlay.isExisting 
+                      ? 'rgba(34, 197, 94, 0.5)'  // Green with 50% opacity
+                      : 'rgba(251, 146, 60, 0.5)', // Orange with 50% opacity
                   }}
                 >
                   {isEditing ? (
