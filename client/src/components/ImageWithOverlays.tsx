@@ -339,7 +339,7 @@ export default function ImageWithOverlays({
   return (
     <Card data-testid="card-image-overlays">
       <CardContent className="p-0">
-        <div ref={containerRef} className="relative w-full" style={{ touchAction: 'pinch-zoom' }}>
+        <div ref={containerRef} className="relative w-full" style={{ touchAction: 'pan-y' }}>
           <img
             ref={imageRef}
             src={imageSrc}
@@ -371,18 +371,15 @@ export default function ImageWithOverlays({
                   height: `${scaledHeight}px`,
                 }}
                 onClick={(e) => {
-                  e.preventDefault();
                   if (!isEditing) handleOverlayClick(index);
                 }}
                 onMouseDown={(e) => handleLongPressStart(index, e)}
                 onMouseUp={handleLongPressEnd}
                 onMouseLeave={handleLongPressEnd}
                 onTouchStart={(e) => {
-                  e.preventDefault();
                   handleLongPressStart(index, e);
                 }}
                 onTouchEnd={(e) => {
-                  e.preventDefault();
                   handleLongPressEnd();
                 }}
                 data-testid={`overlay-box-${index}`}
