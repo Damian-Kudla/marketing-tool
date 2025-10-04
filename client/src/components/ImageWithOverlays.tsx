@@ -24,6 +24,7 @@ interface OverlayBox {
   width: number;
   height: number;
   isExisting: boolean;
+  isDuplicate?: boolean;
   scale: number;
   originalIndex: number;
   matchedCustomer?: Customer;
@@ -159,10 +160,18 @@ export default function ImageWithOverlays({
       }
     });
 
+    // Detect duplicates - names that appear more than once
+    const nameCounts = new Map<string, number>();
+    residentNames.forEach(name => {
+      const lowerName = name.toLowerCase();
+      nameCounts.set(lowerName, (nameCounts.get(lowerName) || 0) + 1);
+    });
+    
     // Create overlays with merged bounding boxes for multi-part names
     const newOverlays: OverlayBox[] = [];
     
     residentMatches.forEach(match => {
+      const isDuplicate = (nameCounts.get(match.residentName.toLowerCase()) || 0) > 1;
       const isExisting = !newProspects.includes(match.residentName);
       const matchedCustomer = isExisting 
         ? existingCustomers.find(c => c.name.toLowerCase() === match.residentName.toLowerCase())
@@ -202,6 +211,7 @@ export default function ImageWithOverlays({
           width: baseWidth + (padding * 2),
           height: baseHeight + (padding * 2),
           isExisting,
+          isDuplicate,
           scale: 1,
           originalIndex: match.residentIndex,
           matchedCustomer,
@@ -236,6 +246,7 @@ export default function ImageWithOverlays({
             xOffset: newOverlay.xOffset,
             yOffset: newOverlay.yOffset,
             isExisting: newOverlay.isExisting,
+            isDuplicate: newOverlay.isDuplicate,
             matchedCustomer: newOverlay.matchedCustomer,
           });
           editedByIndex.delete(newOverlay.originalIndex); // Mark as used
@@ -462,9 +473,38 @@ export default function ImageWithOverlays({
     return null;
   }
 
+  // Calculate which types of overlays are present
+  const hasProspects = overlays.some(o => !o.isExisting && !o.isDuplicate);
+  const hasExisting = overlays.some(o => o.isExisting && !o.isDuplicate);
+  const hasDuplicates = overlays.some(o => o.isDuplicate);
+
   return (
     <Card data-testid="card-image-overlays">
       <CardContent className="p-0">
+        {/* Legend */}
+        {(hasProspects || hasExisting || hasDuplicates) && (
+          <div className="flex items-center gap-4 px-4 py-2 text-sm border-b">
+            {hasProspects && (
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'rgba(251, 146, 60, 1)' }} />
+                <span>{t('photo.legend.prospects', 'Prospects')}</span>
+              </div>
+            )}
+            {hasExisting && (
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'rgba(34, 197, 94, 1)' }} />
+                <span>{t('photo.legend.existing', 'Existing Customers')}</span>
+              </div>
+            )}
+            {hasDuplicates && (
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'rgba(59, 130, 246, 1)' }} />
+                <span>{t('photo.legend.duplicates', 'Duplicates')}</span>
+              </div>
+            )}
+          </div>
+        )}
+        
         <div ref={containerRef} className="relative w-full" style={{ touchAction: 'auto' }}>
           <img
             ref={imageRef}
@@ -515,12 +555,16 @@ export default function ImageWithOverlays({
                 <div
                   className="absolute inset-0 rounded border"
                   style={{
-                    backgroundColor: overlay.isExisting 
-                      ? 'rgba(34, 197, 94, 0.3)'  // Green with 30% opacity
-                      : 'rgba(251, 146, 60, 0.3)', // Orange with 30% opacity
-                    borderColor: overlay.isExisting
-                      ? 'rgba(34, 197, 94, 0.8)'  // Green with 80% opacity
-                      : 'rgba(251, 146, 60, 0.8)', // Orange with 80% opacity
+                    backgroundColor: overlay.isDuplicate
+                      ? 'rgba(59, 130, 246, 0.3)'  // Blue with 30% opacity (duplicates)
+                      : overlay.isExisting 
+                      ? 'rgba(34, 197, 94, 0.3)'  // Green with 30% opacity (existing)
+                      : 'rgba(251, 146, 60, 0.3)', // Orange with 30% opacity (prospects)
+                    borderColor: overlay.isDuplicate
+                      ? 'rgba(59, 130, 246, 0.8)'  // Blue with 80% opacity (duplicates)
+                      : overlay.isExisting
+                      ? 'rgba(34, 197, 94, 0.8)'  // Green with 80% opacity (existing)
+                      : 'rgba(251, 146, 60, 0.8)', // Orange with 80% opacity (prospects)
                     borderWidth: '1px',
                   }}
                 />
@@ -652,7 +696,7 @@ export default function ImageWithOverlays({
                   data-testid="button-mobile-cancel-edit"
                 >
                   <X className="h-5 w-5" />
-                  {t('common.cancel', 'Cancel')}
+                  {t('correction.cancel', 'Abbrechen')}
                 </Button>
                 <Button
                   onClick={saveEdit}
@@ -662,7 +706,7 @@ export default function ImageWithOverlays({
                   data-testid="button-mobile-save-edit"
                 >
                   <Check className="h-5 w-5" />
-                  {t('common.save', 'Save')}
+                  {t('action.save', 'Speichern')}
                 </Button>
               </div>
             </div>

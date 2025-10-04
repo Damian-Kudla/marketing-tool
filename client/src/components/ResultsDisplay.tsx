@@ -127,6 +127,53 @@ export default function ResultsDisplay({ result, photoImageSrc, address, onNames
           </div>
         )}
 
+        {/* Show duplicate names - only if duplicates exist */}
+        {(() => {
+          // Detect duplicates
+          const nameCounts = new Map<string, number>();
+          const duplicates: string[] = [];
+          
+          result.residentNames.forEach(name => {
+            const lowerName = name.toLowerCase();
+            const count = (nameCounts.get(lowerName) || 0) + 1;
+            nameCounts.set(lowerName, count);
+            
+            // Only add to duplicates list if this is exactly the second occurrence
+            if (count === 2) {
+              duplicates.push(name);
+            }
+          });
+          
+          if (duplicates.length === 0) return null;
+          
+          return (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-blue-500" />
+                <p className="text-sm font-medium">
+                  {t('results.duplicateNames', 'Duplicate Names')} ({duplicates.length})
+                </p>
+              </div>
+              {duplicates.map((duplicate, index) => (
+                <div
+                  key={index}
+                  className="flex items-center gap-3 p-3 rounded-lg border bg-card hover-elevate"
+                  data-testid={`row-duplicate-${index}`}
+                >
+                  <div className="h-9 w-9 rounded-full bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                    <User className="h-4 w-4 text-blue-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium overflow-x-auto whitespace-nowrap" data-testid={`text-duplicate-name-${index}`}>
+                      {duplicate}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
         {/* Show prospects - always show when image overlays are present */}
         {showImageOverlays && result.newProspects.length > 0 && (
           <div className="space-y-3">
