@@ -607,22 +607,25 @@ export default function ImageWithOverlays({
                   handleLongPressEnd();
                 }}
                 data-testid={`overlay-box-${index}`}
+                data-is-duplicate={overlay.isDuplicate ? 'true' : 'false'}
+                data-is-existing={overlay.isExisting ? 'true' : 'false'}
               >
                 {/* Background box with rounded corners and border */}
                 <div
-                  className="absolute inset-0 rounded border"
+                  className="absolute inset-0 rounded"
                   style={{
                     backgroundColor: overlay.isDuplicate
                       ? 'rgba(59, 130, 246, 0.3)'  // Blue with 30% opacity (duplicates)
                       : overlay.isExisting 
                       ? 'rgba(34, 197, 94, 0.3)'  // Green with 30% opacity (existing)
                       : 'rgba(251, 146, 60, 0.3)', // Orange with 30% opacity (prospects)
-                    borderColor: overlay.isDuplicate
-                      ? 'rgba(59, 130, 246, 0.8)'  // Blue with 80% opacity (duplicates)
-                      : overlay.isExisting
-                      ? 'rgba(34, 197, 94, 0.8)'  // Green with 80% opacity (existing)
-                      : 'rgba(251, 146, 60, 0.8)', // Orange with 80% opacity (prospects)
-                    borderWidth: '1px',
+                    border: `1px solid ${
+                      overlay.isDuplicate
+                        ? 'rgba(59, 130, 246, 0.8)'  // Blue with 80% opacity (duplicates)
+                        : overlay.isExisting
+                        ? 'rgba(34, 197, 94, 0.8)'  // Green with 80% opacity (existing)
+                        : 'rgba(251, 146, 60, 0.8)'  // Orange with 80% opacity (prospects)
+                    }`,
                   }}
                 />
                 
