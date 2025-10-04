@@ -28,7 +28,6 @@ The application is built as a mobile-first web application with a focus on a sin
     - `GET /api/customers`: Fetches all customers from Google Sheets.
 - **Data Storage**: Google Sheets serves as the primary customer database with a 5-minute in-memory cache. The system is designed with an interface-based storage abstraction for potential migration to PostgreSQL.
 - **Customer Matching Logic**: Employs word-level, case-insensitive matching for names (with period/hyphen normalization to spaces), with optional address filtering (street, house number, postal code) to categorize existing customers versus new prospects.
-- **Duplicate Detection Logic**: Uses word-based matching to identify duplicates. Names are normalized (periods removed, split on spaces/hyphens/slashes, single characters ignored) to extract words. Names sharing any common word are marked as duplicates and displayed with blue overlays and listed under "Duplicate Names" (e.g., "L.Schmidt" and "E.Schmidt" both share "schmidt" and are marked as duplicates).
 - **Germany-Only Service**: Both frontend and backend enforce that this service is only available for German addresses. Frontend displays error message; backend validates and rejects non-German GPS coordinates.
 
 ## External Dependencies
