@@ -57,21 +57,39 @@ const normalizeToWords = (name: string): string[] => {
 
 // Calculate duplicates from a list of names
 const calculateDuplicates = (names: string[]): Set<string> => {
-  const wordToNames = new Map<string, Set<string>>();
+  // Count exact occurrences first (for exact duplicates like "schmidt" appearing twice)
+  const nameCounts = new Map<string, number>();
+  names.forEach(name => {
+    const lowerName = name.toLowerCase();
+    nameCounts.set(lowerName, (nameCounts.get(lowerName) || 0) + 1);
+  });
+
+  // Find word-based duplicates (names sharing words)
+  const wordToNames = new Map<string, string[]>();
   names.forEach(name => {
     const words = normalizeToWords(name);
     words.forEach(word => {
       if (!wordToNames.has(word)) {
-        wordToNames.set(word, new Set());
+        wordToNames.set(word, []);
       }
-      wordToNames.get(word)!.add(name.toLowerCase());
+      wordToNames.get(word)!.push(name.toLowerCase());
     });
   });
 
   const duplicates = new Set<string>();
-  wordToNames.forEach((nameSet, word) => {
-    if (nameSet.size > 1) {
-      nameSet.forEach(name => duplicates.add(name));
+  
+  // Add exact duplicates (same name appears multiple times)
+  nameCounts.forEach((count, name) => {
+    if (count > 1) {
+      duplicates.add(name);
+    }
+  });
+  
+  // Add word-based duplicates (different names sharing words)
+  wordToNames.forEach((nameList, word) => {
+    const uniqueNames = new Set(nameList);
+    if (uniqueNames.size > 1) {
+      uniqueNames.forEach(name => duplicates.add(name));
     }
   });
   
