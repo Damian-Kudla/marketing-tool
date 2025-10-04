@@ -30,6 +30,8 @@ interface OverlayBox {
   xOffset?: number;
   yOffset?: number;
   fontSize?: number;
+  isEdited?: boolean; // Track if this overlay was manually edited
+  editedText?: string; // Store the edited text separately
 }
 
 interface ImageWithOverlaysProps {
@@ -61,10 +63,18 @@ export default function ImageWithOverlays({
   const [longPressIndex, setLongPressIndex] = useState<number | null>(null);
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
   const [originalDimensions, setOriginalDimensions] = useState({ width: 0, height: 0 });
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
   const imageRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const textRefs = useRef<Map<number, HTMLSpanElement>>(new Map());
+
+  // Track window width for responsive edit modal
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Calculate overlays when data changes
   useEffect(() => {
@@ -74,7 +84,17 @@ export default function ImageWithOverlays({
     }
 
     const textAnnotations: TextAnnotation[] = fullVisionResponse.textAnnotations;
-    const newOverlays: OverlayBox[] = [];
+    
+    // Build all possible (resident, annotation) matches with scores
+    type Match = {
+      residentIndex: number;
+      residentName: string;
+      annotationIndex: number;
+      annotation: TextAnnotation;
+      matchScore: number;
+    };
+    
+    const allMatches: Match[] = [];
 
     // Skip first annotation (full text), process individual text blocks
     for (let i = 1; i < textAnnotations.length; i++) {
@@ -82,55 +102,123 @@ export default function ImageWithOverlays({
       const text = annotation.description?.toLowerCase().replace(/[-\.\/\\|]/g, ' ').replace(/\s+/g, ' ').trim();
       
       if (!text) continue;
+      const annotationWords = text.split(/\s+/);
 
-      // Check if this text matches any resident name
-      const matchedNameIndex = residentNames.findIndex(name => {
-        const words = name.toLowerCase().split(/\s+/);
-        const annotationWords = text.split(/\s+/);
-        return words.some(word => annotationWords.includes(word));
-      });
+      // Check against all resident names
+      residentNames.forEach((residentName, nameIndex) => {
+        const nameWords = residentName.toLowerCase().split(/\s+/);
+        const matchingWords = nameWords.filter(word => annotationWords.includes(word));
+        const matchScore = matchingWords.length;
 
-      if (matchedNameIndex === -1) continue;
-
-      const matchedName = residentNames[matchedNameIndex];
-      const isExisting = !newProspects.includes(matchedName);
-
-      // Find matched customer for details
-      const matchedCustomer = isExisting 
-        ? existingCustomers.find(c => c.name.toLowerCase() === matchedName.toLowerCase())
-        : undefined;
-
-      // Calculate bounding box from vertices
-      const vertices = annotation.boundingPoly.vertices;
-      if (vertices.length < 3) continue;
-
-      const xs = vertices.map(v => v.x || 0);
-      const ys = vertices.map(v => v.y || 0);
-      
-      const minX = Math.min(...xs);
-      const minY = Math.min(...ys);
-      const maxX = Math.max(...xs);
-      const maxY = Math.max(...ys);
-
-      // Add padding to frame text properly (extend box by 10% on each side)
-      const padding = Math.max((maxX - minX) * 0.1, (maxY - minY) * 0.1);
-      
-      newOverlays.push({
-        text: matchedName,
-        x: minX - padding,
-        y: minY - padding,
-        width: (maxX - minX) + (padding * 2),
-        height: (maxY - minY) + (padding * 2),
-        isExisting,
-        scale: 1,
-        originalIndex: matchedNameIndex,
-        matchedCustomer,
+        if (matchScore > 0) {
+          allMatches.push({
+            residentIndex: nameIndex,
+            residentName,
+            annotationIndex: i,
+            annotation,
+            matchScore,
+          });
+        }
       });
     }
 
-    // Detect and handle overlaps
-    const processedOverlays = handleOverlaps(newOverlays);
-    setOverlays(processedOverlays);
+    // Sort matches by score descending, then by resident name length descending (prefer longer names)
+    allMatches.sort((a, b) => {
+      if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore;
+      return b.residentName.length - a.residentName.length;
+    });
+
+    // Greedy assignment: pick best matches ensuring each annotation used once
+    const usedAnnotations = new Set<number>();
+    const usedResidents = new Set<number>();
+    const newOverlays: OverlayBox[] = [];
+
+    for (const match of allMatches) {
+      // Skip if this annotation or resident already assigned
+      if (usedAnnotations.has(match.annotationIndex) || usedResidents.has(match.residentIndex)) {
+        continue;
+      }
+
+      // Assign this match
+      usedAnnotations.add(match.annotationIndex);
+      usedResidents.add(match.residentIndex);
+
+      const isExisting = !newProspects.includes(match.residentName);
+      const matchedCustomer = isExisting 
+        ? existingCustomers.find(c => c.name.toLowerCase() === match.residentName.toLowerCase())
+        : undefined;
+
+      // Calculate bounding box from vertices
+      const vertices = match.annotation.boundingPoly.vertices;
+      if (vertices.length >= 3) {
+        const xs = vertices.map(v => v.x || 0);
+        const ys = vertices.map(v => v.y || 0);
+        
+        const minX = Math.min(...xs);
+        const minY = Math.min(...ys);
+        const maxX = Math.max(...xs);
+        const maxY = Math.max(...ys);
+
+        // Add padding to frame text properly (extend box by 10% on each side)
+        const padding = Math.max((maxX - minX) * 0.1, (maxY - minY) * 0.1);
+        
+        newOverlays.push({
+          text: match.residentName,
+          x: minX - padding,
+          y: minY - padding,
+          width: (maxX - minX) + (padding * 2),
+          height: (maxY - minY) + (padding * 2),
+          isExisting,
+          scale: 1,
+          originalIndex: match.residentIndex,
+          matchedCustomer,
+        });
+      }
+    }
+
+    // Preserve edited overlays - merge them with new overlays using stable identifier
+    setOverlays(prevOverlays => {
+      const editedOverlays = prevOverlays.filter(o => o.isEdited);
+      const processedNewOverlays = handleOverlaps(newOverlays);
+      
+      // Create a map of edited overlays by their originalIndex (stable identifier)
+      const editedByIndex = new Map<number, OverlayBox>();
+      editedOverlays.forEach(edited => {
+        editedByIndex.set(edited.originalIndex, edited);
+      });
+      
+      // Merge: use edited version if exists for this originalIndex, otherwise use new overlay
+      const merged: OverlayBox[] = [];
+      processedNewOverlays.forEach(newOverlay => {
+        const editedVersion = editedByIndex.get(newOverlay.originalIndex);
+        if (editedVersion) {
+          // Use edited version but update bounding box from new overlay (in case of resize)
+          merged.push({
+            ...editedVersion,
+            x: newOverlay.x,
+            y: newOverlay.y,
+            width: newOverlay.width,
+            height: newOverlay.height,
+            scale: newOverlay.scale,
+            xOffset: newOverlay.xOffset,
+            yOffset: newOverlay.yOffset,
+            isExisting: newOverlay.isExisting,
+            matchedCustomer: newOverlay.matchedCustomer,
+          });
+          editedByIndex.delete(newOverlay.originalIndex); // Mark as used
+        } else {
+          merged.push(newOverlay);
+        }
+      });
+      
+      // Add any remaining edited overlays that don't have a new match
+      // (This preserves edits even if the overlay no longer matches OCR)
+      editedByIndex.forEach(edited => {
+        merged.push(edited);
+      });
+      
+      return merged;
+    });
   }, [fullVisionResponse, residentNames, existingCustomers, newProspects]);
 
   // Calculate optimal font size for text to fit in box without truncation
@@ -315,6 +403,13 @@ export default function ImageWithOverlays({
     const originalIndex = overlays[editingIndex].originalIndex;
     updatedNames[originalIndex] = editValue.trim().toLowerCase();
 
+    // Mark this overlay as edited so it persists
+    setOverlays(prev => prev.map((overlay, idx) => 
+      idx === editingIndex 
+        ? { ...overlay, isEdited: true, editedText: editValue.trim().toLowerCase(), text: editValue.trim().toLowerCase() }
+        : overlay
+    ));
+
     // Notify parent component which will handle the API call
     onNamesUpdated?.(updatedNames);
     
@@ -399,7 +494,8 @@ export default function ImageWithOverlays({
                     padding: '2px',
                   }}
                 >
-                  {isEditing ? (
+                  {isEditing && windowWidth >= 1000 ? (
+                    // Desktop inline editing
                     <div className="flex items-center gap-1 w-full" onClick={(e) => e.stopPropagation()} style={{ padding: '1px' }}>
                       <Input
                         value={editValue}
@@ -475,6 +571,63 @@ export default function ImageWithOverlays({
             );
           })}
         </div>
+
+        {/* Mobile Edit Modal - Full screen overlay for screens < 1000px */}
+        {editingIndex !== null && windowWidth < 1000 && (
+          <div 
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ 
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+              backdropFilter: 'blur(4px)'
+            }}
+            onClick={cancelEdit}
+            data-testid="mobile-edit-modal"
+          >
+            <div 
+              className="bg-card border-2 rounded-lg p-6 w-full max-w-md shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold mb-4 text-center">
+                {t('photo.editName', 'Edit Name')}
+              </h3>
+              
+              <Input
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                className="text-lg h-12 px-4 mb-6"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') saveEdit();
+                  if (e.key === 'Escape') cancelEdit();
+                }}
+                data-testid="input-mobile-edit-name"
+              />
+              
+              <div className="flex gap-3 justify-center">
+                <Button
+                  onClick={cancelEdit}
+                  variant="destructive"
+                  size="lg"
+                  className="flex-1 h-12 text-base gap-2"
+                  data-testid="button-mobile-cancel-edit"
+                >
+                  <X className="h-5 w-5" />
+                  {t('common.cancel', 'Cancel')}
+                </Button>
+                <Button
+                  onClick={saveEdit}
+                  variant="default"
+                  size="lg"
+                  className="flex-1 h-12 text-base gap-2 bg-success hover:bg-success/90 border-success"
+                  data-testid="button-mobile-save-edit"
+                >
+                  <Check className="h-5 w-5" />
+                  {t('common.save', 'Save')}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

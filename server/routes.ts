@@ -186,7 +186,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // NEW: After standardization, split into words and filter for words with at least 3 letters
           const words = name.split(/\s+/);
-          const filteredWords = words.filter(word => word.length >= 3);
+          const filteredWords = words.filter((word: string) => word.length >= 3);
 
           // If no words left after filtering, skip this name
           if (filteredWords.length === 0) continue;
