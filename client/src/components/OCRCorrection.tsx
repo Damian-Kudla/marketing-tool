@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Check, X, Plus, Trash2, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Address } from '@/components/GPSAddressForm';
+import { ocrAPI } from '@/services/api';
 
 interface OCRCorrectionProps {
   initialNames: string[];
@@ -57,22 +58,7 @@ export default function OCRCorrection({
     setProcessing(true);
 
     try {
-      const response = await fetch('/api/ocr-correct', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          residentNames: validNames,
-          address: address || undefined,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('OCR correction failed');
-      }
-
-      const result = await response.json();
+      const result = await ocrAPI.correctOCR(validNames, address || undefined);
       onCorrectionComplete?.(result);
       
       toast({

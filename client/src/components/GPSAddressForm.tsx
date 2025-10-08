@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MapPin, Loader2, Check, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { geocodeAPI, addressAPI } from '@/services/api';
 
 interface GPSAddressFormProps {
   onAddressDetected?: (address: Address) => void;
@@ -47,22 +48,10 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: G
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           try {
-            const response = await fetch('/api/geocode', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                latitude: position.coords.latitude,
-                longitude: position.coords.longitude,
-              }),
-            });
-
-            if (!response.ok) {
-              throw new Error('Geocoding failed');
-            }
-
-            const addressData = await response.json();
+            const addressData = await geocodeAPI.reverseGeocode(
+              position.coords.latitude,
+              position.coords.longitude
+            );
             
             // Check if the address is in Germany
             if (addressData.country && addressData.country.toLowerCase() !== 'deutschland' && addressData.country.toLowerCase() !== 'germany') {
@@ -121,19 +110,7 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: G
       if (address.city.trim()) searchParams.city = address.city;
       if (address.country.trim()) searchParams.country = address.country;
       
-      const response = await fetch('/api/search-address', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(searchParams),
-      });
-
-      if (!response.ok) {
-        throw new Error('Address search failed');
-      }
-
-      const customers = await response.json();
+      const customers = await addressAPI.searchAddress(searchParams);
       
       if (customers.length === 0) {
         toast({

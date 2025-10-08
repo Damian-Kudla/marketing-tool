@@ -129,6 +129,7 @@ export default function ImageWithOverlays({
 
   // Calculate overlays when data changes
   useEffect(() => {
+
     if (!fullVisionResponse?.textAnnotations || residentNames.length === 0) {
       setOverlays([]);
       return;
@@ -171,16 +172,21 @@ export default function ImageWithOverlays({
         if (usedAnnotations.has(i)) continue; // Skip if already used
         
         const annotation = textAnnotations[i];
-        const text = annotation.description?.toLowerCase().replace(/[-\.\/\\|]/g, ' ').replace(/\s+/g, ' ').trim();
+        const text = annotation.description?.toLowerCase()
+        .replace(/[!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕ×ØÙÚÛÝÞàáâãåæçèéêëìíîïðñòóôõ÷øùúûýþÿ€‰′″‵‹›⁄⁰¹²³⁴⁵⁶⁷⁸⁹⅓⅔←↑→↓↔∅∞∩∪√≈≠≡≤≥⊂⊃⋂⋃∂∇∏∑−×÷∫∬∮πστφχψωΓΔΘΛΞΠΣΥΦΨΩαβγδεζηθικλμνξοπρςστυφχψω]/g, ' ')
+        .replace(/\s+/g, ' ')  // Normalisiert mehrere Leerzeichen
+        .trim();  // Entfernt führende/nachfolgende Leerzeichen
         
         if (!text) continue;
         const annotationWords = text.split(/\s+/);
-
+        // if (residentName.toLowerCase() === "schmidt" && text === "e schmidt") { // i=101
+        //   console.log("stop"); // Hier kannst du einen Breakpoint setzen
+        // }
         // For single-word names, only match if annotation is EXACTLY that word
         // Only take the FIRST match to prevent oversized boxes from multiple detections
         if (nameWords.length === 1) {
           const singleWord = nameWords[0];
-          if (annotationWords.length === 1 && annotationWords[0] === singleWord && matchingAnnotations.length === 0) {
+          if (annotationWords.includes(singleWord) && matchingAnnotations.length === 0) {
             matchingAnnotations.push(annotation);
             matchedIndices.push(i);
             totalScore += 1;
@@ -356,16 +362,9 @@ export default function ImageWithOverlays({
       processedNewOverlays.forEach(newOverlay => {
         const editedVersion = editedByIndex.get(newOverlay.originalIndex);
         if (editedVersion) {
-          // Use edited version but update bounding box from new overlay (in case of resize)
+          // Use edited version without updating bounding box
           merged.push({
             ...editedVersion,
-            x: newOverlay.x,
-            y: newOverlay.y,
-            width: newOverlay.width,
-            height: newOverlay.height,
-            scale: newOverlay.scale,
-            xOffset: newOverlay.xOffset,
-            yOffset: newOverlay.yOffset,
             // Use recalculated status from edited version (not newOverlay)
             isExisting: editedVersion.isExisting,
             isDuplicate: editedVersion.isDuplicate,
@@ -460,10 +459,9 @@ export default function ImageWithOverlays({
             
             // If boxes are heavily overlapped (>70% in both directions), use offsets
             if (overlapX > Math.min(b1w, b2w) * 0.7 && overlapY > Math.min(b1h, b2h) * 0.7) {
-              // Boxes are very overlapped, offset them vertically apart
-              const offsetAmount = Math.max(5, Math.min(b1h, b2h) * 0.1);
-              result[i] = { ...box1, yOffset: (box1.yOffset || 0) - offsetAmount };
-              result[j] = { ...box2, yOffset: (box2.yOffset || 0) + offsetAmount };
+              // Boxes are very overlapped, offset them vertically apart to fully separate
+              result[i] = { ...box1, yOffset: (box1.yOffset || 0) - (overlapY / 2 + 1) };
+              result[j] = { ...box2, yOffset: (box2.yOffset || 0) + (overlapY / 2 + 1) };
             } else {
               // Scale down each box independently from its own center
               const newScale1 = box1.scale * 0.9;

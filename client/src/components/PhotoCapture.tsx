@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Camera, Upload, Loader2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Address } from '@/components/GPSAddressForm';
+import { ocrAPI } from '@/services/api';
 
 interface PhotoCaptureProps {
   onPhotoProcessed?: (results: any, imageSrc?: string) => void;
@@ -51,17 +52,7 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
       formData.append('image', selectedFile);
       formData.append('address', JSON.stringify(address));
 
-      const response = await fetch('/api/ocr', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'OCR processing failed');
-      }
-
-      const result = await response.json();
+      const result = await ocrAPI.processImage(formData);
       onPhotoProcessed?.(result, preview || undefined);
       
       const totalNames = result.residentNames?.length || 0;

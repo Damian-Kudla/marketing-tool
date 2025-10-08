@@ -5,8 +5,10 @@ import PhotoCapture from '@/components/PhotoCapture';
 import ResultsDisplay, { type OCRResult } from '@/components/ResultsDisplay';
 import OCRCorrection from '@/components/OCRCorrection';
 import LanguageToggle from '@/components/LanguageToggle';
+import { UserButton } from '@/components/UserButton';
 import { Button } from '@/components/ui/button';
 import { RotateCcw, Edit } from 'lucide-react';
+import { ocrAPI } from '@/services/api';
 
 export default function ScannerPage() {
   const { t } = useTranslation();
@@ -76,17 +78,7 @@ export default function ScannerPage() {
     if (!address) return;
 
     try {
-      const response = await fetch('/api/ocr-correct', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          residentNames: updatedNames,
-          address,
-        }),
-      });
-
-      if (response.ok) {
-        const result = await response.json();
+      const result = await ocrAPI.correctOCR(updatedNames, address);
         setOcrResult({
           residentNames: result.residentNames,
           existingCustomers: result.existingCustomers || [],
@@ -94,15 +86,6 @@ export default function ScannerPage() {
           allCustomersAtAddress: result.allCustomersAtAddress || [],
           fullVisionResponse: ocrResult?.fullVisionResponse,
         });
-      } else {
-        // Show error toast if update fails
-        const { toast } = await import('@/hooks/use-toast');
-        toast({
-          variant: 'destructive',
-          title: t('photo.error'),
-          description: t('photo.updateFailed'),
-        });
-      }
     } catch (error) {
       console.error('Update error:', error);
       const { toast } = await import('@/hooks/use-toast');
@@ -127,7 +110,10 @@ export default function ScannerPage() {
           <h1 className="text-xl font-bold" data-testid="text-app-title">
             {t('app.title')}
           </h1>
-          <LanguageToggle />
+          <div className="flex items-center gap-3">
+            <UserButton />
+            <LanguageToggle />
+          </div>
         </div>
       </header>
 

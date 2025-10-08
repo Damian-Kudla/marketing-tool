@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import multer from "multer";
 import vision from "@google-cloud/vision";
+import cookieParser from "cookie-parser";
 import { 
   geocodingRequestSchema, 
   addressSchema, 
@@ -11,6 +12,9 @@ import {
   type Customer,
   type OCRResponse
 } from "@shared/schema";
+import { requireAuth, type AuthenticatedRequest } from "./middleware/auth";
+import { GoogleSheetsLoggingService } from "./services/googleSheetsLogging";
+import { authRouter } from "./routes/auth";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -45,7 +49,13 @@ try {
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
-  app.post("/api/geocode", async (req, res) => {
+  // Add cookie parser middleware
+  app.use(cookieParser());
+  
+  // Add auth routes (no authentication required for these)
+  app.use("/api/auth", authRouter);
+  
+  app.post("/api/geocode", requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
       const { latitude, longitude } = geocodingRequestSchema.parse(req.body);
       
@@ -91,6 +101,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Log the geocoding request
+      const addressString = `${address.street} ${address.number}, ${address.city} ${address.postal}`.trim();
+      await GoogleSheetsLoggingService.logUserActivity(req, addressString);
+
       res.json(address);
     } catch (error) {
       console.error("Geocoding error:", error);
@@ -98,7 +112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/ocr", upload.single("image"), async (req, res) => {
+  app.post("/api/ocr", requireAuth, upload.single("image"), async (req: AuthenticatedRequest, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No image file provided" });
@@ -158,11 +172,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const residentNames: string[] = [];
 
       // Common words to exclude (not names)
-      const excludeWords = ['qg', 'eg', 'og', 'dg', 'apartment', 'wohnung', 'haus', 'street', 'strasse', 'str'];
+      const excludeWords = ['apt', 'apartment', 'wohnung', 'haus', 'straße', 'strasse', 'str'];
 
       for (const line of lines) {
         // Replace hyphens, periods, slashes, backslashes, pipes with spaces, then normalize whitespace
-        let cleanedLine = line.replace(/[-\.\/\\|]/g, ' ').replace(/\s+/g, ' ').trim();
+        let cleanedLine = line.toLowerCase()
+        .replace(/[!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~¡¢£¤¥¦§¨©ª«¬­®¯°±²³´µ¶·¸¹º»¼½¾¿ÀÁÂÃÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕ×ØÙÚÛÝÞàáâãåæçèéêëìíîïðñòóôõ÷øùúûýþÿ€‰′″‵‹›⁄⁰¹²³⁴⁵⁶⁷⁸⁹⅓⅔←↑→↓↔∅∞∩∪√≈≠≡≤≥⊂⊃⋂⋃∂∇∏∑−×÷∫∬∮πστφχψωΓΔΘΛΞΠΣΥΦΨΩαβγδεζηθικλμνξοπρςστυφχψω]/g, ' ')
+        .replace(/\s+/g, ' ')  // Normalisiert mehrere Leerzeichen
+        .trim();  // Entfernt führende/nachfolgende Leerzeichen
 
         // Skip empty lines or very short lines
         if (cleanedLine.length === 0) continue;
@@ -172,31 +189,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!/[a-zA-ZäöüÄÖÜß0-9]/.test(cleanedLine)) continue;
 
         // Check if it's an excluded word
-        const lowerLine = cleanedLine.toLowerCase();
-        if (excludeWords.some(word => lowerLine === word)) continue;
+        if (excludeWords.some(word => cleanedLine === word)) continue;
 
-        // Accept the line as a potential name if...
-        const hasUpperOrNumber = /[A-ZÄÖÜ0-9]/.test(line);  // Note: Using original line for case check
-        const notTooLong = cleanedLine.length <= 30;
-        const notTooManySpecialChars = (line.match(/[^a-zA-ZäöüÄÖÜß0-9\s]/g) || []).length <= 3;
-
-        if (hasUpperOrNumber && notTooLong && notTooManySpecialChars) {
-          // Normalize name: convert to lowercase
-          let name = cleanedLine.toLowerCase();
+        // Length checks
+        if (cleanedLine.length <= 30) {
 
           // NEW: After standardization, split into words and filter for words with at least 3 letters
-          const words = name.split(/\s+/);
+          const words = cleanedLine.split(/\s+/);
           const filteredWords = words.filter((word: string) => word.length >= 3);
 
           // If no words left after filtering, skip this name
           if (filteredWords.length === 0) continue;
 
           // Join filtered words back to name
-          name = filteredWords.join(' ');
+          cleanedLine = filteredWords.join(' ');
 
           // Allow duplicate names (for duplicate detection)
-          if (name.length >= 1) {
-            residentNames.push(name);
+          if (cleanedLine.length >= 1) {
+            residentNames.push(cleanedLine);
           }
         }
       }
@@ -218,7 +228,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // No match found - this is a prospect
           newProspects.push(residentName);
         }
-      }
+      } 
 
       const response: OCRResponse = {
         residentNames,
@@ -228,6 +238,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         allCustomersAtAddress,
       };
 
+      // Log the OCR request with results
+      const addressString = address ? `${address.street} ${address.number}, ${address.city} ${address.postal}`.trim() : undefined;
+      await GoogleSheetsLoggingService.logUserActivity(req, addressString, newProspects, existingCustomers);
+
       res.json(response);
     } catch (error) {
       console.error("OCR error:", error);
@@ -235,7 +249,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/ocr-correct", async (req, res) => {
+  app.post("/api/ocr-correct", requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
       const { residentNames, address } = ocrCorrectionRequestSchema.parse(req.body);
 
@@ -270,6 +284,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         allCustomersAtAddress,
       };
 
+      // Log the OCR correction request with results
+      const addressString = address ? `${address.street} ${address.number}, ${address.city} ${address.postal}`.trim() : undefined;
+      await GoogleSheetsLoggingService.logUserActivity(req, addressString, newProspects, existingCustomers);
+
       res.json(response);
     } catch (error) {
       console.error("OCR correction error:", error);
@@ -277,12 +295,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/search-address", async (req, res) => {
+  app.post("/api/search-address", requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
       const address = addressSchema.partial().parse(req.body);
       
       // Use the storage method with fuzzy matching
       const matches = await storage.getCustomersByAddress(address);
+      
+      // Log the address search
+      const addressString = address ? `${address.street} ${address.number}, ${address.city} ${address.postal}`.trim() : undefined;
+      await GoogleSheetsLoggingService.logUserActivity(req, addressString);
       
       res.json(matches);
     } catch (error) {
@@ -291,9 +313,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/customers", async (req, res) => {
+  app.get("/api/customers", requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
       const customers = await storage.getAllCustomers();
+      
+      // Log the customer list request
+      await GoogleSheetsLoggingService.logUserActivity(req);
+      
       res.json(customers);
     } catch (error) {
       console.error("Error fetching customers:", error);
