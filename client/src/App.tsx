@@ -8,6 +8,7 @@ import { I18nextProvider } from 'react-i18next';
 import i18n from './i18n';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { PWAUpdatePrompt } from '@/components/PWAUpdatePrompt';
 import ScannerPage from "@/pages/scanner";
 import NotFound from "@/pages/not-found";
 
@@ -30,6 +31,7 @@ function App() {
         <AuthProvider>
           <TooltipProvider>
             <Toaster />
+            <PWAUpdatePrompt />
             <ProtectedRoute>
               <Router />
             </ProtectedRoute>

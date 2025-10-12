@@ -1,5 +1,6 @@
 // Energy Scan Capture PWA Service Worker
 // Optimized for performance with comprehensive caching strategies
+const VERSION = '1.0.0';
 
 const CACHE_NAME = 'energy-scan-v1.0.0';
 const STATIC_CACHE = 'static-cache-v1.0.0';
