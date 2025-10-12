@@ -4,6 +4,8 @@ import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
+// Force Railway rebuild - production path fix
+
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
