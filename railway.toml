@@ -12,9 +12,9 @@
   restartPolicyType = "ON_FAILURE"
   restartPolicyMaxRetries = 10
 
-# Health Check
+# Health Check - Use dedicated health endpoint (no auth required)
 [healthcheck]
-  path = "/api/auth/check"
+  path = "/api/auth/health"
   interval = 30
   timeout = 10
 

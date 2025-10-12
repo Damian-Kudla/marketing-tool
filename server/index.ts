@@ -64,10 +64,10 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
-  server.listen({
-    port,
-    host: "0.0.0.0"
-  }, () => {
-    log(`serving on port ${port}`);
+  
+  server.listen(port, "0.0.0.0", () => {
+    log(`Server is running on port ${port}`);
+    log(`Environment: ${app.get("env")}`);
+    log(`Health check available at: http://0.0.0.0:${port}/api/auth/check`);
   });
 })();

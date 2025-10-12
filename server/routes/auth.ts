@@ -5,6 +5,15 @@ import { GoogleSheetsLoggingService } from '../services/googleSheetsLogging';
 
 const router = Router();
 
+// Health check endpoint for deployment platforms (no auth required)
+router.get('/health', (_req: Request, res: Response) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    service: 'energy-scan-capture-api'
+  });
+});
+
 // Simple rate limiter for login attempts
 interface RateLimitEntry {
   attempts: number;

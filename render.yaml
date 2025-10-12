@@ -9,7 +9,7 @@ services:
     plan: free  # Oder starter für $7/Monat
     buildCommand: npm install && npm run build
     startCommand: npm start
-    healthCheckPath: /api/auth/check
+    healthCheckPath: /api/auth/health
     envVars:
       - key: NODE_ENV
         value: production

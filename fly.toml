@@ -25,7 +25,7 @@ primary_region = "fra"  # Frankfurt - oder "iad" für USA
     interval = "30s"
     method = "GET"
     timeout = "5s"
-    path = "/api/auth/check"
+    path = "/api/auth/health"
 
 [[vm]]
   cpu_kind = "shared"
