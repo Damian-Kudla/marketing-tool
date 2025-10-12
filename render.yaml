@@ -1,0 +1,31 @@
+# Render.com Deployment Configuration
+# https://render.com
+
+services:
+  - type: web
+    name: energy-scan-capture
+    env: node
+    region: frankfurt  # Oder oregon, singapore
+    plan: free  # Oder starter für $7/Monat
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/auth/check
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      # Optional - Google Services
+      # Füge diese in der Render Dashboard UI hinzu als "Secret Files" oder "Environment Variables"
+      - key: GOOGLE_SERVICE_ACCOUNT_EMAIL
+        sync: false  # Wird in Dashboard gesetzt
+      - key: GOOGLE_PRIVATE_KEY
+        sync: false  # Wird in Dashboard gesetzt
+      - key: GOOGLE_SPREADSHEET_ID
+        sync: false  # Wird in Dashboard gesetzt
+    
+    # Auto-Deploy bei GitHub Push
+    autoDeploy: true
+    
+    # Branch to deploy
+    branch: main
