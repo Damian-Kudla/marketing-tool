@@ -1,12 +1,15 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { X, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { ResidentEditPopup } from './ResidentEditPopup';
 import type { Address } from '@/components/GPSAddressForm';
 import type { Customer } from '@/components/ResultsDisplay';
+import type { EditableResident } from '@/../../shared/schema';
+import { colorConfig } from '@/../../shared/colorConfig';
 
 interface BoundingBox {
   vertices: Array<{ x?: number; y?: number }>;
@@ -27,6 +30,7 @@ interface OverlayBox {
   isDuplicate?: boolean;
   scale: number;
   originalIndex: number;
+  originalName: string; // Stable identifier: the original name from OCR
   matchedCustomer?: Customer;
   xOffset?: number;
   yOffset?: number;
@@ -44,6 +48,10 @@ interface ImageWithOverlaysProps {
   allCustomersAtAddress?: Customer[];
   address?: Address | null;
   onNamesUpdated?: (updatedNames: string[]) => void;
+  editableResidents?: EditableResident[];
+  onResidentsUpdated?: (residents: EditableResident[]) => void;
+  currentDatasetId?: string | null;
+  onRequestDatasetCreation?: () => Promise<string | null>;
 }
 
 // Normalize name to extract words (match backend normalization: periods → spaces)
@@ -56,7 +64,10 @@ const normalizeToWords = (name: string): string[] => {
 };
 
 // Calculate duplicates from a list of names
-const calculateDuplicates = (names: string[]): Set<string> => {
+const calculateDuplicates = (names: string[], existingCustomerNames: string[] = []): Set<string> => {
+  // Create a set of existing customer names (lowercase) for quick lookup
+  const existingSet = new Set(existingCustomerNames.map(n => n.toLowerCase()));
+  
   // Count exact occurrences first (for exact duplicates like "schmidt" appearing twice)
   const nameCounts = new Map<string, number>();
   names.forEach(name => {
@@ -79,17 +90,24 @@ const calculateDuplicates = (names: string[]): Set<string> => {
   const duplicates = new Set<string>();
   
   // Add exact duplicates (same name appears multiple times)
+  // BUT only if at least one occurrence is an existing customer
   nameCounts.forEach((count, name) => {
-    if (count > 1) {
+    if (count > 1 && existingSet.has(name)) {
       duplicates.add(name);
     }
   });
   
   // Add word-based duplicates (different names sharing words)
+  // BUT only if at least one of the names is an existing customer
   wordToNames.forEach((nameList, word) => {
     const uniqueNames = new Set(nameList);
     if (uniqueNames.size > 1) {
-      uniqueNames.forEach(name => duplicates.add(name));
+      // Check if ANY of these names is an existing customer
+      const hasExistingCustomer = Array.from(uniqueNames).some(name => existingSet.has(name));
+      if (hasExistingCustomer) {
+        // Mark all names sharing this word as duplicates
+        uniqueNames.forEach(name => duplicates.add(name));
+      }
     }
   });
   
@@ -105,12 +123,14 @@ export default function ImageWithOverlays({
   allCustomersAtAddress,
   address,
   onNamesUpdated,
+  editableResidents = [],
+  onResidentsUpdated,
+  currentDatasetId,
+  onRequestDatasetCreation,
 }: ImageWithOverlaysProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [overlays, setOverlays] = useState<OverlayBox[]>([]);
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [editValue, setEditValue] = useState('');
   const [longPressIndex, setLongPressIndex] = useState<number | null>(null);
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
   const [originalDimensions, setOriginalDimensions] = useState({ width: 0, height: 0 });
@@ -119,6 +139,10 @@ export default function ImageWithOverlays({
   const containerRef = useRef<HTMLDivElement>(null);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const textRefs = useRef<Map<number, HTMLSpanElement>>(new Map());
+
+  // State for new resident edit popup
+  const [editingResident, setEditingResident] = useState<EditableResident | null>(null);
+  const [showEditPopup, setShowEditPopup] = useState(false);
 
   // Track window width for responsive edit modal
   useEffect(() => {
@@ -217,7 +241,9 @@ export default function ImageWithOverlays({
     });
 
     // Calculate duplicates from resident names
-    const duplicateNames = calculateDuplicates(residentNames);
+    // Only mark as duplicate if at least one occurrence is an existing customer
+    const existingCustomerNames = existingCustomers.map(c => c.name);
+    const duplicateNames = calculateDuplicates(residentNames, existingCustomerNames);
     
     // Track which resident indices have been used to create overlays
     const usedResidentIndices = new Set<number>();
@@ -270,6 +296,7 @@ export default function ImageWithOverlays({
           isDuplicate,
           scale: 1,
           originalIndex: match.residentIndex,
+          originalName: match.residentName, // Store original name as stable ID
           matchedCustomer,
         });
         usedResidentIndices.add(match.residentIndex);
@@ -309,6 +336,7 @@ export default function ImageWithOverlays({
               isDuplicate: true,
               scale: 1,
               originalIndex: idx,
+              originalName: name, // Store original name as stable ID
               matchedCustomer,
             });
           }
@@ -318,7 +346,14 @@ export default function ImageWithOverlays({
 
     // Preserve edited overlays - merge them with new overlays using stable identifier
     setOverlays(prevOverlays => {
-      const editedOverlays = prevOverlays.filter(o => o.isEdited);
+      // Create a set of current resident names (lowercase) for quick lookup
+      const currentResidentNamesSet = new Set(residentNames.map(n => n.toLowerCase()));
+      
+      // Filter out edited overlays whose originalName no longer exists in residentNames
+      const editedOverlays = prevOverlays.filter(o => 
+        o.isEdited && currentResidentNamesSet.has(o.originalName.toLowerCase())
+      );
+      
       const processedNewOverlays = handleOverlaps(newOverlays);
       
       // Collect all current names (original + edited) for duplicate detection
@@ -326,7 +361,7 @@ export default function ImageWithOverlays({
       
       // Add non-edited original names
       processedNewOverlays.forEach(overlay => {
-        const existingEdit = editedOverlays.find(e => e.originalIndex === overlay.originalIndex);
+        const existingEdit = editedOverlays.find(e => e.originalName.toLowerCase() === overlay.originalName.toLowerCase());
         if (!existingEdit) {
           allCurrentNames.push(overlay.text);
         }
@@ -339,7 +374,9 @@ export default function ImageWithOverlays({
       });
       
       // Calculate duplicates from ALL current names (including edited ones)
-      const currentDuplicateNames = calculateDuplicates(allCurrentNames);
+      // Only mark as duplicate if at least one occurrence is an existing customer
+      const existingCustomerNames = existingCustomers.map(c => c.name);
+      const currentDuplicateNames = calculateDuplicates(allCurrentNames, existingCustomerNames);
       
       const updatedEditedOverlays = editedOverlays.map(edited => {
         const editedName = edited.editedText || edited.text;
@@ -351,16 +388,16 @@ export default function ImageWithOverlays({
         return { ...edited, isDuplicate, isExisting, matchedCustomer };
       });
       
-      // Create a map of edited overlays by their originalIndex (stable identifier)
-      const editedByIndex = new Map<number, OverlayBox>();
+      // Create a map of edited overlays by their originalName (stable identifier)
+      const editedByName = new Map<string, OverlayBox>();
       updatedEditedOverlays.forEach(edited => {
-        editedByIndex.set(edited.originalIndex, edited);
+        editedByName.set(edited.originalName.toLowerCase(), edited);
       });
       
-      // Merge: use edited version if exists for this originalIndex, otherwise use new overlay
+      // Merge: use edited version if exists for this originalName, otherwise use new overlay
       const merged: OverlayBox[] = [];
       processedNewOverlays.forEach(newOverlay => {
-        const editedVersion = editedByIndex.get(newOverlay.originalIndex);
+        const editedVersion = editedByName.get(newOverlay.originalName.toLowerCase());
         if (editedVersion) {
           // Use edited version without updating bounding box
           merged.push({
@@ -370,17 +407,14 @@ export default function ImageWithOverlays({
             isDuplicate: editedVersion.isDuplicate,
             matchedCustomer: editedVersion.matchedCustomer,
           });
-          editedByIndex.delete(newOverlay.originalIndex); // Mark as used
+          editedByName.delete(newOverlay.originalName.toLowerCase()); // Mark as used
         } else {
           merged.push(newOverlay);
         }
       });
       
-      // Add any remaining edited overlays that don't have a new match
-      // (This preserves edits even if the overlay no longer matches OCR)
-      editedByIndex.forEach(edited => {
-        merged.push(edited);
-      });
+      // Don't add remaining edited overlays - they should be deleted if their name is gone
+      // (Previously we added them here, but now we filter them out at the beginning)
       
       return merged;
     });
@@ -508,14 +542,30 @@ export default function ImageWithOverlays({
   // Update dimensions when image loads or window resizes
   const updateDimensions = () => {
     if (imageRef.current) {
-      setImageDimensions({
-        width: imageRef.current.offsetWidth,
-        height: imageRef.current.offsetHeight,
-      });
-      setOriginalDimensions({
-        width: imageRef.current.naturalWidth,
-        height: imageRef.current.naturalHeight,
-      });
+      // Wait for the image to fully load before getting dimensions
+      const img = imageRef.current;
+      if (img.complete && img.naturalHeight !== 0) {
+        setImageDimensions({
+          width: img.offsetWidth,
+          height: img.offsetHeight,
+        });
+        setOriginalDimensions({
+          width: img.naturalWidth,
+          height: img.naturalHeight,
+        });
+      } else {
+        // If image isn't loaded, wait for it
+        img.onload = () => {
+          setImageDimensions({
+            width: img.offsetWidth,
+            height: img.offsetHeight,
+          });
+          setOriginalDimensions({
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+          });
+        };
+      }
     }
   };
 
@@ -525,19 +575,46 @@ export default function ImageWithOverlays({
     return () => window.removeEventListener('resize', updateDimensions);
   }, []);
 
+  // Re-update dimensions when imageSrc changes (after rotation)
+  useEffect(() => {
+    updateDimensions();
+  }, [imageSrc]);
+
   // Calculate scale factor
   const scaleX = imageDimensions.width / (originalDimensions.width || 1);
   const scaleY = imageDimensions.height / (originalDimensions.height || 1);
 
-  // Handle click to edit
-  const handleOverlayClick = (index: number) => {
+  // Handle click to edit - always opens ResidentEditPopup
+  const handleOverlayClick = async (index: number) => {
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
     setLongPressIndex(null);
-    setEditingIndex(index);
-    setEditValue(overlays[index].text);
+    
+    // Find the corresponding editable resident by originalName (stable identifier)
+    const overlay = overlays[index];
+    const originalName = overlay.originalName;
+    
+    // Find resident by original name
+    const matchingResident = editableResidents.find(r => 
+      r.name.toLowerCase() === originalName.toLowerCase()
+    );
+    
+    if (!matchingResident) return;
+    
+    // If no dataset exists yet, request dataset creation first
+    if (!currentDatasetId && onRequestDatasetCreation) {
+      const createdDatasetId = await onRequestDatasetCreation();
+      if (!createdDatasetId) {
+        // User cancelled or creation failed
+        return;
+      }
+    }
+    
+    // Open the ResidentEditPopup
+    setEditingResident(matchingResident);
+    setShowEditPopup(true);
   };
 
   // Handle long press start
@@ -557,54 +634,115 @@ export default function ImageWithOverlays({
     }
   };
 
-  // Save edited name
-  const saveEdit = () => {
-    if (editingIndex === null || !editValue.trim()) return;
 
-    const updatedNames = [...residentNames];
-    const originalIndex = overlays[editingIndex].originalIndex;
-    const trimmedValue = editValue.trim();
-    updatedNames[originalIndex] = trimmedValue;
 
-    // Mark this overlay as edited so it persists
-    setOverlays(prev => {
-      const newOverlays = prev.map((overlay, idx) => 
-        idx === editingIndex 
-          ? { ...overlay, isEdited: true, editedText: trimmedValue, text: trimmedValue }
-          : overlay
-      );
+  // Handlers for new resident edit popup
+  const handleResidentSave = async (updatedResident: EditableResident) => {
+    console.log('[ImageWithOverlays.handleResidentSave] 🎯 CALLED! updatedResident:', updatedResident);
+    if (!editingResident || !onResidentsUpdated) return;
+
+    // Find the index of the resident being edited by name and category
+    const residentIndex = editableResidents.findIndex(r => 
+      r.name === editingResident.name && r.category === editingResident.category
+    );
+
+    if (residentIndex >= 0) {
+      // Update the residents list
+      const updatedResidents = [...editableResidents];
+      updatedResidents[residentIndex] = updatedResident;
       
-      // Recalculate duplicate status for all overlays after edit
-      const allNames = newOverlays.map(o => o.editedText || o.text);
-      const duplicates = calculateDuplicates(allNames);
-      
-      return newOverlays.map(overlay => ({
-        ...overlay,
-        isDuplicate: duplicates.has((overlay.editedText || overlay.text).toLowerCase()),
-        isExisting: !newProspects.includes(overlay.editedText || overlay.text),
-        matchedCustomer: !newProspects.includes(overlay.editedText || overlay.text)
-          ? existingCustomers.find(c => c.name.toLowerCase() === (overlay.editedText || overlay.text).toLowerCase())
-          : undefined,
-      }));
-    });
+      // Update local state first
+      onResidentsUpdated(updatedResidents);
 
-    // Notify parent component which will handle the API call
-    onNamesUpdated?.(updatedNames);
+      // 🔥 NEW: Save to backend if we have a dataset ID
+      if (currentDatasetId) {
+        console.log('[ImageWithOverlays.handleResidentSave] 💾 Saving to backend, datasetId:', currentDatasetId);
+        try {
+          const { datasetAPI } = await import('@/services/api');
+          await datasetAPI.bulkUpdateResidents(currentDatasetId, updatedResidents);
+          console.log('[ImageWithOverlays.handleResidentSave] ✅ Backend save successful!');
+        } catch (error) {
+          console.error('[ImageWithOverlays.handleResidentSave] ❌ Backend save failed:', error);
+          toast({
+            variant: 'destructive',
+            title: t('resident.edit.error', 'Error saving'),
+            description: t('resident.edit.errorDesc', 'Changes could not be saved'),
+          });
+          return; // Don't close popup on error
+        }
+      } else {
+        console.log('[ImageWithOverlays.handleResidentSave] ⚠️ No dataset ID, skipping backend save');
+      }
+
+      // Update overlay text if name changed
+      if (updatedResident.name !== editingResident.name) {
+        const updatedNames = [...residentNames];
+        // Find the index in residentNames that matches the old name
+        const nameIndex = updatedNames.findIndex(name => name === editingResident.name);
+        if (nameIndex >= 0) {
+          updatedNames[nameIndex] = updatedResident.name;
+          onNamesUpdated?.(updatedNames);
+        }
+      }
+
+      toast({
+        title: t('photo.success'),
+        description: t('photo.nameUpdated'),
+      });
+    }
+
+    setShowEditPopup(false);
+    setEditingResident(null);
+  };
+
+  const handleResidentCancel = () => {
+    setShowEditPopup(false);
+    setEditingResident(null);
+  };
+
+  const handleResidentDelete = async (resident: EditableResident) => {
+    console.log('[ImageWithOverlays.handleResidentDelete] 🗑️ CALLED! resident:', resident);
     
-    toast({
-      title: t('photo.success'),
-      description: t('photo.nameUpdated'),
-    });
+    // Find the resident in editableResidents
+    const residentIndex = editableResidents.findIndex(r => r.name === resident.name);
+    if (residentIndex === -1) {
+      console.error('[ImageWithOverlays.handleResidentDelete] ❌ Resident not found:', resident.name);
+      throw new Error('Resident not found');
+    }
 
-    setEditingIndex(null);
+    // Remove from editable residents list
+    const updatedResidents = editableResidents.filter((_, index) => index !== residentIndex);
+    if (onResidentsUpdated) {
+      onResidentsUpdated(updatedResidents);
+    }
+
+    // Save to backend if we have a dataset ID
+    if (currentDatasetId) {
+      console.log('[ImageWithOverlays.handleResidentDelete] 💾 Saving to backend, datasetId:', currentDatasetId);
+      try {
+        const { datasetAPI } = await import('@/services/api');
+        await datasetAPI.bulkUpdateResidents(currentDatasetId, updatedResidents);
+        console.log('[ImageWithOverlays.handleResidentDelete] ✅ Backend save successful!');
+      } catch (error) {
+        console.error('[ImageWithOverlays.handleResidentDelete] ❌ Backend save failed:', error);
+        toast({
+          variant: 'destructive',
+          title: t('resident.delete.error', 'Error deleting'),
+          description: t('resident.delete.errorDesc', 'Resident could not be deleted'),
+        });
+        throw error; // Re-throw to prevent popup from closing
+      }
+    } else {
+      console.log('[ImageWithOverlays.handleResidentDelete] ⚠️ No dataset ID, skipping backend save');
+    }
+
+    // Update overlay names list to remove deleted resident
+    const updatedNames = residentNames.filter(name => name !== resident.name);
+    onNamesUpdated?.(updatedNames);
   };
 
-  // Cancel edit
-  const cancelEdit = () => {
-    setEditingIndex(null);
-    setEditValue('');
-  };
-
+  // Only render if we have both an image AND overlays
+  // This prevents duplicate lists when loading datasets without photos
   if (!imageSrc || overlays.length === 0) {
     return null;
   }
@@ -622,19 +760,19 @@ export default function ImageWithOverlays({
           <div className="flex items-center gap-4 px-4 py-2 text-sm border-b">
             {hasProspects && (
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'rgba(251, 146, 60, 1)' }} />
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colorConfig.prospects.solid }} />
                 <span>{t('photo.legend.prospects', 'Prospects')}</span>
               </div>
             )}
             {hasExisting && (
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'rgba(34, 197, 94, 1)' }} />
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colorConfig.existing.solid }} />
                 <span>{t('photo.legend.existing', 'Existing Customers')}</span>
               </div>
             )}
             {hasDuplicates && (
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'rgba(59, 130, 246, 1)' }} />
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colorConfig.duplicates.solid }} />
                 <span>{t('photo.legend.duplicates', 'Duplicates')}</span>
               </div>
             )}
@@ -646,13 +784,13 @@ export default function ImageWithOverlays({
             ref={imageRef}
             src={imageSrc}
             alt="Nameplate with overlays"
-            className="w-full h-auto"
+            className="w-full h-auto max-w-none"
             onLoad={updateDimensions}
             data-testid="img-with-overlays"
+            style={{ objectFit: 'contain', display: 'block' }}
           />
           
           {overlays.map((overlay, index) => {
-            const isEditing = editingIndex === index;
             const isShowingDetails = longPressIndex === index;
             const scaledX = (overlay.x + (overlay.xOffset || 0)) * scaleX;
             const scaledY = (overlay.y + (overlay.yOffset || 0)) * scaleY;
@@ -674,7 +812,7 @@ export default function ImageWithOverlays({
                   height: `${scaledHeight}px`,
                 }}
                 onClick={(e) => {
-                  if (!isEditing) handleOverlayClick(index);
+                  handleOverlayClick(index);
                 }}
                 onMouseDown={(e) => handleLongPressStart(index, e)}
                 onMouseUp={handleLongPressEnd}
@@ -694,16 +832,16 @@ export default function ImageWithOverlays({
                   className="absolute inset-0 rounded"
                   style={{
                     backgroundColor: overlay.isDuplicate
-                      ? 'rgba(59, 130, 246, 0.3)'  // Blue with 30% opacity (duplicates)
+                      ? colorConfig.duplicates.background
                       : overlay.isExisting 
-                      ? 'rgba(34, 197, 94, 0.3)'  // Green with 30% opacity (existing)
-                      : 'rgba(251, 146, 60, 0.3)', // Orange with 30% opacity (prospects)
+                      ? colorConfig.existing.background
+                      : colorConfig.prospects.background,
                     border: `1px solid ${
                       overlay.isDuplicate
-                        ? 'rgba(59, 130, 246, 0.8)'  // Blue with 80% opacity (duplicates)
+                        ? colorConfig.duplicates.border
                         : overlay.isExisting
-                        ? 'rgba(34, 197, 94, 0.8)'  // Green with 80% opacity (existing)
-                        : 'rgba(251, 146, 60, 0.8)'  // Orange with 80% opacity (prospects)
+                        ? colorConfig.existing.border
+                        : colorConfig.prospects.border
                     }`,
                   }}
                 />
@@ -718,51 +856,17 @@ export default function ImageWithOverlays({
                     paddingRight: '8px',
                   }}
                 >
-                  {isEditing && windowWidth >= 1000 ? (
-                    // Desktop inline editing
-                    <div className="flex items-center gap-1 w-full" onClick={(e) => e.stopPropagation()}>
-                      <Input
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        className="h-6 text-xs px-1 flex-1 min-w-0"
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') saveEdit();
-                          if (e.key === 'Escape') cancelEdit();
-                        }}
-                        data-testid={`input-edit-name-${index}`}
-                      />
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-6 w-6 flex-shrink-0"
-                        onClick={saveEdit}
-                        data-testid={`button-save-edit-${index}`}
-                      >
-                        <Check className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-6 w-6 flex-shrink-0"
-                        onClick={cancelEdit}
-                        data-testid={`button-cancel-edit-${index}`}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <span 
-                      className="text-center leading-tight text-black font-medium"
-                      style={{
-                        fontSize: `${optimalFontSize}px`,
-                        lineHeight: '1.1',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {overlay.text}
-                    </span>
-                  )}
+                  {/* Always show text, no inline editing */}
+                  <span 
+                    className="text-center leading-tight text-black font-medium"
+                    style={{
+                      fontSize: `${optimalFontSize}px`,
+                      lineHeight: '1.1',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {overlay.text}
+                  </span>
                 </div>
 
                 {/* Long press popup */}
@@ -795,62 +899,15 @@ export default function ImageWithOverlays({
           })}
         </div>
 
-        {/* Mobile Edit Modal - Full screen overlay for screens < 1000px */}
-        {editingIndex !== null && windowWidth < 1000 && (
-          <div 
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            style={{ 
-              backgroundColor: 'rgba(0, 0, 0, 0.7)',
-              backdropFilter: 'blur(4px)'
-            }}
-            onClick={cancelEdit}
-            data-testid="mobile-edit-modal"
-          >
-            <div 
-              className="bg-card border-2 rounded-lg p-6 w-full max-w-md shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h3 className="text-lg font-semibold mb-4 text-center">
-                {t('photo.editName', 'Edit Name')}
-              </h3>
-              
-              <Input
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                className="text-lg h-12 px-4 mb-6"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') saveEdit();
-                  if (e.key === 'Escape') cancelEdit();
-                }}
-                data-testid="input-mobile-edit-name"
-              />
-              
-              <div className="flex gap-3 justify-center">
-                <Button
-                  onClick={cancelEdit}
-                  variant="destructive"
-                  size="lg"
-                  className="flex-1 h-12 text-base gap-2"
-                  data-testid="button-mobile-cancel-edit"
-                >
-                  <X className="h-5 w-5" />
-                  {t('correction.cancel', 'Abbrechen')}
-                </Button>
-                <Button
-                  onClick={saveEdit}
-                  variant="default"
-                  size="lg"
-                  className="flex-1 h-12 text-base gap-2 bg-success hover:bg-success/90 border-success"
-                  data-testid="button-mobile-save-edit"
-                >
-                  <Check className="h-5 w-5" />
-                  {t('action.save', 'Speichern')}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* New Resident Edit Popup */}
+        <ResidentEditPopup
+          isOpen={showEditPopup}
+          onClose={handleResidentCancel}
+          onSave={handleResidentSave}
+          onDelete={handleResidentDelete}
+          resident={editingResident}
+          isEditing={editingResident !== null}
+        />
       </CardContent>
     </Card>
   );

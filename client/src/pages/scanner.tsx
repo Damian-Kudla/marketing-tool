@@ -1,21 +1,199 @@
-import { useState } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import GPSAddressForm, { type Address } from '@/components/GPSAddressForm';
 import PhotoCapture from '@/components/PhotoCapture';
 import ResultsDisplay, { type OCRResult } from '@/components/ResultsDisplay';
-import OCRCorrection from '@/components/OCRCorrection';
 import LanguageToggle from '@/components/LanguageToggle';
 import { UserButton } from '@/components/UserButton';
+import { ClickableAddressHeader } from '@/components/ClickableAddressHeader';
+import { AddressDatasets } from '@/components/AddressDatasets';
 import { Button } from '@/components/ui/button';
 import { RotateCcw, Edit } from 'lucide-react';
-import { ocrAPI } from '@/services/api';
+import { ocrAPI, datasetAPI } from '@/services/api';
+import { useToast } from '@/hooks/use-toast';
+
+// Helper function to create normalized address string for comparison
+const createNormalizedAddressString = (address: Address | null): string | null => {
+  if (!address) return null;
+  // Create a normalized string from the address (similar to backend normalization)
+  return `${address.street || ''} ${address.number || ''} ${address.postal || ''} ${address.city || ''}`.toLowerCase().trim();
+};
 
 export default function ScannerPage() {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [address, setAddress] = useState<Address | null>(null);
+  const [normalizedAddress, setNormalizedAddress] = useState<string | null>(null);
   const [ocrResult, setOcrResult] = useState<OCRResult | null>(null);
-  const [showCorrection, setShowCorrection] = useState(false);
   const [photoImageSrc, setPhotoImageSrc] = useState<string | null>(null);
+  const [canEdit, setCanEdit] = useState(true);
+  const [currentDatasetId, setCurrentDatasetId] = useState<string | null>(null);
+  const [datasetCreatedAt, setDatasetCreatedAt] = useState<string | null>(null);
+  const [showDatasets, setShowDatasets] = useState(false);
+  const [editableResidents, setEditableResidents] = useState<any[]>([]);
+
+  // Auto-reset when address changes to a different normalized address
+  useEffect(() => {
+    const newNormalizedAddress = createNormalizedAddressString(address);
+    
+    // Check if we have a dataset loaded and the address has changed
+    if (currentDatasetId && normalizedAddress && newNormalizedAddress) {
+      if (normalizedAddress !== newNormalizedAddress) {
+        console.log('[Address Change Detected] Old:', normalizedAddress, '→ New:', newNormalizedAddress);
+        console.log('[Address Change] Resetting dataset and clearing state');
+        
+        // Clear all dataset-related state
+        setCurrentDatasetId(null);
+        setDatasetCreatedAt(null);
+        setEditableResidents([]);
+        setOcrResult(null);
+        setPhotoImageSrc(null);
+        setCanEdit(true);
+        
+        // Update the datasets list for the new address
+        setShowDatasets(true);
+        
+        toast({
+          title: t('dataset.addressChanged', 'Address changed'),
+          description: t('dataset.addressChangedDesc', 'Previous dataset was removed'),
+        });
+      }
+    }
+    
+    // Update normalized address
+    setNormalizedAddress(newNormalizedAddress);
+  }, [address, currentDatasetId, normalizedAddress, t, toast]);
+
+  const handleDatasetLoad = (dataset: any) => {
+    try {
+      console.log('[handleDatasetLoad] Loading dataset:', dataset);
+      
+      // Validate dataset structure
+      if (!dataset || !dataset.street || !dataset.houseNumber) {
+        console.error('[handleDatasetLoad] Invalid dataset structure:', dataset);
+        throw new Error('Invalid dataset structure');
+      }
+      
+      // Load dataset into the current state
+      const address: Address = {
+        street: dataset.street,
+        number: dataset.houseNumber,
+        city: dataset.city || '',
+        postal: dataset.postalCode || '',
+        country: 'Deutschland',
+      };
+      
+      console.log('[handleDatasetLoad] Setting address:', address);
+      setAddress(address);
+      
+      // Update normalized address to prevent auto-reset
+      setNormalizedAddress(createNormalizedAddressString(address));
+      
+      // Set edit permissions
+      const canEditDataset = dataset.canEdit !== undefined ? dataset.canEdit : false;
+      console.log('[handleDatasetLoad] Edit permissions check:', {
+        'dataset.canEdit': dataset.canEdit,
+        'canEditDataset': canEditDataset,
+        'dataset.createdBy': dataset.createdBy,
+        'dataset.createdAt': dataset.createdAt,
+      });
+      setCanEdit(canEditDataset);
+      setCurrentDatasetId(dataset.id);
+      setDatasetCreatedAt(dataset.createdAt);
+      
+      // Ensure editableResidents is an array
+      const editableResidentsList = Array.isArray(dataset.editableResidents) 
+        ? dataset.editableResidents 
+        : [];
+      
+      const fixedCustomersList = Array.isArray(dataset.fixedCustomers)
+        ? dataset.fixedCustomers
+        : [];
+      
+      console.log('[handleDatasetLoad] Residents:', {
+        editableCount: editableResidentsList.length,
+        fixedCount: fixedCustomersList.length,
+      });
+      
+      // Set editableResidents directly from dataset
+      console.log('[handleDatasetLoad] Setting editableResidents:', editableResidentsList);
+      setEditableResidents(editableResidentsList);
+      
+      // Convert dataset residents to OCR result format
+      const existingCustomersData = editableResidentsList
+        .filter((r: any) => r.category === 'existing_customer')
+        .map((r: any) => ({
+          name: r.name,
+          isExisting: true,
+        }));
+      
+      const newProspectsData = editableResidentsList
+        .filter((r: any) => r.category === 'potential_new_customer')
+        .map((r: any) => r.name);
+      
+      const fixedCustomersData = fixedCustomersList.map((r: any) => ({
+        name: r.name,
+        isExisting: true,
+      }));
+      
+      console.log('[handleDatasetLoad] Converted data:', {
+        existingCustomers: existingCustomersData.length,
+        newProspects: newProspectsData.length,
+        fixedCustomers: fixedCustomersData.length,
+      });
+      
+      setOcrResult({
+        residentNames: Array.isArray(dataset.rawResidentData) ? dataset.rawResidentData : [],
+        existingCustomers: existingCustomersData,
+        newProspects: newProspectsData,
+        allCustomersAtAddress: fixedCustomersData,
+      });
+      
+      setPhotoImageSrc(null); // No photo available for loaded datasets
+      setShowDatasets(true); // Keep datasets visible
+      
+      console.log('[handleDatasetLoad] Dataset loaded successfully');
+      console.log('[handleDatasetLoad] Final state:', {
+        canEdit: canEditDataset,
+        ocrResult: {
+          residentNames: Array.isArray(dataset.rawResidentData) ? dataset.rawResidentData.length : 0,
+          existingCustomers: existingCustomersData.length,
+          newProspects: newProspectsData.length,
+          fixedCustomers: fixedCustomersData.length,
+        }
+      });
+      
+      toast({
+        title: t('dataset.loaded', 'Dataset loaded'),
+        description: canEditDataset 
+          ? t('dataset.loadedEditable', 'You can edit this dataset')
+          : t('dataset.loadedReadOnly', 'This dataset is read-only'),
+      });
+    } catch (error) {
+      console.error('[handleDatasetLoad] Error loading dataset:', error);
+      toast({
+        variant: 'destructive',
+        title: t('dataset.loadError', 'Fehler beim Laden'),
+        description: t('dataset.loadErrorDesc', 'Datensatz konnte nicht geladen werden'),
+      });
+    }
+  };
+
+  const handleDatasetLoadById = async (datasetId: string) => {
+    try {
+      console.log('[handleDatasetLoadById] Loading dataset with ID:', datasetId);
+      const dataset = await datasetAPI.getDatasetById(datasetId);
+      console.log('[handleDatasetLoadById] Received dataset:', JSON.stringify(dataset, null, 2));
+      handleDatasetLoad(dataset);
+    } catch (error) {
+      console.error('[handleDatasetLoadById] Error loading dataset by ID:', error);
+      toast({
+        variant: 'destructive',
+        title: t('dataset.loadError', 'Fehler beim Laden'),
+        description: t('dataset.loadErrorDesc', 'Datensatz konnte nicht geladen werden'),
+      });
+    }
+  };
 
   const handlePhotoProcessed = (result: any, imageSrc?: string) => {
     console.log('OCR result:', result);
@@ -31,16 +209,16 @@ export default function ScannerPage() {
       if (imageSrc) {
         setPhotoImageSrc(imageSrc);
       }
-      setShowCorrection(false);
+      setShowDatasets(true); // Show datasets after photo upload
     }
   };
 
-  const handleAddressDetected = (detectedAddress: Address) => {
+  const handleAddressDetected = useCallback((detectedAddress: Address) => {
     console.log('Address detected:', detectedAddress);
     setAddress(detectedAddress);
-  };
+  }, []);
 
-  const handleAddressSearch = (customers: any[]) => {
+  const handleAddressSearch = useCallback((customers: any[]) => {
     console.log('Address search result:', customers);
     
     // Show results as existing customers (since all customers at an address are existing)
@@ -50,28 +228,19 @@ export default function ScannerPage() {
       existingCustomers: customers,
       newProspects: [],
     });
-    setShowCorrection(false);
-  };
-
-  const handleCorrectionComplete = (result: any) => {
-    console.log('Correction result:', result);
-    
-    if (result.residentNames !== undefined) {
-      setOcrResult({
-        residentNames: result.residentNames,
-        existingCustomers: result.existingCustomers || [],
-        newProspects: result.newProspects || [],
-        allCustomersAtAddress: result.allCustomersAtAddress || [],
-        fullVisionResponse: ocrResult?.fullVisionResponse,
-      });
-      setShowCorrection(false);
-    }
-  };
+    setShowDatasets(true); // Show datasets after address search
+  }, []);
 
   const handleReset = () => {
     setOcrResult(null);
-    setShowCorrection(false);
     setPhotoImageSrc(null);
+    setCanEdit(true);
+    setDatasetCreatedAt(null);
+    setCurrentDatasetId(null);
+    setEditableResidents([]);
+    setAddress(null);
+    setNormalizedAddress(null);
+    setShowDatasets(false);
   };
 
   const handleNamesUpdated = async (updatedNames: string[]) => {
@@ -97,21 +266,27 @@ export default function ScannerPage() {
     }
   };
 
-  const handleCorrect = () => {
-    setShowCorrection(true);
-  };
-
   const hasResults = ocrResult && (ocrResult.existingCustomers.length > 0 || ocrResult.newProspects.length > 0);
 
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 bg-background border-b">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-          <h1 className="text-xl font-bold" data-testid="text-app-title">
-            {t('app.title')}
-          </h1>
+          <div className="flex items-center gap-4">
+            <h1 className="text-xl font-bold" data-testid="text-app-title">
+              {t('app.title')}
+            </h1>
+            {address && (
+              <ClickableAddressHeader 
+                address={address} 
+                residents={editableResidents} 
+                canEdit={canEdit}
+                datasetCreatedAt={datasetCreatedAt}
+              />
+            )}
+          </div>
           <div className="flex items-center gap-3">
-            <UserButton />
+            <UserButton onDatasetLoad={handleDatasetLoad} />
             <LanguageToggle />
           </div>
         </div>
@@ -122,47 +297,44 @@ export default function ScannerPage() {
           onAddressDetected={handleAddressDetected}
           onAddressSearch={handleAddressSearch}
         />
-        <PhotoCapture onPhotoProcessed={handlePhotoProcessed} address={address} />
         
-        {showCorrection ? (
-          <OCRCorrection 
-            initialNames={ocrResult?.residentNames || []}
+        {canEdit && (
+          <PhotoCapture onPhotoProcessed={handlePhotoProcessed} address={address} />
+        )}
+        
+        {address && showDatasets && (
+          <AddressDatasets 
             address={address}
-            onCorrectionComplete={handleCorrectionComplete}
-            onCancel={() => setShowCorrection(false)}
-          />
-        ) : (
-          <ResultsDisplay 
-            result={ocrResult} 
-            photoImageSrc={photoImageSrc}
-            address={address}
-            onNamesUpdated={handleNamesUpdated}
+            onLoadDataset={handleDatasetLoadById}
           />
         )}
+        
+        <ResultsDisplay 
+          result={ocrResult} 
+          photoImageSrc={photoImageSrc}
+          address={address}
+          onNamesUpdated={handleNamesUpdated}
+          canEdit={canEdit}
+          currentDatasetId={currentDatasetId}
+          onDatasetIdChange={setCurrentDatasetId}
+          onDatasetCreatedAtChange={setDatasetCreatedAt}
+          onResidentsUpdated={setEditableResidents}
+          initialResidents={editableResidents}
+        />
       </main>
 
-      {hasResults && !showCorrection && (
+      {hasResults && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t safe-area-bottom">
-          <div className="container mx-auto flex flex-wrap gap-2">
+          <div className="container mx-auto">
             <Button
               variant="outline"
               size="lg"
               onClick={handleReset}
-              className="flex-1 min-w-[140px] min-h-12 gap-2"
+              className="w-full min-h-12 gap-2"
               data-testid="button-reset"
             >
               <RotateCcw className="h-4 w-4" />
               {t('action.reset')}
-            </Button>
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={handleCorrect}
-              className="flex-1 min-w-[140px] min-h-12 gap-2"
-              data-testid="button-correct"
-            >
-              <Edit className="h-4 w-4" />
-              {t('action.correct')}
             </Button>
           </div>
         </div>

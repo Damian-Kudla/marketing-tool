@@ -1,0 +1,13 @@
+<svg width="180" height="180" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="180" height="180" rx="20" fill="#2563eb"/>
+  <g transform="translate(20, 20)">
+    <!-- Energy/Lightning bolt icon -->
+    <path d="M45 22.5L90 22.5L67.5 67.5L101.25 67.5L78.75 112.5L45 112.5L67.5 67.5L33.75 67.5L45 22.5Z" fill="#ffffff" stroke="#ffffff" stroke-width="2" stroke-linejoin="round"/>
+    <!-- Camera/Scan frame -->
+    <rect x="33.75" y="90" width="67.5" height="45" rx="7.5" fill="none" stroke="#ffffff" stroke-width="2.5"/>
+    <circle cx="67.5" cy="112.5" r="11.25" fill="none" stroke="#ffffff" stroke-width="2.5"/>
+    <!-- GPS/Location indicator -->
+    <circle cx="123.75" cy="33.75" r="7.5" fill="#ffffff"/>
+    <circle cx="123.75" cy="33.75" r="3.75" fill="#2563eb"/>
+  </g>
+</svg>

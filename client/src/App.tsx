@@ -1,3 +1,4 @@
+import React from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -20,6 +21,9 @@ function Router() {
 }
 
 function App() {
+  // Debug version indicator
+  console.log('🔄 App loaded - Version: 2025-10-10-v2.0-with-new-features');
+  
   return (
     <QueryClientProvider client={queryClient}>
       <I18nextProvider i18n={i18n}>

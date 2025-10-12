@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,10 +35,21 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: G
     country: ''
   });
 
-  // Notify parent component whenever address changes (including manual edits)
+  // Notify parent component whenever address changes
+  // Using JSON.stringify to detect actual changes and prevent infinite loops
   useEffect(() => {
-    onAddressDetected?.(address);
-  }, [address, onAddressDetected]);
+    // Only notify if address has actual values (not empty initial state)
+    if (address.street || address.postal || address.number) {
+      onAddressDetected?.(address);
+    }
+  }, [
+    address.street, 
+    address.number, 
+    address.city, 
+    address.postal, 
+    address.country, 
+    onAddressDetected
+  ]);
 
   const detectLocation = async () => {
     setLoading(true);

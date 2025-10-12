@@ -1,5 +1,3 @@
-import { useAuth } from '@/contexts/AuthContext';
-
 // API configuration
 const API_BASE_URL = '/api';
 
@@ -42,9 +40,7 @@ class ApiService {
       
       // Handle 401 Unauthorized responses
       if (response.status === 401 && requireAuth) {
-        // Clear auth state and redirect to login
-        window.location.reload(); // This will trigger auth check and show login
-        throw new Error('Session expired');
+        throw new Error('Authentication required - please check your login status');
       }
       
       return response;
@@ -182,5 +178,70 @@ export const authAPI = {
   checkAuth: async () => {
     const response = await apiService.get('/auth/check', { requireAuth: false });
     return response;
+  },
+};
+
+export const datasetAPI = {
+  createDataset: async (data: any) => {
+    const response = await apiService.post('/address-datasets', data);
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch {
+        const errorText = await response.text();
+        errorData = { error: errorText };
+      }
+      
+      // Create error object with response data
+      const error: any = new Error(errorData.message || errorData.error || 'Failed to create dataset');
+      error.response = { status: response.status, data: errorData };
+      throw error;
+    }
+    return response.json();
+  },
+  
+  getDatasets: async (address: any) => {
+    const params = new URLSearchParams(address).toString();
+    const response = await apiService.get(`/address-datasets?${params}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch datasets');
+    }
+    return response.json();
+  },
+  
+  updateResident: async (data: any) => {
+    const response = await apiService.put('/address-datasets/residents', data);
+    if (!response.ok) {
+      throw new Error('Failed to update resident');
+    }
+    return response.json();
+  },
+
+  bulkUpdateResidents: async (datasetId: string, editableResidents: any[]) => {
+    const response = await apiService.put('/address-datasets/bulk-residents', {
+      datasetId,
+      editableResidents,
+    });
+    if (!response.ok) {
+      throw new Error('Failed to bulk update residents');
+    }
+    return response.json();
+  },
+  
+  getUserHistory: async (username: string, date: string) => {
+    const response = await apiService.get(`/address-datasets/history/${username}/${date}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch user history');
+    }
+    return response.json();
+  },
+  
+  getDatasetById: async (id: string) => {
+    const response = await apiService.get(`/address-datasets/${id}`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch dataset');
+    }
+    return response.json();
   },
 };

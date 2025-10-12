@@ -5,14 +5,15 @@ let sheetsClient: any = null;
 let sheetsEnabled = false;
 
 try {
-  const visionKey = process.env.GOOGLE_CLOUD_VISION_KEY || '{}';
+  const sheetsKey = process.env.GOOGLE_SHEETS_KEY || '{}';
   
-  if (visionKey.startsWith('{')) {
-    const credentials = JSON.parse(visionKey);
+  if (sheetsKey.startsWith('{')) {
+    const credentials = JSON.parse(sheetsKey);
     
     if (credentials.client_email && credentials.private_key) {
-      const auth = new google.auth.GoogleAuth({
-        credentials,
+      const auth = new google.auth.JWT({
+        email: credentials.client_email,
+        key: credentials.private_key,
         scopes: [
           'https://www.googleapis.com/auth/spreadsheets',
           'https://www.googleapis.com/auth/drive.file',
@@ -93,7 +94,7 @@ export class GoogleSheetsLoggingService {
         // Add header row
         await sheetsClient.spreadsheets.values.update({
           spreadsheetId: this.LOG_SHEET_ID,
-          range: `${worksheetName}!A1:G1`,
+          range: `${worksheetName}!A1:I1`,
           valueInputOption: 'RAW',
           resource: {
             values: [

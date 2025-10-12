@@ -1,0 +1,17 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="64" fill="#2563eb"/>
+  <g transform="translate(64, 64)">
+    <!-- Energy/Lightning bolt icon -->
+    <path d="M128 64L256 64L192 192L288 192L224 320L128 320L192 192L96 192L128 64Z" fill="#ffffff" stroke="#ffffff" stroke-width="4" stroke-linejoin="round"/>
+    <!-- Camera/Scan frame -->
+    <rect x="96" y="256" width="192" height="128" rx="16" fill="none" stroke="#ffffff" stroke-width="6"/>
+    <circle cx="192" cy="320" r="32" fill="none" stroke="#ffffff" stroke-width="6"/>
+    <!-- GPS/Location indicator -->
+    <circle cx="352" cy="96" r="20" fill="#ffffff"/>
+    <circle cx="352" cy="96" r="12" fill="#2563eb"/>
+    <!-- Scan lines -->
+    <line x1="64" y1="200" x2="320" y2="200" stroke="#ffffff" stroke-width="2" opacity="0.7"/>
+    <line x1="64" y1="220" x2="280" y2="220" stroke="#ffffff" stroke-width="2" opacity="0.5"/>
+    <line x1="64" y1="240" x2="300" y2="240" stroke="#ffffff" stroke-width="2" opacity="0.3"/>
+  </g>
+</svg>

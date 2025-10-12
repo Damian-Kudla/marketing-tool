@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import multer from "multer";
 import vision from "@google-cloud/vision";
+import { google } from "googleapis";
 import cookieParser from "cookie-parser";
 import { 
   geocodingRequestSchema, 
@@ -15,6 +16,13 @@ import {
 import { requireAuth, type AuthenticatedRequest } from "./middleware/auth";
 import { GoogleSheetsLoggingService } from "./services/googleSheetsLogging";
 import { authRouter } from "./routes/auth";
+import addressDatasetsRouter from "./routes/addressDatasets";
+import { addressDatasetService, normalizeAddress } from "./services/googleSheets";
+import { 
+  performOrientationCorrection, 
+  checkImageAspectRatio,
+  type OrientationAnalysisResult 
+} from "./services/imageOrientation";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -34,7 +42,20 @@ try {
       console.warn('GOOGLE_CLOUD_VISION_KEY does not contain valid service account credentials (missing client_email or private_key). OCR disabled.');
       console.warn('To enable OCR, provide a complete JSON service account key with Vision API access.');
     } else {
-      visionClient = new vision.ImageAnnotatorClient({ credentials });
+      // Create a JWT auth client to avoid deprecation warnings
+      const jwtAuth = new google.auth.JWT({
+        email: credentials.client_email,
+        key: credentials.private_key,
+        scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+      });
+      
+      // Create a GoogleAuth instance with the JWT client
+      const auth = new google.auth.GoogleAuth({
+        authClient: jwtAuth,
+        projectId: credentials.project_id,
+      });
+      
+      visionClient = new vision.ImageAnnotatorClient({ auth });
       visionEnabled = true;
       console.log('Google Cloud Vision API initialized successfully');
     }
@@ -54,6 +75,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Add auth routes (no authentication required for these)
   app.use("/api/auth", authRouter);
+  
+  // Add address datasets routes (authentication required)
+  app.use("/api/address-datasets", requireAuth, addressDatasetsRouter);
   
   app.post("/api/geocode", requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
@@ -143,9 +167,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Perform text detection
+      // Parse orientation info if provided from frontend
+      let frontendOrientationInfo = null;
+      if (req.body.orientationInfo) {
+        try {
+          frontendOrientationInfo = JSON.parse(req.body.orientationInfo);
+        } catch (e) {
+          console.warn("Failed to parse orientation info:", e);
+        }
+      }
+
+      let imageBuffer = req.file.buffer;
+      let orientationCorrectionApplied = false;
+      let backendOrientationInfo: OrientationAnalysisResult | null = null;
+
+      // If frontend didn't handle orientation or confidence is low, try backend correction
+      const shouldTryBackendCorrection = !frontendOrientationInfo || 
+        frontendOrientationInfo.detectionMethod === 'manual' ||
+        frontendOrientationInfo.detectionMethod === 'none';
+
+      if (shouldTryBackendCorrection) {
+        try {
+          console.log('Attempting backend orientation correction...');
+          backendOrientationInfo = await performOrientationCorrection(imageBuffer, visionClient);
+          
+          if (backendOrientationInfo.needsCorrection && backendOrientationInfo.correctedBuffer) {
+            imageBuffer = backendOrientationInfo.correctedBuffer;
+            orientationCorrectionApplied = true;
+            console.log(`Backend orientation correction applied: ${backendOrientationInfo.orientationInfo.rotation}° rotation`);
+          }
+        } catch (error) {
+          console.warn('Backend orientation correction failed, proceeding with original image:', error);
+        }
+      }
+
+      // Perform text detection on the (possibly corrected) image
       const [result] = await visionClient.textDetection({
-        image: { content: req.file.buffer },
+        image: { content: imageBuffer },
       });
 
       const detections = result.textAnnotations;
@@ -236,11 +294,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         newProspects,
         existingCustomers,
         allCustomersAtAddress,
+        // Include orientation correction info in response
+        orientationCorrectionApplied,
+        backendOrientationInfo: backendOrientationInfo?.orientationInfo || null,
       };
 
-      // Log the OCR request with results
+      // Log the OCR request with results including orientation correction
       const addressString = address ? `${address.street} ${address.number}, ${address.city} ${address.postal}`.trim() : undefined;
-      await GoogleSheetsLoggingService.logUserActivity(req, addressString, newProspects, existingCustomers);
+      
+      // Enhance existing prospects and customers data with orientation info
+      const enhancedNewProspects = orientationCorrectionApplied 
+        ? [...newProspects, `[ORIENTATION: ${backendOrientationInfo?.orientationInfo.rotation}° rotation applied]`]
+        : newProspects;
+      
+      await GoogleSheetsLoggingService.logUserActivity(req, addressString, enhancedNewProspects, existingCustomers);
 
       res.json(response);
     } catch (error) {

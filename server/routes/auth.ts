@@ -99,8 +99,8 @@ router.post('/login', async (req: Request, res: Response) => {
     // Set secure HTTP-only cookie
     res.cookie('authToken', sessionToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      secure: false, // Always false for development to work with http://localhost
+      sameSite: 'lax', // Changed from 'strict' to 'lax' for better compatibility
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
       path: '/'
     });
@@ -134,8 +134,8 @@ router.post('/logout', (req: Request, res: Response) => {
   // Clear the cookie
   res.clearCookie('authToken', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
+    secure: false, // Always false for development
+    sameSite: 'lax',
     path: '/'
   });
 
@@ -155,8 +155,8 @@ router.get('/check', (req: Request, res: Response) => {
     // Clear invalid cookie
     res.clearCookie('authToken', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      secure: false, // Always false for development
+      sameSite: 'lax',
       path: '/'
     });
     return res.status(401).json({ authenticated: false });

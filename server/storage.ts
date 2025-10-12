@@ -95,8 +95,9 @@ export class GoogleSheetsStorage implements IStorage {
       }
 
       const credentials = JSON.parse(sheetsKey);
-      const auth = new google.auth.GoogleAuth({
-        credentials,
+      const auth = new google.auth.JWT({
+        email: credentials.client_email,
+        key: credentials.private_key,
         scopes: ['https://www.googleapis.com/auth/spreadsheets'],
       });
       this.sheetsClient = google.sheets({ version: 'v4', auth });

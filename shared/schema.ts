@@ -76,6 +76,21 @@ export const ocrResponseSchema = z.object({
     postalCode: z.string().nullable().optional(),
     isExisting: z.boolean(),
   })).optional(),
+  // Orientation correction fields
+  orientationCorrectionApplied: z.boolean().optional(),
+  backendOrientationInfo: z.object({
+    rotation: z.number(),
+    confidence: z.number(),
+    method: z.enum(['bounding_box_analysis', 'aspect_ratio', 'none']),
+    originalDimensions: z.object({
+      width: z.number(),
+      height: z.number(),
+    }),
+    suggestedDimensions: z.object({
+      width: z.number(),
+      height: z.number(),
+    }),
+  }).nullable().optional(),
 });
 
 export type OCRResponse = z.infer<typeof ocrResponseSchema>;
@@ -86,3 +101,76 @@ export const ocrCorrectionRequestSchema = z.object({
 });
 
 export type OCRCorrectionRequest = z.infer<typeof ocrCorrectionRequestSchema>;
+
+// Resident status enum for new features
+export const residentStatusSchema = z.enum(['no_interest', 'not_reached', 'interest_later', 'appointment']);
+export type ResidentStatus = z.infer<typeof residentStatusSchema>;
+
+// Resident category enum
+export const residentCategorySchema = z.enum(['existing_customer', 'potential_new_customer', 'duplicate', 'all_existing_customers']);
+export type ResidentCategory = z.infer<typeof residentCategorySchema>;
+
+// Extended resident data with editing capabilities
+export const editableResidentSchema = z.object({
+  id: z.string().optional(),
+  name: z.string(),
+  category: residentCategorySchema,
+  status: residentStatusSchema.optional(),
+  floor: z.number().min(0).max(100).optional(),
+  door: z.string().max(30).optional(),
+  isFixed: z.boolean().default(false), // For "All Existing Customers at this Address" entries
+});
+
+export type EditableResident = z.infer<typeof editableResidentSchema>;
+
+// Address dataset schema for Google Sheets management
+export const addressDatasetSchema = z.object({
+  id: z.string(),
+  normalizedAddress: z.string(),
+  street: z.string(),
+  houseNumber: z.string(),
+  city: z.string().optional(),
+  postalCode: z.string(),
+  createdBy: z.string(), // Username
+  createdAt: z.date(),
+  rawResidentData: z.array(z.string()), // Raw OCR results stored for safety
+  editableResidents: z.array(editableResidentSchema),
+  fixedCustomers: z.array(editableResidentSchema), // Non-editable customers from database
+});
+
+export type AddressDataset = z.infer<typeof addressDatasetSchema>;
+
+// Request to create/update address dataset
+export const addressDatasetRequestSchema = z.object({
+  address: addressSchema,
+  rawResidentData: z.array(z.string()),
+  editableResidents: z.array(editableResidentSchema),
+});
+
+export type AddressDatasetRequest = z.infer<typeof addressDatasetRequestSchema>;
+
+// Response with existing datasets
+export const addressDatasetResponseSchema = z.object({
+  datasets: z.array(addressDatasetSchema),
+  canCreateNew: z.boolean(),
+  existingTodayBy: z.string().optional(), // Username if someone already created today
+});
+
+export type AddressDatasetResponse = z.infer<typeof addressDatasetResponseSchema>;
+
+// Request to update a resident in a dataset
+export const updateResidentRequestSchema = z.object({
+  datasetId: z.string(),
+  residentIndex: z.number(),
+  residentData: editableResidentSchema.nullable(), // Allow null for deletions
+});
+
+export type UpdateResidentRequest = z.infer<typeof updateResidentRequestSchema>;
+
+// Schema for bulk updating all residents in a dataset
+export const bulkUpdateResidentsRequestSchema = z.object({
+  datasetId: z.string(),
+  editableResidents: z.array(editableResidentSchema),
+});
+
+export type BulkUpdateResidentsRequest = z.infer<typeof bulkUpdateResidentsRequestSchema>;

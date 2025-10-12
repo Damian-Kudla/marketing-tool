@@ -19,11 +19,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { User, LogOut, ChevronDown } from 'lucide-react';
+import { User, LogOut, ChevronDown, History } from 'lucide-react';
+import { UserHistory } from './UserHistory';
+import { datasetAPI } from '@/services/api';
 
-export function UserButton() {
+interface UserButtonProps {
+  onDatasetLoad?: (dataset: any) => void;
+}
+
+export function UserButton({ onDatasetLoad }: UserButtonProps) {
   const { username, userId, logout } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -36,11 +43,24 @@ export function UserButton() {
     }
   };
 
+  const handleLoadDataset = async (datasetId: string) => {
+    try {
+      const dataset = await datasetAPI.getDatasetById(datasetId);
+      if (onDatasetLoad) {
+        onDatasetLoad(dataset);
+      }
+    } catch (error) {
+      console.error('Failed to load dataset:', error);
+      throw error; // Re-throw to be handled by UserHistory component
+    }
+  };
+
   if (!username) {
     return null;
   }
 
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button 
@@ -69,6 +89,16 @@ export function UserButton() {
           <p className="text-sm font-medium text-gray-900">{username}</p>
           <p className="text-xs text-gray-500">Benutzer-ID: {userId}</p>
         </div>
+        
+        <DropdownMenuSeparator />
+        
+        <DropdownMenuItem 
+          className="cursor-pointer"
+          onClick={() => setShowHistory(true)}
+        >
+          <History className="w-4 h-4 mr-2" />
+          Verlauf
+        </DropdownMenuItem>
         
         <DropdownMenuSeparator />
         
@@ -112,5 +142,16 @@ export function UserButton() {
         </AlertDialog>
       </DropdownMenuContent>
     </DropdownMenu>
+
+    {/* User History Dialog */}
+    {username && (
+      <UserHistory
+        isOpen={showHistory}
+        onClose={() => setShowHistory(false)}
+        username={username}
+        onLoadDataset={handleLoadDataset}
+      />
+    )}
+    </>
   );
 }

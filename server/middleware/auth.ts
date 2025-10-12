@@ -85,8 +85,8 @@ export function requireAuth(req: AuthenticatedRequest, res: Response, next: Next
     // Clear invalid cookie
     res.clearCookie('authToken', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict'
+      secure: false, // Always false for development
+      sameSite: 'lax'
     });
     res.status(401).json({ error: 'Invalid or expired session' });
     return;
