@@ -212,15 +212,36 @@ export class GoogleSheetsStorage implements IStorage {
       });
     }
     
-    // Filter by house number (flexible matching - prefix match, improved)
+    // Filter by house number (intelligent matching for suffixes like a, b, c)
     if (address.number) {
-      const normalizeNumber = (num: string) => num.toLowerCase().trim().replace(/[.-]/g, '');  // Remove dots/hyphens for tolerance
+      const normalizeNumber = (num: string) => num.toLowerCase().trim().replace(/[.\-\s]/g, '');
       const searchNumber = normalizeNumber(address.number);
+      
       matches = matches.filter(customer => {
         if (!customer.houseNumber) return false;
         const customerNumber = normalizeNumber(customer.houseNumber);
-        // Stricter: Exact match or customer starts with search (avoids search longer than customer)
-        return customerNumber === searchNumber || customerNumber.startsWith(searchNumber);
+        
+        // Exact match - always valid
+        if (customerNumber === searchNumber) return true;
+        
+        // Extract numeric and suffix parts
+        const searchNumeric = searchNumber.match(/^\d+/)?.[0] || '';
+        const searchSuffix = searchNumber.replace(/^\d+/, '');
+        const customerNumeric = customerNumber.match(/^\d+/)?.[0] || '';
+        const customerSuffix = customerNumber.replace(/^\d+/, '');
+        
+        // If numeric parts don't match exactly, reject
+        if (searchNumeric !== customerNumeric) return false;
+        
+        // If search has no suffix, only match customers without suffix or single letter suffixes
+        if (!searchSuffix) {
+          // Allow: "1" matches "1", "1a", "1b", but NOT "10", "11"
+          return !customerSuffix || /^[a-z]$/.test(customerSuffix);
+        }
+        
+        // If search has suffix, customer must have same or similar suffix
+        // Allow: "1a" matches "1a", "1A", but NOT "1b", "1", "10a"
+        return customerSuffix === searchSuffix;
       });
     }
     
