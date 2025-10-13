@@ -21,6 +21,22 @@ export function ViewModeProvider({ children }: { children: ReactNode }) {
     setMaximizedPanel(maximizedPanel === panel ? null : panel);
   };
 
+  // Auto-switch to list view on narrow screens (< 700px)
+  React.useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 700 && viewMode === 'grid') {
+        setViewMode('list');
+      }
+    };
+
+    // Check on mount
+    handleResize();
+
+    // Listen for resize events
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [viewMode]);
+
   return (
     <ViewModeContext.Provider
       value={{

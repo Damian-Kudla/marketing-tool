@@ -33,6 +33,17 @@
   touch-action: manipulation;
 }
 
+/* Allow pinch-to-zoom on maximized image overlays */
+.maximized-image-container {
+  touch-action: pinch-zoom;
+}
+
+.maximized-image-container img {
+  max-width: none;
+  width: auto;
+  height: auto;
+}
+
 /* LIGHT MODE */
 :root {
   --button-outline: rgba(0,0,0, .10);

@@ -102,8 +102,9 @@ export function UserButton({ onDatasetLoad }: UserButtonProps) {
           Verlauf
         </DropdownMenuItem>
         
+        {/* Hide view toggle on narrow screens (< 700px) */}
         <DropdownMenuItem 
-          className="cursor-pointer"
+          className="cursor-pointer hidden min-[700px]:flex"
           onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
         >
           {viewMode === 'list' ? (

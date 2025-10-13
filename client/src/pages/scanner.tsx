@@ -26,7 +26,7 @@ const createNormalizedAddressString = (address: Address | null): string | null =
 export default function ScannerPage() {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { viewMode, maximizedPanel } = useViewMode();
+  const { viewMode, maximizedPanel, setMaximizedPanel } = useViewMode();
   const [address, setAddress] = useState<Address | null>(null);
   const [normalizedAddress, setNormalizedAddress] = useState<string | null>(null);
   const [ocrResult, setOcrResult] = useState<OCRResult | null>(null);
@@ -526,8 +526,11 @@ export default function ScannerPage() {
             onClick={() => setMaximizedPanel(null)}
           />
           {/* Content */}
-          <div className="fixed inset-0 z-50 flex items-start justify-center pointer-events-none overflow-y-auto p-4">
-            <div className="relative w-full max-w-4xl mt-12 pointer-events-auto bg-background rounded-lg shadow-lg border p-6 animate-in fade-in zoom-in-95 duration-200">
+          <div className="fixed inset-0 z-[51] flex items-start justify-center pointer-events-none overflow-y-auto p-4">
+            <div 
+              className="relative w-full max-w-4xl mt-12 pointer-events-auto bg-background rounded-lg shadow-lg border p-6 animate-in fade-in zoom-in-95 duration-200"
+              onClick={(e) => e.stopPropagation()}
+            >
               <MaximizeButton panel="location" className="absolute top-4 right-4" />
               <div className="pt-8">
                 <GPSAddressForm 
@@ -548,8 +551,11 @@ export default function ScannerPage() {
             onClick={() => setMaximizedPanel(null)}
           />
           {/* Content */}
-          <div className="fixed inset-0 z-50 flex items-start justify-center pointer-events-none overflow-y-auto p-4">
-            <div className="relative w-full max-w-4xl mt-12 pointer-events-auto bg-background rounded-lg shadow-lg border p-6 animate-in fade-in zoom-in-95 duration-200">
+          <div className="fixed inset-0 z-[51] flex items-start justify-center pointer-events-none overflow-y-auto p-4">
+            <div 
+              className="relative w-full max-w-4xl mt-12 pointer-events-auto bg-background rounded-lg shadow-lg border p-6 animate-in fade-in zoom-in-95 duration-200"
+              onClick={(e) => e.stopPropagation()}
+            >
               <MaximizeButton panel="photo" className="absolute top-4 right-4" />
               <div className="pt-8">
                 <PhotoCapture onPhotoProcessed={handlePhotoProcessed} address={address} />
@@ -566,11 +572,14 @@ export default function ScannerPage() {
             className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm"
             onClick={() => setMaximizedPanel(null)}
           />
-          {/* Content */}
-          <div className="fixed inset-0 z-50 flex items-start justify-center pointer-events-none overflow-y-auto p-4">
-            <div className="relative w-full max-w-6xl mt-12 pointer-events-auto bg-background rounded-lg shadow-lg border p-6 animate-in fade-in zoom-in-95 duration-200">
+          {/* Content - with pinch-to-zoom support */}
+          <div className="fixed inset-0 z-[51] flex items-start justify-center pointer-events-none overflow-y-auto p-4">
+            <div 
+              className="relative w-full max-w-6xl mt-12 pointer-events-auto bg-background rounded-lg shadow-lg border p-6 animate-in fade-in zoom-in-95 duration-200"
+              onClick={(e) => e.stopPropagation()}
+            >
               <MaximizeButton panel="overlays" className="absolute top-4 right-4" />
-              <div className="pt-8">
+              <div className="pt-8 maximized-image-container">
                 <ImageWithOverlays
                   imageSrc={photoImageSrc}
                   fullVisionResponse={ocrResult.fullVisionResponse}
@@ -599,8 +608,11 @@ export default function ScannerPage() {
             onClick={() => setMaximizedPanel(null)}
           />
           {/* Content */}
-          <div className="fixed inset-0 z-50 flex items-start justify-center pointer-events-none overflow-y-auto p-4">
-            <div className="relative w-full max-w-4xl mt-12 pointer-events-auto bg-background rounded-lg shadow-lg border p-6 animate-in fade-in zoom-in-95 duration-200">
+          <div className="fixed inset-0 z-[51] flex items-start justify-center pointer-events-none overflow-y-auto p-4">
+            <div 
+              className="relative w-full max-w-4xl mt-12 pointer-events-auto bg-background rounded-lg shadow-lg border p-6 animate-in fade-in zoom-in-95 duration-200"
+              onClick={(e) => e.stopPropagation()}
+            >
               <MaximizeButton panel="results" className="absolute top-4 right-4" />
               <div className="pt-8">
                 <ResultsDisplay 
