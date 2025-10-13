@@ -9,6 +9,16 @@ import { ClickableAddressHeader } from '@/components/ClickableAddressHeader';
 import { AddressDatasets } from '@/components/AddressDatasets';
 import { MaximizeButton } from '@/components/MaximizeButton';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { RotateCcw, Edit } from 'lucide-react';
 import { ocrAPI, datasetAPI } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
@@ -35,6 +45,8 @@ export default function ScannerPage() {
   const [datasetCreatedAt, setDatasetCreatedAt] = useState<string | null>(null);
   const [showDatasets, setShowDatasets] = useState(false);
   const [editableResidents, setEditableResidents] = useState<any[]>([]);
+  const [showDataStorageConfirmation, setShowDataStorageConfirmation] = useState(false);
+  const [datasetCreationResolver, setDatasetCreationResolver] = useState<((value: string | null) => void) | null>(null);
 
   // Auto-reset when address changes to a different normalized address
   useEffect(() => {
@@ -205,14 +217,29 @@ export default function ScannerPage() {
       return currentDatasetId;
     }
 
-    // Simple dataset creation without confirmation dialog (dialog is only in ResultsDisplay)
+    // Show confirmation dialog and wait for user response
+    return new Promise((resolve) => {
+      setDatasetCreationResolver(() => resolve);
+      setShowDataStorageConfirmation(true);
+    });
+  };
+
+  const confirmDatasetCreation = async () => {
+    setShowDataStorageConfirmation(false);
+    
     try {
       if (!address) {
-        console.error('[handleRequestDatasetCreation] No address available');
-        return null;
+        console.error('[confirmDatasetCreation] No address available');
+        toast({
+          variant: 'destructive',
+          title: t('dataset.createError', 'Fehler beim Erstellen'),
+          description: t('dataset.createErrorDesc', 'Datensatz konnte nicht erstellt werden'),
+        });
+        datasetCreationResolver?.(null);
+        return;
       }
 
-      console.log('[handleRequestDatasetCreation] Creating dataset for address:', address);
+      console.log('[confirmDatasetCreation] Creating dataset for address:', address);
       
       const dataset = await datasetAPI.createDataset({
         address: {
@@ -225,7 +252,7 @@ export default function ScannerPage() {
         rawResidentData: ocrResult?.residentNames || [],
       });
 
-      console.log('[handleRequestDatasetCreation] Dataset created:', dataset.id);
+      console.log('[confirmDatasetCreation] Dataset created:', dataset.id);
       
       // Update state with new dataset ID
       setCurrentDatasetId(dataset.id);
@@ -233,20 +260,25 @@ export default function ScannerPage() {
       setCanEdit(true);
 
       toast({
-        title: t('dataset.created', 'Dataset created'),
-        description: t('dataset.createdDesc', 'Dataset was created successfully'),
+        title: t('dataset.created', 'Datensatz erstellt'),
+        description: t('dataset.createdDesc', 'Datensatz wurde erfolgreich erstellt'),
       });
 
-      return dataset.id;
+      datasetCreationResolver?.(dataset.id);
     } catch (error) {
-      console.error('[handleRequestDatasetCreation] Error creating dataset:', error);
+      console.error('[confirmDatasetCreation] Error creating dataset:', error);
       toast({
         variant: 'destructive',
-        title: t('dataset.createError', 'Error creating'),
-        description: t('dataset.createErrorDesc', 'Dataset could not be created'),
+        title: t('dataset.createError', 'Fehler beim Erstellen'),
+        description: t('dataset.createErrorDesc', 'Datensatz konnte nicht erstellt werden'),
       });
-      return null;
+      datasetCreationResolver?.(null);
     }
+  };
+
+  const cancelDatasetCreation = () => {
+    setShowDataStorageConfirmation(false);
+    datasetCreationResolver?.(null);
   };
 
   const handlePhotoProcessed = (result: any, imageSrc?: string) => {
@@ -430,7 +462,7 @@ export default function ScannerPage() {
                     editableResidents={editableResidents}
                     onResidentsUpdated={setEditableResidents}
                     currentDatasetId={currentDatasetId}
-                    onRequestDatasetCreation={async () => null}
+                    onRequestDatasetCreation={handleRequestDatasetCreation}
                   />
                 </div>
               )}
@@ -533,10 +565,31 @@ export default function ScannerPage() {
               onDatasetCreatedAtChange={setDatasetCreatedAt}
               onResidentsUpdated={setEditableResidents}
               initialResidents={editableResidents}
+              hideImageOverlays={true}
             />
           </div>
         </div>
       )}
+
+      {/* Dataset Creation Confirmation Dialog */}
+      <AlertDialog open={showDataStorageConfirmation} onOpenChange={setShowDataStorageConfirmation}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('dataset.confirmTitle', 'Datensatz erstellen?')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('dataset.confirmDescription', 'Möchten Sie diese Daten speichern? Ein neuer Datensatz wird für diese Adresse erstellt.')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={cancelDatasetCreation}>
+              {t('action.cancel', 'Abbrechen')}
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDatasetCreation}>
+              {t('action.confirm', 'Bestätigen')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
