@@ -265,13 +265,30 @@ export default function ScannerPage() {
       });
 
       datasetCreationResolver?.(dataset.id);
-    } catch (error) {
+    } catch (error: any) {
       console.error('[confirmDatasetCreation] Error creating dataset:', error);
-      toast({
-        variant: 'destructive',
-        title: t('dataset.createError', 'Fehler beim Erstellen'),
-        description: t('dataset.createErrorDesc', 'Datensatz konnte nicht erstellt werden'),
-      });
+      
+      // Check if it's a 409 conflict (dataset already exists)
+      if (error?.response?.status === 409) {
+        const errorData = error.response?.data || {};
+        const errorMessage = errorData.message || 'Ein Datensatz für diese Adresse existiert bereits heute.';
+        const isOwnDataset = errorData.isOwnDataset;
+        
+        toast({
+          variant: 'destructive',
+          title: isOwnDataset 
+            ? t('dataset.alreadyExistsOwn', 'Datensatz bereits vorhanden')
+            : t('dataset.alreadyExistsOther', 'Datensatz bereits erstellt'),
+          description: errorMessage,
+          duration: 8000, // Show longer for important message
+        });
+      } else {
+        toast({
+          variant: 'destructive',
+          title: t('dataset.createError', 'Fehler beim Erstellen'),
+          description: error.message || t('dataset.createErrorDesc', 'Datensatz konnte nicht erstellt werden'),
+        });
+      }
       datasetCreationResolver?.(null);
     }
   };
