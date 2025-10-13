@@ -9,16 +9,7 @@ import { ClickableAddressHeader } from '@/components/ClickableAddressHeader';
 import { AddressDatasets } from '@/components/AddressDatasets';
 import { MaximizeButton } from '@/components/MaximizeButton';
 import { Button } from '@/components/ui/button';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { DataStorageConfirmation } from '@/components/DataStorageConfirmation';
 import { RotateCcw, Edit } from 'lucide-react';
 import { ocrAPI, datasetAPI } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
@@ -589,24 +580,14 @@ export default function ScannerPage() {
       )}
 
       {/* Dataset Creation Confirmation Dialog */}
-      <AlertDialog open={showDataStorageConfirmation} onOpenChange={setShowDataStorageConfirmation}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t('dataset.confirmTitle', 'Datensatz erstellen?')}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t('dataset.confirmDescription', 'Möchten Sie diese Daten speichern? Ein neuer Datensatz wird für diese Adresse erstellt.')}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={cancelDatasetCreation}>
-              {t('action.cancel', 'Abbrechen')}
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDatasetCreation}>
-              {t('action.confirm', 'Bestätigen')}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {address && (
+        <DataStorageConfirmation
+          isOpen={showDataStorageConfirmation}
+          onConfirm={confirmDatasetCreation}
+          onCancel={cancelDatasetCreation}
+          address={address}
+        />
+      )}
     </div>
   );
 }

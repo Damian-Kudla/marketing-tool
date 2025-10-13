@@ -34,12 +34,12 @@ export function DataStorageConfirmation({
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
-            {t('dataStorage.confirmation.title', 'Neue Daten speichern?')}
+            {t('dataStorage.confirmation.title', 'Neuen Datensatz anlegen?')}
           </AlertDialogTitle>
           <AlertDialogDescription className="space-y-2">
             <div>
               {t('dataStorage.confirmation.message', 
-                'Möchten Sie neue Daten für diese Adresse speichern?'
+                'Möchtest du für diese Adresse einen neuen Datensatz anlegen?'
               )}
             </div>
             <div className="font-medium text-foreground bg-muted p-2 rounded">
