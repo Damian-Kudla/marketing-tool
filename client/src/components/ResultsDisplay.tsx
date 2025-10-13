@@ -114,7 +114,7 @@ export default function ResultsDisplay({
   
   // Accordion state: automatically expand all when searching
   const accordionValue = searchQuery.trim() 
-    ? ["allCustomers", "duplicates", "prospects", "existing"] 
+    ? ["allCustomers", "duplicates", "prospects", "existing", "addressProspects"] 
     : undefined; // undefined = use internal accordion state (user can collapse/expand)
   
   // State for editing
@@ -730,7 +730,7 @@ export default function ResultsDisplay({
         <CardContent className="space-y-6">
           <Accordion 
             type="multiple" 
-            defaultValue={["allCustomers", "duplicates", "prospects", "existing"]}
+            defaultValue={["allCustomers", "duplicates", "prospects", "existing", "addressProspects"]}
             value={accordionValue}
           >
             {/* Show all customers at address from Google Sheets first */}
@@ -1092,33 +1092,39 @@ export default function ResultsDisplay({
             )}
 
             {/* Show prospects if no image overlays (address-only search) */}
-          {/* This section is for NEW OCR results without photo - do NOT show for loaded datasets */}
-          {!showImageOverlays && !externalDatasetId && result.newProspects.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <UserPlus className="h-4 w-4 text-warning" />
-                <p className="text-sm font-medium">
-                  {t('results.newProspects')} ({result.newProspects.length})
-                </p>
-              </div>
-              {result.newProspects.map((prospect, index) => (
-                <div
-                  key={index}
-                  className="flex items-center gap-3 p-3 rounded-lg border bg-card hover-elevate"
-                  data-testid={`row-prospect-${index}`}
-                >
-                  <div className="h-9 w-9 rounded-full bg-warning/10 flex items-center justify-center flex-shrink-0">
-                    <User className="h-4 w-4 text-warning" />
+            {/* This section is for NEW OCR results without photo - do NOT show for loaded datasets */}
+            {!showImageOverlays && !externalDatasetId && result.newProspects.length > 0 && (
+              <AccordionItem value="addressProspects">
+                <AccordionTrigger className="hover:no-underline">
+                  <div className="flex items-center gap-2">
+                    <UserPlus className="h-4 w-4 text-warning" />
+                    <p className="text-sm font-medium">
+                      {t('results.newProspects')} ({result.newProspects.length})
+                    </p>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="font-medium overflow-x-auto whitespace-nowrap" data-testid={`text-prospect-name-${index}`}>
-                      {prospect}
-                    </span>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-3 pt-3">
+                    {result.newProspects.map((prospect, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center gap-3 p-3 rounded-lg border bg-card hover-elevate"
+                        data-testid={`row-prospect-${index}`}
+                      >
+                        <div className="h-9 w-9 rounded-full bg-warning/10 flex items-center justify-center flex-shrink-0">
+                          <User className="h-4 w-4 text-warning" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium overflow-x-auto whitespace-nowrap" data-testid={`text-prospect-name-${index}`}>
+                            {prospect}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                </AccordionContent>
+              </AccordionItem>
+            )}
           </Accordion>
         </CardContent>
       </Card>

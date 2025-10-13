@@ -21,14 +21,14 @@ export function MaximizeButton({ panel, className = '' }: MaximizeButtonProps) {
       variant="ghost"
       size="sm"
       onClick={() => toggleMaximize(panel)}
-      className={`absolute top-2 right-2 z-10 h-8 w-8 p-0 hover:bg-accent ${className}`}
+      className={`absolute top-1 right-1 z-10 h-6 w-6 p-0 hover:bg-accent/50 opacity-60 hover:opacity-100 transition-opacity ${className}`}
       aria-label={isMaximized ? 'Minimize panel' : 'Maximize panel'}
       title={isMaximized ? 'Minimieren' : 'Maximieren'}
     >
       {isMaximized ? (
-        <Minimize2 className="h-4 w-4" />
+        <Minimize2 className="h-3 w-3" />
       ) : (
-        <Maximize2 className="h-4 w-4" />
+        <Maximize2 className="h-3 w-3" />
       )}
     </Button>
   );

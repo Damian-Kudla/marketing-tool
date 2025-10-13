@@ -339,10 +339,10 @@ export default function ScannerPage() {
             </div>
           </div>
         ) : (
-          // Grid view: two-column layout
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[calc(100vh-12rem)]">
-            {/* Left column: Location, Photo, Overlays */}
-            <div className="flex flex-col gap-4 overflow-y-auto">
+          // Grid view: two-column layout (ab 700px Breite)
+          <div className="grid grid-cols-1 min-[700px]:grid-cols-2 gap-4 h-[calc(100vh-12rem)]">
+            {/* Left column: Location, Photo, Overlays - NO SCROLL, auto-scale */}
+            <div className="flex flex-col gap-4">
               <div className="relative">
                 <MaximizeButton panel="location" />
                 <GPSAddressForm 
