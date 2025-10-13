@@ -391,7 +391,7 @@ export default function ScannerPage() {
               <MaximizeButton panel="results" />
               <ResultsDisplay 
                 result={ocrResult} 
-                photoImageSrc={null}
+                photoImageSrc={photoImageSrc}
                 address={address}
                 onNamesUpdated={handleNamesUpdated}
                 canEdit={canEdit}
@@ -473,7 +473,7 @@ export default function ScannerPage() {
           <div className="container mx-auto max-w-4xl pt-12">
             <ResultsDisplay 
               result={ocrResult} 
-              photoImageSrc={null}
+              photoImageSrc={photoImageSrc}
               address={address}
               onNamesUpdated={handleNamesUpdated}
               canEdit={canEdit}
