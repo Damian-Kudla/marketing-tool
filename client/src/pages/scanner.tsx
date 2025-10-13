@@ -365,7 +365,7 @@ export default function ScannerPage() {
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 bg-background border-b safe-area-top">
-        <div className="container mx-auto px-4 py-3 overflow-x-auto">
+        <div className="container mx-auto px-4 py-3 overflow-x-auto header-scroll-container">
           <div className="flex items-center justify-between gap-4 min-w-max">
             <div className="flex items-center gap-4 flex-shrink-0">
               <h1 className="text-xl font-bold whitespace-nowrap" data-testid="text-app-title">
@@ -519,67 +519,107 @@ export default function ScannerPage() {
 
       {/* Maximized Panel Overlays */}
       {maximizedPanel === 'location' && (
-        <div className="fixed inset-0 z-50 bg-background overflow-y-auto p-4 animate-in fade-in zoom-in-95 duration-200">
-          <MaximizeButton panel="location" className="fixed top-4 right-4" />
-          <div className="container mx-auto max-w-4xl pt-12">
-            <GPSAddressForm 
-              onAddressDetected={handleAddressDetected}
-              onAddressSearch={handleAddressSearch}
-            />
+        <>
+          {/* Backdrop - click to close */}
+          <div 
+            className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm"
+            onClick={() => setMaximizedPanel(null)}
+          />
+          {/* Content */}
+          <div className="fixed inset-0 z-50 flex items-start justify-center pointer-events-none overflow-y-auto p-4">
+            <div className="relative w-full max-w-4xl mt-12 pointer-events-auto bg-background rounded-lg shadow-lg border p-6 animate-in fade-in zoom-in-95 duration-200">
+              <MaximizeButton panel="location" className="absolute top-4 right-4" />
+              <div className="pt-8">
+                <GPSAddressForm 
+                  onAddressDetected={handleAddressDetected}
+                  onAddressSearch={handleAddressSearch}
+                />
+              </div>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {maximizedPanel === 'photo' && canEdit && (
-        <div className="fixed inset-0 z-50 bg-background overflow-y-auto p-4 animate-in fade-in zoom-in-95 duration-200">
-          <MaximizeButton panel="photo" className="fixed top-4 right-4" />
-          <div className="container mx-auto max-w-4xl pt-12">
-            <PhotoCapture onPhotoProcessed={handlePhotoProcessed} address={address} />
+        <>
+          {/* Backdrop - click to close */}
+          <div 
+            className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm"
+            onClick={() => setMaximizedPanel(null)}
+          />
+          {/* Content */}
+          <div className="fixed inset-0 z-50 flex items-start justify-center pointer-events-none overflow-y-auto p-4">
+            <div className="relative w-full max-w-4xl mt-12 pointer-events-auto bg-background rounded-lg shadow-lg border p-6 animate-in fade-in zoom-in-95 duration-200">
+              <MaximizeButton panel="photo" className="absolute top-4 right-4" />
+              <div className="pt-8">
+                <PhotoCapture onPhotoProcessed={handlePhotoProcessed} address={address} />
+              </div>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {maximizedPanel === 'overlays' && photoImageSrc && ocrResult?.fullVisionResponse && (
-        <div className="fixed inset-0 z-50 bg-background overflow-y-auto p-4 animate-in fade-in zoom-in-95 duration-200">
-          <MaximizeButton panel="overlays" className="fixed top-4 right-4" />
-          <div className="container mx-auto max-w-6xl pt-12">
-            <ImageWithOverlays
-              imageSrc={photoImageSrc}
-              fullVisionResponse={ocrResult.fullVisionResponse}
-              residentNames={ocrResult.residentNames}
-              existingCustomers={ocrResult.existingCustomers}
-              newProspects={ocrResult.newProspects}
-              allCustomersAtAddress={ocrResult.allCustomersAtAddress}
-              address={address}
-              onNamesUpdated={handleNamesUpdated}
-              editableResidents={editableResidents}
-              onResidentsUpdated={setEditableResidents}
-              currentDatasetId={currentDatasetId}
-              onRequestDatasetCreation={handleRequestDatasetCreation}
-            />
+        <>
+          {/* Backdrop - click to close */}
+          <div 
+            className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm"
+            onClick={() => setMaximizedPanel(null)}
+          />
+          {/* Content */}
+          <div className="fixed inset-0 z-50 flex items-start justify-center pointer-events-none overflow-y-auto p-4">
+            <div className="relative w-full max-w-6xl mt-12 pointer-events-auto bg-background rounded-lg shadow-lg border p-6 animate-in fade-in zoom-in-95 duration-200">
+              <MaximizeButton panel="overlays" className="absolute top-4 right-4" />
+              <div className="pt-8">
+                <ImageWithOverlays
+                  imageSrc={photoImageSrc}
+                  fullVisionResponse={ocrResult.fullVisionResponse}
+                  residentNames={ocrResult.residentNames}
+                  existingCustomers={ocrResult.existingCustomers}
+                  newProspects={ocrResult.newProspects}
+                  allCustomersAtAddress={ocrResult.allCustomersAtAddress}
+                  address={address}
+                  onNamesUpdated={handleNamesUpdated}
+                  editableResidents={editableResidents}
+                  onResidentsUpdated={setEditableResidents}
+                  currentDatasetId={currentDatasetId}
+                  onRequestDatasetCreation={handleRequestDatasetCreation}
+                />
+              </div>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {maximizedPanel === 'results' && (
-        <div className="fixed inset-0 z-50 bg-background overflow-y-auto p-4 animate-in fade-in zoom-in-95 duration-200">
-          <MaximizeButton panel="results" className="fixed top-4 right-4" />
-          <div className="container mx-auto max-w-4xl pt-12">
-            <ResultsDisplay 
-              result={ocrResult} 
-              photoImageSrc={photoImageSrc}
-              address={address}
-              onNamesUpdated={handleNamesUpdated}
-              canEdit={canEdit}
-              currentDatasetId={currentDatasetId}
-              onDatasetIdChange={setCurrentDatasetId}
-              onDatasetCreatedAtChange={setDatasetCreatedAt}
-              onResidentsUpdated={setEditableResidents}
-              initialResidents={editableResidents}
-              hideImageOverlays={true}
-            />
+        <>
+          {/* Backdrop - click to close */}
+          <div 
+            className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm"
+            onClick={() => setMaximizedPanel(null)}
+          />
+          {/* Content */}
+          <div className="fixed inset-0 z-50 flex items-start justify-center pointer-events-none overflow-y-auto p-4">
+            <div className="relative w-full max-w-4xl mt-12 pointer-events-auto bg-background rounded-lg shadow-lg border p-6 animate-in fade-in zoom-in-95 duration-200">
+              <MaximizeButton panel="results" className="absolute top-4 right-4" />
+              <div className="pt-8">
+                <ResultsDisplay 
+                  result={ocrResult} 
+                  photoImageSrc={photoImageSrc}
+                  address={address}
+                  onNamesUpdated={handleNamesUpdated}
+                  canEdit={canEdit}
+                  currentDatasetId={currentDatasetId}
+                  onDatasetIdChange={setCurrentDatasetId}
+                  onDatasetCreatedAtChange={setDatasetCreatedAt}
+                  onResidentsUpdated={setEditableResidents}
+                  initialResidents={editableResidents}
+                  hideImageOverlays={true}
+                />
+              </div>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Dataset Creation Confirmation Dialog */}

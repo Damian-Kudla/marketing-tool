@@ -2,15 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-/* iOS Safe Area Support for PWA */
-@supports (padding-top: env(safe-area-inset-top)) {
-  body {
-    padding-top: env(safe-area-inset-top);
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-}
+/* iOS Safe Area Support for PWA - only apply to specific elements, not body */
+/* Body padding causes sticky header positioning issues */
 
 /* Utility classes for safe area */
 .safe-area-top {
@@ -27,6 +20,17 @@
 
 .safe-area-right {
   padding-right: env(safe-area-inset-right, 0);
+}
+
+/* Prevent accidental button clicks during horizontal scroll in header */
+.header-scroll-container {
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.header-scroll-container button,
+.header-scroll-container a {
+  touch-action: manipulation;
 }
 
 /* LIGHT MODE */
