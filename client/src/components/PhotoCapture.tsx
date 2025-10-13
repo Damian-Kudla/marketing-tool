@@ -103,14 +103,7 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
       };
       reader.readAsDataURL(correctedFile);
 
-      // Show toast if correction was applied
-      if (correctionResult.orientationInfo.needsCorrection) {
-        toast({
-          title: t('photo.orientationCorrected', 'Orientation Corrected'),
-          description: t('photo.orientationCorrectedDesc', 'Image has been automatically rotated for better text recognition'),
-          duration: 3000,
-        });
-      }
+      // No automatic rotation toast - users can manually rotate if needed
     } catch (error) {
       console.error('Native orientation correction failed:', error);
       
@@ -381,8 +374,13 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
               <img 
                 src={preview} 
                 alt="Nameplate preview" 
-                className="w-full h-48 object-cover rounded-lg"
+                className="w-full h-auto max-h-[60vh] object-contain rounded-lg"
                 data-testid="img-preview"
+                style={{
+                  aspectRatio: 'auto',
+                  maxWidth: '100%',
+                  display: 'block',
+                }}
               />
               {(processing || correcting || rotating) && (
                 <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">

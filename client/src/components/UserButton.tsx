@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useViewMode } from '@/contexts/ViewModeContext';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -19,7 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { User, LogOut, ChevronDown, History } from 'lucide-react';
+import { User, LogOut, ChevronDown, History, LayoutGrid, List } from 'lucide-react';
 import { UserHistory } from './UserHistory';
 import { datasetAPI } from '@/services/api';
 
@@ -29,6 +30,7 @@ interface UserButtonProps {
 
 export function UserButton({ onDatasetLoad }: UserButtonProps) {
   const { username, userId, logout } = useAuth();
+  const { viewMode, setViewMode } = useViewMode();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
@@ -98,6 +100,23 @@ export function UserButton({ onDatasetLoad }: UserButtonProps) {
         >
           <History className="w-4 h-4 mr-2" />
           Verlauf
+        </DropdownMenuItem>
+        
+        <DropdownMenuItem 
+          className="cursor-pointer"
+          onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
+        >
+          {viewMode === 'list' ? (
+            <>
+              <LayoutGrid className="w-4 h-4 mr-2" />
+              Kachelansicht
+            </>
+          ) : (
+            <>
+              <List className="w-4 h-4 mr-2" />
+              Listenansicht
+            </>
+          )}
         </DropdownMenuItem>
         
         <DropdownMenuSeparator />

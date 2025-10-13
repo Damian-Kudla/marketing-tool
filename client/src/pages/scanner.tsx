@@ -7,10 +7,13 @@ import LanguageToggle from '@/components/LanguageToggle';
 import { UserButton } from '@/components/UserButton';
 import { ClickableAddressHeader } from '@/components/ClickableAddressHeader';
 import { AddressDatasets } from '@/components/AddressDatasets';
+import { MaximizeButton } from '@/components/MaximizeButton';
 import { Button } from '@/components/ui/button';
 import { RotateCcw, Edit } from 'lucide-react';
 import { ocrAPI, datasetAPI } from '@/services/api';
 import { useToast } from '@/hooks/use-toast';
+import { useViewMode } from '@/contexts/ViewModeContext';
+import ImageWithOverlays from '@/components/ImageWithOverlays';
 
 // Helper function to create normalized address string for comparison
 const createNormalizedAddressString = (address: Address | null): string | null => {
@@ -22,6 +25,7 @@ const createNormalizedAddressString = (address: Address | null): string | null =
 export default function ScannerPage() {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const { viewMode, maximizedPanel } = useViewMode();
   const [address, setAddress] = useState<Address | null>(null);
   const [normalizedAddress, setNormalizedAddress] = useState<string | null>(null);
   const [ocrResult, setOcrResult] = useState<OCRResult | null>(null);
@@ -292,35 +296,114 @@ export default function ScannerPage() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-4 space-y-4 pb-24">
-        <GPSAddressForm 
-          onAddressDetected={handleAddressDetected}
-          onAddressSearch={handleAddressSearch}
-        />
-        
-        {canEdit && (
-          <PhotoCapture onPhotoProcessed={handlePhotoProcessed} address={address} />
+      <main className="container mx-auto px-4 py-4 pb-24">
+        {viewMode === 'list' ? (
+          // List view: vertical layout (current design)
+          <div className="space-y-4">
+            <div className="relative">
+              <MaximizeButton panel="location" />
+              <GPSAddressForm 
+                onAddressDetected={handleAddressDetected}
+                onAddressSearch={handleAddressSearch}
+              />
+            </div>
+            
+            {canEdit && (
+              <div className="relative">
+                <MaximizeButton panel="photo" />
+                <PhotoCapture onPhotoProcessed={handlePhotoProcessed} address={address} />
+              </div>
+            )}
+            
+            {address && showDatasets && (
+              <AddressDatasets 
+                address={address}
+                onLoadDataset={handleDatasetLoadById}
+              />
+            )}
+            
+            <div className="relative">
+              <MaximizeButton panel="results" />
+              <ResultsDisplay 
+                result={ocrResult} 
+                photoImageSrc={photoImageSrc}
+                address={address}
+                onNamesUpdated={handleNamesUpdated}
+                canEdit={canEdit}
+                currentDatasetId={currentDatasetId}
+                onDatasetIdChange={setCurrentDatasetId}
+                onDatasetCreatedAtChange={setDatasetCreatedAt}
+                onResidentsUpdated={setEditableResidents}
+                initialResidents={editableResidents}
+              />
+            </div>
+          </div>
+        ) : (
+          // Grid view: two-column layout
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[calc(100vh-12rem)]">
+            {/* Left column: Location, Photo, Overlays */}
+            <div className="flex flex-col gap-4 overflow-y-auto">
+              <div className="relative">
+                <MaximizeButton panel="location" />
+                <GPSAddressForm 
+                  onAddressDetected={handleAddressDetected}
+                  onAddressSearch={handleAddressSearch}
+                />
+              </div>
+              
+              {canEdit && (
+                <div className="relative">
+                  <MaximizeButton panel="photo" />
+                  <PhotoCapture onPhotoProcessed={handlePhotoProcessed} address={address} />
+                </div>
+              )}
+              
+              {photoImageSrc && ocrResult?.fullVisionResponse && (
+                <div className="relative">
+                  <MaximizeButton panel="overlays" />
+                  <ImageWithOverlays
+                    imageSrc={photoImageSrc}
+                    fullVisionResponse={ocrResult.fullVisionResponse}
+                    residentNames={ocrResult.residentNames}
+                    existingCustomers={ocrResult.existingCustomers}
+                    newProspects={ocrResult.newProspects}
+                    allCustomersAtAddress={ocrResult.allCustomersAtAddress}
+                    address={address}
+                    onNamesUpdated={handleNamesUpdated}
+                    editableResidents={editableResidents}
+                    onResidentsUpdated={setEditableResidents}
+                    currentDatasetId={currentDatasetId}
+                    onRequestDatasetCreation={async () => null}
+                  />
+                </div>
+              )}
+              
+              {address && showDatasets && (
+                <AddressDatasets 
+                  address={address}
+                  onLoadDataset={handleDatasetLoadById}
+                />
+              )}
+            </div>
+            
+            {/* Right column: Results (full height) */}
+            <div className="relative overflow-y-auto">
+              <MaximizeButton panel="results" />
+              <ResultsDisplay 
+                result={ocrResult} 
+                photoImageSrc={null}
+                address={address}
+                onNamesUpdated={handleNamesUpdated}
+                canEdit={canEdit}
+                currentDatasetId={currentDatasetId}
+                onDatasetIdChange={setCurrentDatasetId}
+                onDatasetCreatedAtChange={setDatasetCreatedAt}
+                onResidentsUpdated={setEditableResidents}
+                initialResidents={editableResidents}
+              />
+            </div>
+          </div>
         )}
-        
-        {address && showDatasets && (
-          <AddressDatasets 
-            address={address}
-            onLoadDataset={handleDatasetLoadById}
-          />
-        )}
-        
-        <ResultsDisplay 
-          result={ocrResult} 
-          photoImageSrc={photoImageSrc}
-          address={address}
-          onNamesUpdated={handleNamesUpdated}
-          canEdit={canEdit}
-          currentDatasetId={currentDatasetId}
-          onDatasetIdChange={setCurrentDatasetId}
-          onDatasetCreatedAtChange={setDatasetCreatedAt}
-          onResidentsUpdated={setEditableResidents}
-          initialResidents={editableResidents}
-        />
       </main>
 
       {hasResults && (
@@ -336,6 +419,70 @@ export default function ScannerPage() {
               <RotateCcw className="h-4 w-4" />
               {t('action.reset')}
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Maximized Panel Overlays */}
+      {maximizedPanel === 'location' && (
+        <div className="fixed inset-0 z-50 bg-background overflow-y-auto p-4">
+          <MaximizeButton panel="location" className="fixed top-4 right-4" />
+          <div className="container mx-auto max-w-4xl pt-12">
+            <GPSAddressForm 
+              onAddressDetected={handleAddressDetected}
+              onAddressSearch={handleAddressSearch}
+            />
+          </div>
+        </div>
+      )}
+
+      {maximizedPanel === 'photo' && canEdit && (
+        <div className="fixed inset-0 z-50 bg-background overflow-y-auto p-4">
+          <MaximizeButton panel="photo" className="fixed top-4 right-4" />
+          <div className="container mx-auto max-w-4xl pt-12">
+            <PhotoCapture onPhotoProcessed={handlePhotoProcessed} address={address} />
+          </div>
+        </div>
+      )}
+
+      {maximizedPanel === 'overlays' && photoImageSrc && ocrResult?.fullVisionResponse && (
+        <div className="fixed inset-0 z-50 bg-background overflow-y-auto p-4">
+          <MaximizeButton panel="overlays" className="fixed top-4 right-4" />
+          <div className="container mx-auto max-w-6xl pt-12">
+            <ImageWithOverlays
+              imageSrc={photoImageSrc}
+              fullVisionResponse={ocrResult.fullVisionResponse}
+              residentNames={ocrResult.residentNames}
+              existingCustomers={ocrResult.existingCustomers}
+              newProspects={ocrResult.newProspects}
+              allCustomersAtAddress={ocrResult.allCustomersAtAddress}
+              address={address}
+              onNamesUpdated={handleNamesUpdated}
+              editableResidents={editableResidents}
+              onResidentsUpdated={setEditableResidents}
+              currentDatasetId={currentDatasetId}
+              onRequestDatasetCreation={async () => null}
+            />
+          </div>
+        </div>
+      )}
+
+      {maximizedPanel === 'results' && (
+        <div className="fixed inset-0 z-50 bg-background overflow-y-auto p-4">
+          <MaximizeButton panel="results" className="fixed top-4 right-4" />
+          <div className="container mx-auto max-w-4xl pt-12">
+            <ResultsDisplay 
+              result={ocrResult} 
+              photoImageSrc={null}
+              address={address}
+              onNamesUpdated={handleNamesUpdated}
+              canEdit={canEdit}
+              currentDatasetId={currentDatasetId}
+              onDatasetIdChange={setCurrentDatasetId}
+              onDatasetCreatedAtChange={setDatasetCreatedAt}
+              onResidentsUpdated={setEditableResidents}
+              initialResidents={editableResidents}
+            />
           </div>
         </div>
       )}

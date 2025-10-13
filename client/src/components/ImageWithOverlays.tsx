@@ -539,15 +539,48 @@ export default function ImageWithOverlays({
     return result;
   };
 
+  // Calculate actual rendered image dimensions with object-fit: contain
+  const calculateRenderedImageDimensions = (img: HTMLImageElement): { width: number; height: number; offsetX: number; offsetY: number } => {
+    const naturalWidth = img.naturalWidth;
+    const naturalHeight = img.naturalHeight;
+    const containerWidth = img.offsetWidth;
+    const containerHeight = img.offsetHeight;
+    
+    // Calculate aspect ratios
+    const imageAspect = naturalWidth / naturalHeight;
+    const containerAspect = containerWidth / containerHeight;
+    
+    let renderedWidth: number;
+    let renderedHeight: number;
+    let offsetX: number = 0;
+    let offsetY: number = 0;
+    
+    // object-fit: contain logic
+    if (imageAspect > containerAspect) {
+      // Image is wider than container - fit to width
+      renderedWidth = containerWidth;
+      renderedHeight = containerWidth / imageAspect;
+      offsetY = (containerHeight - renderedHeight) / 2;
+    } else {
+      // Image is taller than container - fit to height
+      renderedHeight = containerHeight;
+      renderedWidth = containerHeight * imageAspect;
+      offsetX = (containerWidth - renderedWidth) / 2;
+    }
+    
+    return { width: renderedWidth, height: renderedHeight, offsetX, offsetY };
+  };
+
   // Update dimensions when image loads or window resizes
   const updateDimensions = () => {
     if (imageRef.current) {
       // Wait for the image to fully load before getting dimensions
       const img = imageRef.current;
       if (img.complete && img.naturalHeight !== 0) {
+        const rendered = calculateRenderedImageDimensions(img);
         setImageDimensions({
-          width: img.offsetWidth,
-          height: img.offsetHeight,
+          width: rendered.width,
+          height: rendered.height,
         });
         setOriginalDimensions({
           width: img.naturalWidth,
@@ -556,9 +589,10 @@ export default function ImageWithOverlays({
       } else {
         // If image isn't loaded, wait for it
         img.onload = () => {
+          const rendered = calculateRenderedImageDimensions(img);
           setImageDimensions({
-            width: img.offsetWidth,
-            height: img.offsetHeight,
+            width: rendered.width,
+            height: rendered.height,
           });
           setOriginalDimensions({
             width: img.naturalWidth,
@@ -583,6 +617,9 @@ export default function ImageWithOverlays({
   // Calculate scale factor
   const scaleX = imageDimensions.width / (originalDimensions.width || 1);
   const scaleY = imageDimensions.height / (originalDimensions.height || 1);
+
+  // Calculate image offset (for centering with object-fit: contain)
+  const imageOffset = imageRef.current ? calculateRenderedImageDimensions(imageRef.current) : { offsetX: 0, offsetY: 0 };
 
   // Handle click to edit - always opens ResidentEditPopup
   const handleOverlayClick = async (index: number) => {
@@ -784,16 +821,23 @@ export default function ImageWithOverlays({
             ref={imageRef}
             src={imageSrc}
             alt="Nameplate with overlays"
-            className="w-full h-auto max-w-none"
+            className="w-full h-auto"
             onLoad={updateDimensions}
             data-testid="img-with-overlays"
-            style={{ objectFit: 'contain', display: 'block' }}
+            style={{ 
+              objectFit: 'contain', 
+              display: 'block',
+              maxHeight: '80vh',
+              maxWidth: '100%',
+              aspectRatio: 'auto',
+            }}
           />
           
           {overlays.map((overlay, index) => {
             const isShowingDetails = longPressIndex === index;
-            const scaledX = (overlay.x + (overlay.xOffset || 0)) * scaleX;
-            const scaledY = (overlay.y + (overlay.yOffset || 0)) * scaleY;
+            // Apply scale and add offset for object-fit: contain centering
+            const scaledX = (overlay.x + (overlay.xOffset || 0)) * scaleX + imageOffset.offsetX;
+            const scaledY = (overlay.y + (overlay.yOffset || 0)) * scaleY + imageOffset.offsetY;
             const scaledWidth = overlay.width * scaleX * overlay.scale;
             const scaledHeight = overlay.height * scaleY * overlay.scale;
             

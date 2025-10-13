@@ -171,16 +171,18 @@ async function analyzeImageDimensions(file: File): Promise<{ width: number; heig
       const aspectRatio = width / height;
       const deviceType = detectDeviceTypeNative();
       
-      // For mobile devices, landscape images (width > height) often need rotation
-      // This is especially true for doorbell nameplate photos
-      const needsRotation = (deviceType === 'ios' || deviceType === 'android') && aspectRatio > 1.2;
+      // DISABLED: Automatic rotation based on dimensions
+      // iPhone photos are already correctly oriented when taken upright
+      // Only EXIF orientation should trigger automatic rotation
+      const needsRotation = false;
       
       console.log('Image analysis:', {
         width,
         height,
         aspectRatio,
         deviceType,
-        needsRotation
+        needsRotation: false,
+        note: 'Dimension-based rotation disabled'
       });
       
       resolve({ width, height, needsRotation });
@@ -216,11 +218,15 @@ async function rotateImageNative(file: File, degrees: number): Promise<Blob> {
       try {
         const { width, height } = img;
         
+        // Normalize degrees to 0-360 range
+        const normalizedDegrees = ((degrees % 360) + 360) % 360;
+        
         // Calculate new canvas dimensions
-        if (degrees === 90 || degrees === 270) {
+        // For 90° and 270° (and their equivalents like -90° = 270°), swap dimensions
+        if (normalizedDegrees === 90 || normalizedDegrees === 270) {
           canvas.width = height;
           canvas.height = width;
-        } else if (degrees === 180) {
+        } else if (normalizedDegrees === 180) {
           canvas.width = width;
           canvas.height = height;
         } else {
@@ -273,61 +279,27 @@ async function rotateImageNative(file: File, degrees: number): Promise<Blob> {
  * Main orientation correction function - completely library-free
  */
 export async function correctImageOrientationNative(file: File): Promise<NativeOrientationResult> {
-  console.log('Starting native orientation correction for:', file.name);
+  console.log('Starting native orientation correction (DISABLED - manual rotation only):', file.name);
   
   try {
-    // Step 1: Try to read EXIF orientation natively
+    // DISABLED: Automatic rotation based on EXIF or dimensions
+    // User should manually rotate images using the UI buttons
+    // This prevents unwanted automatic rotation of correctly-oriented photos
+    
+    // Step 1: Read EXIF for logging only (no automatic rotation)
     const exifOrientation = await readEXIFOrientationNative(file);
     const exifRotation = orientationToRotation(exifOrientation);
     
     if (exifRotation > 0) {
-      console.log(`EXIF orientation ${exifOrientation} requires ${exifRotation}° rotation`);
-      
-      const originalDimensions = await analyzeImageDimensions(file);
-      const rotatedBlob = await rotateImageNative(file, exifRotation);
-      
-      // Calculate corrected dimensions
-      const correctedDimensions = exifRotation === 90 || exifRotation === 270 
-        ? { width: originalDimensions.height, height: originalDimensions.width }
-        : { width: originalDimensions.width, height: originalDimensions.height };
-      
-      return {
-        correctedBlob: rotatedBlob,
-        orientationInfo: {
-          rotation: exifRotation,
-          needsCorrection: true,
-          detectionMethod: 'exif_native',
-          confidence: 0.9
-        },
-        originalDimensions: { width: originalDimensions.width, height: originalDimensions.height },
-        correctedDimensions
-      };
+      console.log(`EXIF orientation ${exifOrientation} detected (would require ${exifRotation}° rotation) - SKIPPED`);
     }
     
-    // Step 2: Fallback to dimension analysis
+    // Step 2: Analyze dimensions for logging only (no automatic rotation)
     const dimensionAnalysis = await analyzeImageDimensions(file);
     
-    if (dimensionAnalysis.needsRotation) {
-      console.log('Dimension analysis suggests 90° rotation needed');
-      
-      const rotatedBlob = await rotateImageNative(file, 90);
-      
-      return {
-        correctedBlob: rotatedBlob,
-        orientationInfo: {
-          rotation: 90,
-          needsCorrection: true,
-          detectionMethod: 'dimension_analysis',
-          confidence: 0.7
-        },
-        originalDimensions: { width: dimensionAnalysis.width, height: dimensionAnalysis.height },
-        correctedDimensions: { width: dimensionAnalysis.height, height: dimensionAnalysis.width }
-      };
-    }
+    console.log('Automatic rotation DISABLED - user can manually rotate if needed');
     
-    // Step 3: No correction needed
-    console.log('No orientation correction needed');
-    
+    // Step 3: Return original image without any rotation
     const originalBlob = new Blob([file], { type: file.type });
     
     return {
@@ -336,7 +308,7 @@ export async function correctImageOrientationNative(file: File): Promise<NativeO
         rotation: 0,
         needsCorrection: false,
         detectionMethod: 'none',
-        confidence: 0.8
+        confidence: 1.0
       },
       originalDimensions: { width: dimensionAnalysis.width, height: dimensionAnalysis.height },
       correctedDimensions: { width: dimensionAnalysis.width, height: dimensionAnalysis.height }

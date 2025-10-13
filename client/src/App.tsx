@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { I18nextProvider } from 'react-i18next';
 import i18n from './i18n';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { ViewModeProvider } from '@/contexts/ViewModeContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { PWAUpdatePrompt } from '@/components/PWAUpdatePrompt';
 import ScannerPage from "@/pages/scanner";
@@ -29,13 +30,15 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <I18nextProvider i18n={i18n}>
         <AuthProvider>
-          <TooltipProvider>
-            <Toaster />
-            <PWAUpdatePrompt />
-            <ProtectedRoute>
-              <Router />
-            </ProtectedRoute>
-          </TooltipProvider>
+          <ViewModeProvider>
+            <TooltipProvider>
+              <Toaster />
+              <PWAUpdatePrompt />
+              <ProtectedRoute>
+                <Router />
+              </ProtectedRoute>
+            </TooltipProvider>
+          </ViewModeProvider>
         </AuthProvider>
       </I18nextProvider>
     </QueryClientProvider>

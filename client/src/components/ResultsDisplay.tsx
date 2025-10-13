@@ -5,6 +5,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -105,6 +111,11 @@ export default function ResultsDisplay({
   
   // State for real-time search
   const [searchQuery, setSearchQuery] = useState<string>('');
+  
+  // Accordion state: automatically expand all when searching
+  const accordionValue = searchQuery.trim() 
+    ? ["allCustomers", "duplicates", "prospects", "existing"] 
+    : undefined; // undefined = use internal accordion state (user can collapse/expand)
   
   // State for editing
   const [showEditPopup, setShowEditPopup] = useState(false);
@@ -717,18 +728,27 @@ export default function ResultsDisplay({
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Show all customers at address from Google Sheets first */}
-          {/* Only show this list when NOT loading a dataset (externalDatasetId is null) */}
-          {/* When a dataset is loaded, show only editable lists below */}
-          {!externalDatasetId && result.allCustomersAtAddress && result.allCustomersAtAddress.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <User className="h-4 w-4 text-primary" />
-                <p className="text-sm font-medium">
-                  {t('results.allCustomersAtAddress')} ({result.allCustomersAtAddress.length})
-                </p>
-              </div>
-              {result.allCustomersAtAddress.map((customer, index) => {
+          <Accordion 
+            type="multiple" 
+            defaultValue={["allCustomers", "duplicates", "prospects", "existing"]}
+            value={accordionValue}
+          >
+            {/* Show all customers at address from Google Sheets first */}
+            {/* Only show this list when NOT loading a dataset (externalDatasetId is null) */}
+            {/* When a dataset is loaded, show only editable lists below */}
+            {!externalDatasetId && result.allCustomersAtAddress && result.allCustomersAtAddress.length > 0 && (
+              <AccordionItem value="allCustomers">
+                <AccordionTrigger className="hover:no-underline">
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-primary" />
+                    <p className="text-sm font-medium">
+                      {t('results.allCustomersAtAddress')} ({result.allCustomersAtAddress.length})
+                    </p>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-3 pt-3">
+                    {result.allCustomersAtAddress.map((customer, index) => {
                 const isVisible = matchesSearch(customer.name);
                 return (
                   <div
@@ -755,10 +775,12 @@ export default function ResultsDisplay({
                   </div>
                 );
               })}
-            </div>
-          )}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            )}
 
-          {/* Show duplicate names */}
+            {/* Show duplicate names */}
           {/* Only show when we have residentNames (from OCR), not when loading a dataset */}
           {!externalDatasetId && result.residentNames && result.residentNames.length > 0 && (() => {
             const normalizeToWords = (name: string): string[] => {
@@ -808,14 +830,18 @@ export default function ResultsDisplay({
             if (duplicates.length === 0) return null;
             
             return (
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-blue-500" />
-                  <p className="text-sm font-medium">
-                    {t('results.duplicateNames', 'Duplicate Names')} ({duplicates.length})
-                  </p>
-                </div>
-                {duplicates.map((duplicate, index) => {
+              <AccordionItem value="duplicates">
+                <AccordionTrigger className="hover:no-underline">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 text-blue-500" />
+                    <p className="text-sm font-medium">
+                      {t('results.duplicateNames', 'Duplicate Names')} ({duplicates.length})
+                    </p>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-3 pt-3">
+                    {duplicates.map((duplicate, index) => {
                   const isVisible = matchesSearch(duplicate);
                   return (
                     <div
@@ -835,21 +861,27 @@ export default function ResultsDisplay({
                     </div>
                   );
                 })}
-              </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
             );
           })()}
 
-          {/* Show prospects with edit button */}
-          {showResidentLists && currentNewProspects.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <UserPlus className="h-4 w-4 text-warning" />
-                  <p className="text-sm font-medium">
-                    {t('results.newProspects')} ({currentNewProspects.length})
-                  </p>
-                </div>
-                {canEdit && (
+            {/* Show prospects with edit button */}
+            {showResidentLists && currentNewProspects.length > 0 && (
+              <AccordionItem value="prospects">
+                <AccordionTrigger className="hover:no-underline">
+                  <div className="flex items-center gap-2">
+                    <UserPlus className="h-4 w-4 text-warning" />
+                    <p className="text-sm font-medium">
+                      {t('results.newProspects')} ({currentNewProspects.length})
+                    </p>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-3 pt-3">
+                    <div className="flex items-center justify-end mb-3">
+                      {canEdit && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -942,20 +974,26 @@ export default function ResultsDisplay({
                   </div>
                 );
               })}
-            </div>
-          )}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            )}
 
-          {/* Show existing customers (matched from photo) with edit button */}
-          {currentExistingCustomers.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <UserCheck className="h-4 w-4 text-success" />
-                  <p className="text-sm font-medium">
-                    {t('results.existingCustomers')} ({currentExistingCustomers.length})
-                  </p>
-                </div>
-                {canEdit && (
+            {/* Show existing customers (matched from photo) with edit button */}
+            {currentExistingCustomers.length > 0 && (
+              <AccordionItem value="existing">
+                <AccordionTrigger className="hover:no-underline">
+                  <div className="flex items-center gap-2">
+                    <UserCheck className="h-4 w-4 text-success" />
+                    <p className="text-sm font-medium">
+                      {t('results.existingCustomers')} ({currentExistingCustomers.length})
+                    </p>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-3 pt-3">
+                    <div className="flex items-center justify-end mb-3">
+                      {canEdit && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -1048,10 +1086,12 @@ export default function ResultsDisplay({
                   </div>
                 );
               })}
-            </div>
-          )}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            )}
 
-          {/* Show prospects if no image overlays (address-only search) */}
+            {/* Show prospects if no image overlays (address-only search) */}
           {/* This section is for NEW OCR results without photo - do NOT show for loaded datasets */}
           {!showImageOverlays && !externalDatasetId && result.newProspects.length > 0 && (
             <div className="space-y-3">
@@ -1079,6 +1119,7 @@ export default function ResultsDisplay({
               ))}
             </div>
           )}
+          </Accordion>
         </CardContent>
       </Card>
 
