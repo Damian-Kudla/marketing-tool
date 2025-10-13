@@ -574,6 +574,7 @@ export default function ScannerPage() {
               onDatasetCreatedAtChange={setDatasetCreatedAt}
               onResidentsUpdated={setEditableResidents}
               initialResidents={editableResidents}
+              hideImageOverlays={true}
             />
           </div>
         </div>
