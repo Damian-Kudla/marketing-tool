@@ -364,24 +364,26 @@ export default function ScannerPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 bg-background border-b">
-        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h1 className="text-xl font-bold" data-testid="text-app-title">
-              {t('app.title')}
-            </h1>
-            {address && (
-              <ClickableAddressHeader 
-                address={address} 
-                residents={editableResidents} 
-                canEdit={canEdit}
-                datasetCreatedAt={datasetCreatedAt}
-              />
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            <UserButton onDatasetLoad={handleDatasetLoad} />
-            <LanguageToggle />
+      <header className="sticky top-0 z-50 bg-background border-b safe-area-top">
+        <div className="container mx-auto px-4 py-3 overflow-x-auto">
+          <div className="flex items-center justify-between gap-4 min-w-max">
+            <div className="flex items-center gap-4 flex-shrink-0">
+              <h1 className="text-xl font-bold whitespace-nowrap" data-testid="text-app-title">
+                {t('app.title')}
+              </h1>
+              {address && (
+                <ClickableAddressHeader 
+                  address={address} 
+                  residents={editableResidents} 
+                  canEdit={canEdit}
+                  datasetCreatedAt={datasetCreatedAt}
+                />
+              )}
+            </div>
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <UserButton onDatasetLoad={handleDatasetLoad} />
+              <LanguageToggle />
+            </div>
           </div>
         </div>
       </header>
