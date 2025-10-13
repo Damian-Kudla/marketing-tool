@@ -351,6 +351,13 @@ export default function ScannerPage() {
                 />
               </div>
               
+              {address && showDatasets && (
+                <AddressDatasets 
+                  address={address}
+                  onLoadDataset={handleDatasetLoadById}
+                />
+              )}
+              
               {canEdit && (
                 <div className="relative">
                   <MaximizeButton panel="photo" />
@@ -376,13 +383,6 @@ export default function ScannerPage() {
                     onRequestDatasetCreation={async () => null}
                   />
                 </div>
-              )}
-              
-              {address && showDatasets && (
-                <AddressDatasets 
-                  address={address}
-                  onLoadDataset={handleDatasetLoadById}
-                />
               )}
             </div>
             
@@ -425,7 +425,7 @@ export default function ScannerPage() {
 
       {/* Maximized Panel Overlays */}
       {maximizedPanel === 'location' && (
-        <div className="fixed inset-0 z-50 bg-background overflow-y-auto p-4">
+        <div className="fixed inset-0 z-50 bg-background overflow-y-auto p-4 animate-in fade-in zoom-in-95 duration-200">
           <MaximizeButton panel="location" className="fixed top-4 right-4" />
           <div className="container mx-auto max-w-4xl pt-12">
             <GPSAddressForm 
@@ -437,7 +437,7 @@ export default function ScannerPage() {
       )}
 
       {maximizedPanel === 'photo' && canEdit && (
-        <div className="fixed inset-0 z-50 bg-background overflow-y-auto p-4">
+        <div className="fixed inset-0 z-50 bg-background overflow-y-auto p-4 animate-in fade-in zoom-in-95 duration-200">
           <MaximizeButton panel="photo" className="fixed top-4 right-4" />
           <div className="container mx-auto max-w-4xl pt-12">
             <PhotoCapture onPhotoProcessed={handlePhotoProcessed} address={address} />
@@ -446,7 +446,7 @@ export default function ScannerPage() {
       )}
 
       {maximizedPanel === 'overlays' && photoImageSrc && ocrResult?.fullVisionResponse && (
-        <div className="fixed inset-0 z-50 bg-background overflow-y-auto p-4">
+        <div className="fixed inset-0 z-50 bg-background overflow-y-auto p-4 animate-in fade-in zoom-in-95 duration-200">
           <MaximizeButton panel="overlays" className="fixed top-4 right-4" />
           <div className="container mx-auto max-w-6xl pt-12">
             <ImageWithOverlays
@@ -468,7 +468,7 @@ export default function ScannerPage() {
       )}
 
       {maximizedPanel === 'results' && (
-        <div className="fixed inset-0 z-50 bg-background overflow-y-auto p-4">
+        <div className="fixed inset-0 z-50 bg-background overflow-y-auto p-4 animate-in fade-in zoom-in-95 duration-200">
           <MaximizeButton panel="results" className="fixed top-4 right-4" />
           <div className="container mx-auto max-w-4xl pt-12">
             <ResultsDisplay 
