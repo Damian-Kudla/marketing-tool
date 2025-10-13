@@ -14,7 +14,7 @@ interface ViewModeContextType {
 const ViewModeContext = createContext<ViewModeContextType | undefined>(undefined);
 
 export function ViewModeProvider({ children }: { children: ReactNode }) {
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [maximizedPanel, setMaximizedPanel] = useState<MaximizedPanel>(null);
 
   const toggleMaximize = (panel: MaximizedPanel) => {

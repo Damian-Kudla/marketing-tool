@@ -388,7 +388,7 @@ export default function ScannerPage() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-4 pb-24">
+      <main className="container mx-auto px-4 py-4 pb-32">
         {viewMode === 'list' ? (
           // List view: vertical layout (current design)
           <div className="space-y-4">
@@ -414,8 +414,29 @@ export default function ScannerPage() {
               />
             )}
             
-            <div className="relative">
-              <MaximizeButton panel="results" />
+            {/* Image with Overlays in List view - with maximize button */}
+            {photoImageSrc && ocrResult?.fullVisionResponse && (
+              <div className="relative">
+                <MaximizeButton panel="overlays" />
+                <ImageWithOverlays
+                  imageSrc={photoImageSrc}
+                  fullVisionResponse={ocrResult.fullVisionResponse}
+                  residentNames={ocrResult.residentNames}
+                  existingCustomers={ocrResult.existingCustomers}
+                  newProspects={ocrResult.newProspects}
+                  allCustomersAtAddress={ocrResult.allCustomersAtAddress}
+                  address={address}
+                  onNamesUpdated={handleNamesUpdated}
+                  editableResidents={editableResidents}
+                  onResidentsUpdated={setEditableResidents}
+                  currentDatasetId={currentDatasetId}
+                  onRequestDatasetCreation={handleRequestDatasetCreation}
+                />
+              </div>
+            )}
+            
+            {/* Results Display without maximize button and without embedded image */}
+            <div>
               <ResultsDisplay 
                 result={ocrResult} 
                 photoImageSrc={photoImageSrc}
@@ -427,6 +448,7 @@ export default function ScannerPage() {
                 onDatasetCreatedAtChange={setDatasetCreatedAt}
                 onResidentsUpdated={setEditableResidents}
                 initialResidents={editableResidents}
+                hideImageOverlays={true}
               />
             </div>
           </div>
