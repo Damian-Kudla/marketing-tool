@@ -446,9 +446,30 @@ export default function ScannerPage() {
                   <PhotoCapture onPhotoProcessed={handlePhotoProcessed} address={address} />
                 </div>
               )}
+
+              {/* ImageWithOverlays at bottom of left column */}
+              {photoImageSrc && ocrResult?.fullVisionResponse && (
+                <div className="relative">
+                  <MaximizeButton panel="overlays" />
+                  <ImageWithOverlays
+                    imageSrc={photoImageSrc}
+                    fullVisionResponse={ocrResult.fullVisionResponse}
+                    residentNames={ocrResult.residentNames}
+                    existingCustomers={ocrResult.existingCustomers}
+                    newProspects={ocrResult.newProspects}
+                    allCustomersAtAddress={ocrResult.allCustomersAtAddress}
+                    address={address}
+                    onNamesUpdated={handleNamesUpdated}
+                    editableResidents={editableResidents}
+                    onResidentsUpdated={setEditableResidents}
+                    currentDatasetId={currentDatasetId}
+                    onRequestDatasetCreation={handleRequestDatasetCreation}
+                  />
+                </div>
+              )}
             </div>
             
-            {/* Right column: Results (full height, includes ImageWithOverlays at bottom) */}
+            {/* Right column: Results lists only (no ImageWithOverlays) */}
             <div className="relative overflow-y-auto">
               <MaximizeButton panel="results" />
               <ResultsDisplay 
@@ -462,6 +483,7 @@ export default function ScannerPage() {
                 onDatasetCreatedAtChange={setDatasetCreatedAt}
                 onResidentsUpdated={setEditableResidents}
                 initialResidents={editableResidents}
+                hideImageOverlays={true}
               />
             </div>
           </div>
