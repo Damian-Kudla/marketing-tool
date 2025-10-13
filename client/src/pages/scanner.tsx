@@ -199,6 +199,56 @@ export default function ScannerPage() {
     }
   };
 
+  const handleRequestDatasetCreation = async (): Promise<string | null> => {
+    // If dataset already exists, return it
+    if (currentDatasetId) {
+      return currentDatasetId;
+    }
+
+    // Simple dataset creation without confirmation dialog (dialog is only in ResultsDisplay)
+    try {
+      if (!address) {
+        console.error('[handleRequestDatasetCreation] No address available');
+        return null;
+      }
+
+      console.log('[handleRequestDatasetCreation] Creating dataset for address:', address);
+      
+      const dataset = await datasetAPI.createDataset({
+        address: {
+          street: address.street,
+          number: address.number,
+          city: address.city,
+          postal: address.postal,
+        },
+        editableResidents: editableResidents,
+        rawResidentData: ocrResult?.residentNames || [],
+      });
+
+      console.log('[handleRequestDatasetCreation] Dataset created:', dataset.id);
+      
+      // Update state with new dataset ID
+      setCurrentDatasetId(dataset.id);
+      setDatasetCreatedAt(dataset.createdAt);
+      setCanEdit(true);
+
+      toast({
+        title: t('dataset.created', 'Dataset created'),
+        description: t('dataset.createdDesc', 'Dataset was created successfully'),
+      });
+
+      return dataset.id;
+    } catch (error) {
+      console.error('[handleRequestDatasetCreation] Error creating dataset:', error);
+      toast({
+        variant: 'destructive',
+        title: t('dataset.createError', 'Error creating'),
+        description: t('dataset.createErrorDesc', 'Dataset could not be created'),
+      });
+      return null;
+    }
+  };
+
   const handlePhotoProcessed = (result: any, imageSrc?: string) => {
     console.log('OCR result:', result);
     
@@ -400,6 +450,7 @@ export default function ScannerPage() {
                 onDatasetCreatedAtChange={setDatasetCreatedAt}
                 onResidentsUpdated={setEditableResidents}
                 initialResidents={editableResidents}
+                hideImageOverlays={true}
               />
             </div>
           </div>
@@ -461,7 +512,7 @@ export default function ScannerPage() {
               editableResidents={editableResidents}
               onResidentsUpdated={setEditableResidents}
               currentDatasetId={currentDatasetId}
-              onRequestDatasetCreation={async () => null}
+              onRequestDatasetCreation={handleRequestDatasetCreation}
             />
           </div>
         </div>
