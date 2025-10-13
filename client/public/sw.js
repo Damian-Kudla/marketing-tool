@@ -1,11 +1,11 @@
 // Energy Scan Capture PWA Service Worker
 // Optimized for performance with comprehensive caching strategies
-const VERSION = '1.0.0';
+const VERSION = '2.0.0';
 
-const CACHE_NAME = 'energy-scan-v1.0.0';
-const STATIC_CACHE = 'static-cache-v1.0.0';
-const API_CACHE = 'api-cache-v1.0.0';
-const IMAGE_CACHE = 'image-cache-v1.0.0';
+const CACHE_NAME = 'energy-scan-v2.0.0';
+const STATIC_CACHE = 'static-cache-v2.0.0';
+const API_CACHE = 'api-cache-v2.0.0';
+const IMAGE_CACHE = 'image-cache-v2.0.0';
 
 // Static assets to cache on install
 const STATIC_ASSETS = [
@@ -15,7 +15,7 @@ const STATIC_ASSETS = [
   '/icons/icon-192x192.svg',
   '/icons/icon-512x512.svg',
   '/icons/apple-touch-icon.svg',
-  // Add other static assets as needed
+  // Vite build assets will be cached dynamically when requested
 ];
 
 // API endpoints to cache
@@ -125,9 +125,11 @@ self.addEventListener('fetch', event => {
 // Check if request is for static asset
 function isStaticAsset(request) {
   const url = new URL(request.url);
+  // Match Vite build assets with content hashes (e.g., index-abc123.js)
   return url.pathname.match(/\.(html|js|css|json|svg|ico|woff2?)$/) ||
          url.pathname === '/' ||
          url.pathname.startsWith('/icons/') ||
+         url.pathname.startsWith('/assets/') || // Vite build assets
          url.pathname === '/manifest.json';
 }
 
