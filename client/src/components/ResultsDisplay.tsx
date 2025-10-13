@@ -25,6 +25,7 @@ import ImageWithOverlays from './ImageWithOverlays';
 import { ResidentEditPopup } from './ResidentEditPopup';
 import { DataStorageConfirmation } from './DataStorageConfirmation';
 import { ClickableAddressHeader } from './ClickableAddressHeader';
+import { MaximizeButton } from './MaximizeButton';
 import { useToast } from '@/hooks/use-toast';
 import { datasetAPI } from '@/services/api';
 import type { Address } from '@/components/GPSAddressForm';
@@ -62,7 +63,6 @@ interface ResultsDisplayProps {
   onDatasetIdChange?: (id: string | null) => void; // Callback when dataset ID changes
   onDatasetCreatedAtChange?: (createdAt: string | null) => void; // Callback when dataset creation date changes
   initialResidents?: EditableResident[]; // Initial residents when loading an existing dataset
-  hideImageOverlays?: boolean; // Hide ImageWithOverlays component (for Grid-View where it's shown separately)
 }
 
 export default function ResultsDisplay({ 
@@ -75,8 +75,7 @@ export default function ResultsDisplay({
   currentDatasetId: externalDatasetId = null,
   onDatasetIdChange,
   onDatasetCreatedAtChange,
-  initialResidents = [],
-  hideImageOverlays = false
+  initialResidents = []
 }: ResultsDisplayProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -682,8 +681,9 @@ export default function ResultsDisplay({
 
   return (
     <>
-      {showImageOverlays && !hideImageOverlays && (
-        <div className="mb-4">
+      {showImageOverlays && (
+        <div className="mb-4 relative">
+          <MaximizeButton panel="overlays" />
           <ImageWithOverlays
             imageSrc={photoImageSrc!}
             fullVisionResponse={result.fullVisionResponse}

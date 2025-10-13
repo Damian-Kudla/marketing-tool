@@ -446,29 +446,9 @@ export default function ScannerPage() {
                   <PhotoCapture onPhotoProcessed={handlePhotoProcessed} address={address} />
                 </div>
               )}
-              
-              {photoImageSrc && ocrResult?.fullVisionResponse && (
-                <div className="relative">
-                  <MaximizeButton panel="overlays" />
-                  <ImageWithOverlays
-                    imageSrc={photoImageSrc}
-                    fullVisionResponse={ocrResult.fullVisionResponse}
-                    residentNames={ocrResult.residentNames}
-                    existingCustomers={ocrResult.existingCustomers}
-                    newProspects={ocrResult.newProspects}
-                    allCustomersAtAddress={ocrResult.allCustomersAtAddress}
-                    address={address}
-                    onNamesUpdated={handleNamesUpdated}
-                    editableResidents={editableResidents}
-                    onResidentsUpdated={setEditableResidents}
-                    currentDatasetId={currentDatasetId}
-                    onRequestDatasetCreation={handleRequestDatasetCreation}
-                  />
-                </div>
-              )}
             </div>
             
-            {/* Right column: Results (full height) */}
+            {/* Right column: Results (full height, includes ImageWithOverlays at bottom) */}
             <div className="relative overflow-y-auto">
               <MaximizeButton panel="results" />
               <ResultsDisplay 
@@ -482,7 +462,6 @@ export default function ScannerPage() {
                 onDatasetCreatedAtChange={setDatasetCreatedAt}
                 onResidentsUpdated={setEditableResidents}
                 initialResidents={editableResidents}
-                hideImageOverlays={true}
               />
             </div>
           </div>
@@ -565,7 +544,6 @@ export default function ScannerPage() {
               onDatasetCreatedAtChange={setDatasetCreatedAt}
               onResidentsUpdated={setEditableResidents}
               initialResidents={editableResidents}
-              hideImageOverlays={true}
             />
           </div>
         </div>
