@@ -103,7 +103,7 @@ export const ocrCorrectionRequestSchema = z.object({
 export type OCRCorrectionRequest = z.infer<typeof ocrCorrectionRequestSchema>;
 
 // Resident status enum for new features
-export const residentStatusSchema = z.enum(['no_interest', 'not_reached', 'interest_later', 'appointment']);
+export const residentStatusSchema = z.enum(['no_interest', 'not_reached', 'interest_later', 'appointment', 'written']);
 export type ResidentStatus = z.infer<typeof residentStatusSchema>;
 
 // Resident category enum
@@ -119,6 +119,8 @@ export const editableResidentSchema = z.object({
   floor: z.number().min(0).max(100).optional(),
   door: z.string().max(30).optional(),
   isFixed: z.boolean().default(false), // For "All Existing Customers at this Address" entries
+  originalName: z.string().optional(), // Original name from OCR for tracking category changes
+  originalCategory: residentCategorySchema.optional(), // Original category for tracking changes
 });
 
 export type EditableResident = z.infer<typeof editableResidentSchema>;
@@ -174,3 +176,57 @@ export const bulkUpdateResidentsRequestSchema = z.object({
 });
 
 export type BulkUpdateResidentsRequest = z.infer<typeof bulkUpdateResidentsRequestSchema>;
+
+// Schema for logging category changes
+export const categoryChangeLogSchema = z.object({
+  datasetId: z.string(),
+  residentOriginalName: z.string(),
+  residentCurrentName: z.string(),
+  oldCategory: residentCategorySchema,
+  newCategory: residentCategorySchema,
+  changedBy: z.string(), // Username
+  changedAt: z.date(),
+  addressDatasetSnapshot: z.string(), // JSON snapshot of the dataset
+});
+
+export type CategoryChangeLog = z.infer<typeof categoryChangeLogSchema>;
+
+// Request schema for logging category change
+export const logCategoryChangeRequestSchema = z.object({
+  datasetId: z.string(),
+  residentOriginalName: z.string(),
+  residentCurrentName: z.string(),
+  oldCategory: residentCategorySchema,
+  newCategory: residentCategorySchema,
+  addressDatasetSnapshot: z.string(), // JSON string of dataset
+});
+
+export type LogCategoryChangeRequest = z.infer<typeof logCategoryChangeRequestSchema>;
+
+// Appointment schemas
+export const appointmentSchema = z.object({
+  id: z.string(),
+  datasetId: z.string(),
+  residentName: z.string(),
+  address: z.string(), // Full address string
+  appointmentDate: z.string(), // ISO date string
+  appointmentTime: z.string(), // Time in HH:mm format
+  notes: z.string().optional(),
+  createdBy: z.string(), // Username
+  createdAt: z.date(),
+});
+
+export type Appointment = z.infer<typeof appointmentSchema>;
+
+// Request schema for creating appointments
+export const createAppointmentRequestSchema = z.object({
+  datasetId: z.string(),
+  residentName: z.string(),
+  address: z.string(),
+  appointmentDate: z.string(),
+  appointmentTime: z.string(),
+  notes: z.string().optional(),
+});
+
+export type CreateAppointmentRequest = z.infer<typeof createAppointmentRequestSchema>;
+

@@ -9,6 +9,8 @@ import {
   geocodingRequestSchema, 
   addressSchema, 
   ocrCorrectionRequestSchema,
+  logCategoryChangeRequestSchema,
+  createAppointmentRequestSchema,
   type Address,
   type Customer,
   type OCRResponse
@@ -17,7 +19,7 @@ import { requireAuth, type AuthenticatedRequest } from "./middleware/auth";
 import { GoogleSheetsLoggingService } from "./services/googleSheetsLogging";
 import { authRouter } from "./routes/auth";
 import addressDatasetsRouter from "./routes/addressDatasets";
-import { addressDatasetService, normalizeAddress } from "./services/googleSheets";
+import { addressDatasetService, normalizeAddress, categoryChangeLoggingService, appointmentService } from "./services/googleSheets";
 import { 
   performOrientationCorrection, 
   checkImageAspectRatio,
@@ -79,6 +81,141 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Add address datasets routes (authentication required)
   app.use("/api/address-datasets", requireAuth, addressDatasetsRouter);
   
+  // Category change logging route
+    app.post("/api/log-category-change", async (req, res) => {
+    try {
+      const validatedData = logCategoryChangeRequestSchema.parse(req.body);
+      const username = req.cookies.auth_token || "unknown";
+
+      await categoryChangeLoggingService.logCategoryChange(
+        validatedData.datasetId,
+        validatedData.residentOriginalName,
+        validatedData.residentCurrentName,
+        validatedData.oldCategory,
+        validatedData.newCategory,
+        username,
+        validatedData.addressDatasetSnapshot
+      );
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error logging category change:", error);
+      res.status(500).json({ error: "Failed to log category change" });
+    }
+  });
+
+  // Call Back endpoints
+  app.get("/api/callbacks/today", requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const username = req.username;
+      if (!username) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const today = new Date();
+      const callBacks = await addressDatasetService.getCallBackAddresses(username, today);
+      res.json(callBacks);
+    } catch (error) {
+      console.error("Error getting today's call backs:", error);
+      res.status(500).json({ error: "Failed to get call backs" });
+    }
+  });
+
+  app.get("/api/callbacks/yesterday", requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const username = req.username;
+      if (!username) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const callBacks = await addressDatasetService.getCallBackAddresses(username, yesterday);
+      res.json(callBacks);
+    } catch (error) {
+      console.error("Error getting yesterday's call backs:", error);
+      res.status(500).json({ error: "Failed to get call backs" });
+    }
+  });
+
+  // Appointment endpoints
+  app.post("/api/appointments", requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const username = req.username;
+      if (!username) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const validatedData = createAppointmentRequestSchema.parse(req.body);
+      const appointment = await appointmentService.createAppointment(
+        validatedData.datasetId,
+        validatedData.residentName,
+        validatedData.address,
+        validatedData.appointmentDate,
+        validatedData.appointmentTime,
+        validatedData.notes || "",
+        username
+      );
+
+      res.json(appointment);
+    } catch (error) {
+      console.error("Error creating appointment:", error);
+      res.status(500).json({ error: "Failed to create appointment" });
+    }
+  });
+
+  app.get("/api/appointments", requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const username = req.username;
+      if (!username) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const appointments = await appointmentService.getUserAppointments(username);
+      res.json(appointments);
+    } catch (error) {
+      console.error("Error getting appointments:", error);
+      res.status(500).json({ error: "Failed to get appointments" });
+    }
+  });
+
+  app.get("/api/appointments/upcoming", requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const username = req.username;
+      if (!username) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const appointments = await appointmentService.getUpcomingAppointments(username);
+      res.json(appointments);
+    } catch (error) {
+      console.error("Error getting upcoming appointments:", error);
+      res.status(500).json({ error: "Failed to get upcoming appointments" });
+    }
+  });
+
+  app.delete("/api/appointments/:id", requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const username = req.username;
+      if (!username) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const { id } = req.params;
+      await appointmentService.deleteAppointment(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting appointment:", error);
+      res.status(500).json({ error: "Failed to delete appointment" });
+    }
+  });
+
+  app.get("/api/health", (req, res) => {
+    res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
+  app.get("/api/health", (req, res) => {
+    res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+  
   app.post("/api/geocode", requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
       const { latitude, longitude } = geocodingRequestSchema.parse(req.body);
@@ -122,6 +259,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
             error: "This service is only available for addresses in Germany",
             errorCode: "NON_GERMAN_ADDRESS"
           });
+        }
+      }
+
+      // Validate postal code for user (if postal codes are assigned)
+      if (address.postal && req.username) {
+        const { googleSheetsService } = await import('./services/googleSheets');
+        const allowedPostalCodes = await googleSheetsService.getUserPostalCodes(req.username);
+        
+        // Only check if user has postal code restrictions
+        if (allowedPostalCodes.length > 0) {
+          const isAllowed = allowedPostalCodes.includes(address.postal.trim());
+          
+          if (!isAllowed) {
+            const allowedCodesText = allowedPostalCodes.join(', ');
+            return res.status(403).json({
+              error: `Du bist nicht in deinem Gebiet. Dein Gebiet ist ${allowedCodesText}, du bist aber in ${address.postal}. Bitte gehe in dein Gebiet oder kontaktiere deinen Leiter.`,
+              errorCode: "POSTAL_CODE_RESTRICTED",
+              allowedPostalCodes,
+              currentPostalCode: address.postal
+            });
+          }
         }
       }
 
@@ -181,27 +339,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let orientationCorrectionApplied = false;
       let backendOrientationInfo: OrientationAnalysisResult | null = null;
 
-      // If frontend didn't handle orientation or confidence is low, try backend correction
-      const shouldTryBackendCorrection = !frontendOrientationInfo || 
-        frontendOrientationInfo.detectionMethod === 'manual' ||
-        frontendOrientationInfo.detectionMethod === 'none';
+      // BACKEND ROTATION DISABLED: Rotating the image without transforming bounding boxes
+      // causes misalignment between text overlays and image. Frontend handles rotation.
+      // Keeping orientation analysis for logging but not applying corrections.
 
-      if (shouldTryBackendCorrection) {
-        try {
-          console.log('Attempting backend orientation correction...');
-          backendOrientationInfo = await performOrientationCorrection(imageBuffer, visionClient);
-          
-          if (backendOrientationInfo.needsCorrection && backendOrientationInfo.correctedBuffer) {
-            imageBuffer = backendOrientationInfo.correctedBuffer;
-            orientationCorrectionApplied = true;
-            console.log(`Backend orientation correction applied: ${backendOrientationInfo.orientationInfo.rotation}° rotation`);
-          }
-        } catch (error) {
-          console.warn('Backend orientation correction failed, proceeding with original image:', error);
-        }
-      }
-
-      // Perform text detection on the (possibly corrected) image
+      // Perform text detection on the original image (no backend rotation)
       const [result] = await visionClient.textDetection({
         image: { content: imageBuffer },
       });
@@ -280,8 +422,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const matches = await storage.searchCustomers(residentName, address);
         
         if (matches.length > 0) {
-          // Add all matches to existing customers
-          existingCustomers.push(...matches);
+          // Keep the original name from OCR, but use customer data from database
+          // This ensures the name on the image matches the displayed name
+          for (const match of matches) {
+            existingCustomers.push({
+              ...match,
+              name: residentName, // Use original OCR name, not database name
+            });
+          }
         } else {
           // No match found - this is a prospect
           newProspects.push(residentName);
@@ -294,20 +442,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         newProspects,
         existingCustomers,
         allCustomersAtAddress,
-        // Include orientation correction info in response
-        orientationCorrectionApplied,
-        backendOrientationInfo: backendOrientationInfo?.orientationInfo || null,
+        // Backend orientation correction disabled - always false
+        orientationCorrectionApplied: false,
+        backendOrientationInfo: null,
       };
 
-      // Log the OCR request with results including orientation correction
+      // Log the OCR request with results
       const addressString = address ? `${address.street} ${address.number}, ${address.city} ${address.postal}`.trim() : undefined;
-      
-      // Enhance existing prospects and customers data with orientation info
-      const enhancedNewProspects = orientationCorrectionApplied 
-        ? [...newProspects, `[ORIENTATION: ${backendOrientationInfo?.orientationInfo.rotation}° rotation applied]`]
-        : newProspects;
-      
-      await GoogleSheetsLoggingService.logUserActivity(req, addressString, enhancedNewProspects, existingCustomers);
+      await GoogleSheetsLoggingService.logUserActivity(req, addressString, newProspects, existingCustomers);
 
       res.json(response);
     } catch (error) {
@@ -337,7 +479,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const matches = await storage.searchCustomers(residentName, address);
         
         if (matches.length > 0) {
-          existingCustomers.push(...matches);
+          // Keep the original name from OCR, but use customer data from database
+          for (const match of matches) {
+            existingCustomers.push({
+              ...match,
+              name: residentName, // Use original OCR name, not database name
+            });
+          }
         } else {
           newProspects.push(residentName);
         }

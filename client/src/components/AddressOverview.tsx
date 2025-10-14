@@ -28,14 +28,18 @@ export function AddressOverview({ isOpen, onClose, address, residents }: Address
   // Group residents by floor and organize data
   const floorData = useMemo(() => {
     const floors = new Map<number, EditableResident[]>();
+    const residentsWithoutFloor: EditableResident[] = [];
     
-    // Group residents by floor (only those with floor data)
+    // Group residents by floor
     residents.forEach(resident => {
       if (resident.floor !== undefined && resident.floor !== null) {
         if (!floors.has(resident.floor)) {
           floors.set(resident.floor, []);
         }
         floors.get(resident.floor)!.push(resident);
+      } else {
+        // Residents without floor go into special collection
+        residentsWithoutFloor.push(resident);
       }
     });
 
@@ -43,6 +47,14 @@ export function AddressOverview({ isOpen, onClose, address, residents }: Address
     const floorArray: FloorData[] = Array.from(floors.entries())
       .map(([floor, residents]) => ({ floor, residents }))
       .sort((a, b) => b.floor - a.floor);
+
+    // Add "Sammeletage" at the end if there are residents without floor
+    if (residentsWithoutFloor.length > 0) {
+      floorArray.push({
+        floor: -1, // Special marker for "no floor"
+        residents: residentsWithoutFloor
+      });
+    }
 
     return floorArray;
   }, [residents]);
@@ -63,6 +75,8 @@ export function AddressOverview({ isOpen, onClose, address, residents }: Address
         return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'appointment':
         return 'bg-green-100 text-green-800 border-green-200';
+      case 'written':
+        return 'bg-green-800 text-white border-green-900'; // Dunkelgrün für "Geschrieben"
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
     }
@@ -70,7 +84,17 @@ export function AddressOverview({ isOpen, onClose, address, residents }: Address
 
   const getStatusText = (status?: ResidentStatus) => {
     if (!status) return '';
-    return t(`resident.status.${status}`, status);
+    
+    // Spezielle Übersetzungen für deutsche Anzeige
+    const translations: Record<ResidentStatus, string> = {
+      no_interest: 'Kein Interesse',
+      not_reached: 'Nicht erreicht',
+      interest_later: 'Interesse später',
+      appointment: 'Termin',
+      written: 'Geschrieben'
+    };
+    
+    return translations[status] || t(`resident.status.${status}`, status);
   };
 
   if (floorData.length === 0) {
@@ -121,7 +145,7 @@ export function AddressOverview({ isOpen, onClose, address, residents }: Address
                 {floorData.map(({ floor, residents: floorResidents }) => (
                   <tr key={floor} className="hover:bg-gray-50">
                     <td className="border border-gray-300 px-3 py-2 font-medium text-center">
-                      {floor}
+                      {floor === -1 ? '-*' : floor}
                     </td>
                     {Array.from({ length: maxResidentsPerFloor }, (_, index) => {
                       const resident = floorResidents[index];
@@ -181,20 +205,24 @@ export function AddressOverview({ isOpen, onClose, address, residents }: Address
           <div className="font-medium">{t('address.overview.legend', 'Legende')}:</div>
           <div className="flex flex-wrap gap-2">
             <Badge className="bg-red-100 text-red-800 border-red-200">
-              {t('resident.status.noInterest', 'Kein Interesse')}
+              Kein Interesse
             </Badge>
             <Badge className="bg-orange-100 text-orange-800 border-orange-200">
-              {t('resident.status.notReached', 'Nicht erreicht')}
+              Nicht erreicht
             </Badge>
             <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
-              {t('resident.status.interestLater', 'Interesse später')}
+              Interesse später
             </Badge>
             <Badge className="bg-green-100 text-green-800 border-green-200">
-              {t('resident.status.appointment', 'Termin')}
+              Termin
+            </Badge>
+            <Badge className="bg-green-800 text-white border-green-900">
+              Geschrieben
             </Badge>
           </div>
-          <div className="text-xs">
-            {t('address.overview.clickInstruction', 'Klicken Sie auf eine Zelle, um Details anzuzeigen')}
+          <div className="space-y-1 text-xs">
+            <div>{t('address.overview.clickInstruction', 'Klicken Sie auf eine Zelle, um Details anzuzeigen')}</div>
+            <div className="italic">*Den Anwohnern in dieser Zeile wurde keine Etage zugeordnet.</div>
           </div>
         </div>
       </DialogContent>

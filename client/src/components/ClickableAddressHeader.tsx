@@ -25,10 +25,8 @@ export function ClickableAddressHeader({
   const displayAddress = `${address.street} ${address.number}`;
   const fullAddressString = `${address.street} ${address.number}, ${address.postal} ${address.city || ''}`.trim();
 
-  // Filter residents that have both status and floor data for overview
-  const residentsWithStatusAndFloor = residents.filter(r => 
-    r.status && r.floor !== undefined && r.floor !== null
-  );
+  // Filter residents that have status (floor is now optional)
+  const residentsWithStatus = residents.filter(r => r.status);
 
   // Determine dataset state message
   const getDatasetStateText = () => {
@@ -74,9 +72,9 @@ export function ClickableAddressHeader({
             <div className="text-sm">
               {displayAddress}
             </div>
-            {residentsWithStatusAndFloor.length > 0 && (
+            {residentsWithStatus.length > 0 && (
               <span className="text-xs text-blue-600 ml-1">
-                ({residentsWithStatusAndFloor.length})
+                ({residentsWithStatus.length})
               </span>
             )}
           </div>
@@ -92,7 +90,7 @@ export function ClickableAddressHeader({
         isOpen={showOverview}
         onClose={() => setShowOverview(false)}
         address={fullAddressString}
-        residents={residentsWithStatusAndFloor}
+        residents={residentsWithStatus}
       />
     </>
   );

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -27,6 +28,8 @@ interface ResidentEditPopupProps {
   onSave: (resident: EditableResident) => Promise<void>;
   onDelete?: (resident: EditableResident) => Promise<void>; // Optional callback for deleting resident
   isEditing?: boolean; // true if editing existing, false if creating new
+  currentDatasetId?: string | null; // For category change logging
+  addressDataset?: any; // For category change logging snapshot
 }
 
 export function ResidentEditPopup({
@@ -36,25 +39,40 @@ export function ResidentEditPopup({
   onSave,
   onDelete,
   isEditing = false,
+  currentDatasetId,
+  addressDataset,
 }: ResidentEditPopupProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<EditableResident>({
     name: '',
     category: 'potential_new_customer' as ResidentCategory,
     isFixed: false,
   });
+  
+  // Additional state for appointment details
+  const [appointmentDate, setAppointmentDate] = useState('');
+  const [appointmentTime, setAppointmentTime] = useState('');
+  const [appointmentNotes, setAppointmentNotes] = useState('');
 
   useEffect(() => {
     if (resident && isOpen) {
       setFormData({ ...resident });
+      // Reset appointment fields when opening popup
+      setAppointmentDate('');
+      setAppointmentTime('');
+      setAppointmentNotes('');
     } else if (!resident && isOpen) {
       setFormData({
         name: '',
         category: 'potential_new_customer' as ResidentCategory,
         isFixed: false,
       });
+      setAppointmentDate('');
+      setAppointmentTime('');
+      setAppointmentNotes('');
     }
   }, [resident, isOpen]);
 
@@ -70,17 +88,7 @@ export function ResidentEditPopup({
       return;
     }
 
-    // Validate floor is required if status is set
-    if (formData.status && (formData.floor === undefined || formData.floor === null)) {
-      toast({
-        variant: 'destructive',
-        title: t('resident.edit.floorRequired', 'Etage ist erforderlich'),
-        description: t('resident.edit.floorRequiredDesc', 'Bitte geben Sie eine Etage an, wenn ein Status gesetzt ist'),
-      });
-      return;
-    }
-
-    // Validate floor range
+    // Validate floor range (only if floor is provided)
     if (formData.floor !== undefined && (formData.floor < 0 || formData.floor > 100)) {
       toast({
         variant: 'destructive',
@@ -100,15 +108,104 @@ export function ResidentEditPopup({
       return;
     }
 
+    // Validate appointment fields if status is 'appointment'
+    if (formData.status === 'appointment') {
+      if (!appointmentDate || !appointmentTime) {
+        toast({
+          variant: 'destructive',
+          title: 'Termin-Daten erforderlich',
+          description: 'Bitte geben Sie Datum und Uhrzeit für den Termin an',
+        });
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       console.log('[ResidentEditPopup] Calling onSave with:', formData);
+      
+      // Check if category was changed for an OCR-generated resident
+      if (resident?.originalCategory && resident.originalName && 
+          resident.originalCategory !== formData.category && 
+          currentDatasetId) {
+        
+        console.log('[ResidentEditPopup] Category change detected, logging...');
+        
+        try {
+          // Log category change to backend
+          await fetch('/api/log-category-change', {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              datasetId: currentDatasetId,
+              residentOriginalName: resident.originalName,
+              residentCurrentName: formData.name,
+              oldCategory: resident.originalCategory,
+              newCategory: formData.category,
+              addressDatasetSnapshot: JSON.stringify(addressDataset || {})
+            })
+          });
+          
+          console.log('[ResidentEditPopup] Category change logged successfully');
+        } catch (logError) {
+          console.error('[ResidentEditPopup] Failed to log category change:', logError);
+          // Don't fail the save if logging fails
+        }
+      }
+      
       await onSave(formData);
       console.log('[ResidentEditPopup] onSave completed successfully');
-      toast({
-        title: t('resident.edit.success', 'Bewohner gespeichert'),
-        description: t('resident.edit.successDesc', 'Die Änderungen wurden erfolgreich gespeichert'),
-      });
+      
+      // If status is 'appointment', create appointment in backend
+      if (formData.status === 'appointment' && appointmentDate && appointmentTime && 
+          currentDatasetId && addressDataset) {
+        try {
+          // Build address string from addressDataset
+          const addressString = typeof addressDataset.address === 'string' 
+            ? addressDataset.address 
+            : `${addressDataset.address?.street || ''} ${addressDataset.address?.number || ''}, ${addressDataset.address?.city || ''} ${addressDataset.address?.postal || ''}`.trim();
+          
+          const appointmentResponse = await fetch('/api/appointments', {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              datasetId: currentDatasetId,
+              residentName: formData.name,
+              address: addressString,
+              appointmentDate,
+              appointmentTime,
+              notes: appointmentNotes,
+            }),
+          });
+
+          if (!appointmentResponse.ok) {
+            throw new Error('Failed to create appointment');
+          }
+
+          console.log('[ResidentEditPopup] Appointment created successfully');
+          
+          // Invalidate appointments queries to refresh the list
+          queryClient.invalidateQueries({ queryKey: ['/api/appointments/upcoming'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/appointments'] });
+          
+          console.log('[ResidentEditPopup] Invalidated appointment queries');
+        } catch (appointmentError) {
+          console.error('[ResidentEditPopup] Error creating appointment:', appointmentError);
+          toast({
+            variant: 'destructive',
+            title: 'Termin konnte nicht erstellt werden',
+            description: 'Der Bewohner wurde gespeichert, aber der Termin konnte nicht angelegt werden',
+          });
+        }
+      }
+      
+      // Toast message is shown by parent component (ResultsDisplay.handleResidentSave)
       onClose();
     } catch (error) {
       console.error('[ResidentEditPopup] Failed to save resident:', error);
@@ -157,6 +254,7 @@ export function ResidentEditPopup({
     { value: 'not_reached', label: t('resident.status.notReached', 'Nicht erreicht') },
     { value: 'interest_later', label: t('resident.status.interestLater', 'Interesse später') },
     { value: 'appointment', label: t('resident.status.appointment', 'Termin') },
+    { value: 'written', label: t('resident.status.written', 'Geschrieben') },
   ];
 
   return (
@@ -236,9 +334,57 @@ export function ResidentEditPopup({
 
               {formData.status && (
                 <>
+                  {/* Show appointment fields if status is 'appointment' */}
+                  {formData.status === 'appointment' && (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="appointmentDate">
+                          Termin-Datum <span className="text-red-600">*</span>
+                        </Label>
+                        <Input
+                          id="appointmentDate"
+                          type="date"
+                          value={appointmentDate}
+                          onChange={(e) => setAppointmentDate(e.target.value)}
+                          min={new Date().toISOString().split('T')[0]}
+                          disabled={loading}
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="appointmentTime">
+                          Termin-Uhrzeit <span className="text-red-600">*</span>
+                        </Label>
+                        <Input
+                          id="appointmentTime"
+                          type="time"
+                          value={appointmentTime}
+                          onChange={(e) => setAppointmentTime(e.target.value)}
+                          disabled={loading}
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="appointmentNotes">
+                          Notizen <span className="text-muted-foreground text-xs">(optional)</span>
+                        </Label>
+                        <Input
+                          id="appointmentNotes"
+                          value={appointmentNotes}
+                          onChange={(e) => setAppointmentNotes(e.target.value)}
+                          placeholder="z.B. Zusätzliche Informationen zum Termin"
+                          disabled={loading}
+                        />
+                      </div>
+                    </>
+                  )}
+                  
+                  {/* Floor and door fields for all statuses */}
                   <div className="space-y-2">
                     <Label htmlFor="floor">
-                      {t('resident.edit.floor', 'Etage')} *
+                      {t('resident.edit.floor', 'Etage')} <span className="text-muted-foreground text-xs">(optional)</span>
                     </Label>
                     <Input
                       id="floor"

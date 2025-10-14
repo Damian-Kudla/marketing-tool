@@ -212,7 +212,7 @@ export class GoogleSheetsStorage implements IStorage {
       });
     }
     
-    // Filter by house number (intelligent matching for suffixes like a, b, c)
+    // Filter by house number (STRICT matching - no fuzzy logic)
     if (address.number) {
       const normalizeNumber = (num: string) => num.toLowerCase().trim().replace(/[.\-\s]/g, '');
       const searchNumber = normalizeNumber(address.number);
@@ -221,31 +221,29 @@ export class GoogleSheetsStorage implements IStorage {
         if (!customer.houseNumber) return false;
         const customerNumber = normalizeNumber(customer.houseNumber);
         
-        // Exact match - always valid
-        if (customerNumber === searchNumber) return true;
-        
-        // Extract numeric and suffix parts
-        const searchNumeric = searchNumber.match(/^\d+/)?.[0] || '';
-        const searchSuffix = searchNumber.replace(/^\d+/, '');
-        const customerNumeric = customerNumber.match(/^\d+/)?.[0] || '';
-        const customerSuffix = customerNumber.replace(/^\d+/, '');
-        
-        // If numeric parts don't match exactly, reject
-        if (searchNumeric !== customerNumeric) return false;
-        
-        // If search has no suffix, only match customers without suffix or single letter suffixes
-        if (!searchSuffix) {
-          // Allow: "1" matches "1", "1a", "1b", but NOT "10", "11"
-          return !customerSuffix || /^[a-z]$/.test(customerSuffix);
-        }
-        
-        // If search has suffix, customer must have same or similar suffix
-        // Allow: "1a" matches "1a", "1A", but NOT "1b", "1", "10a"
-        return customerSuffix === searchSuffix;
+        // STRICT: Only exact matches allowed
+        // "1" matches ONLY "1", not "1a", "1b", etc.
+        // "1a" matches ONLY "1a", not "1" or "1b"
+        return customerNumber === searchNumber;
       });
     }
     
     return matches;
+  }
+
+  /**
+   * Normalize name for matching by handling German special characters
+   * ß → ss, ä → ae, ö → oe, ü → ue
+   */
+  private normalizeName(name: string): string {
+    return name
+      .toLowerCase()
+      .trim()
+      .replace(/ß/g, 'ss')
+      .replace(/ä/g, 'ae')
+      .replace(/ö/g, 'oe')
+      .replace(/ü/g, 'ue')
+      .replace(/\s+/g, ' '); // Normalize multiple spaces
   }
 
   async searchCustomers(name: string, address?: Partial<Address>): Promise<Customer[]> {
@@ -260,18 +258,21 @@ export class GoogleSheetsStorage implements IStorage {
       customersToSearch = await this.fetchCustomersFromSheet();
     }
     
-    // Now search names ONLY within the address-filtered customers
-    const normalizedSearchName = name.toLowerCase().trim();
+    // Normalize search name for special character matching
+    const normalizedSearchName = this.normalizeName(name);
     const searchWords = normalizedSearchName.split(/\s+/).filter(word => word.length >= 2);
 
     const matches = customersToSearch.filter(customer => {
-      const customerNameWords = customer.name.toLowerCase().trim().split(/\s+/);
+      // Normalize customer name as well
+      const normalizedCustomerName = this.normalizeName(customer.name);
+      const customerNameWords = normalizedCustomerName.split(/\s+/);
       
-      // Neu: Exakter Match - prüfe, ob searchWord exakt in customerNameWords vorkommt
-        return searchWords.some(searchWord => 
-          customerNameWords.includes(searchWord)
-        );
-      });
+      // Check if any search word matches any customer name word exactly
+      // This handles ß↔ss, ä↔ae, ö↔oe, ü↔ue matching
+      return searchWords.some(searchWord => 
+        customerNameWords.includes(searchWord)
+      );
+    });
     
     return matches;
   }

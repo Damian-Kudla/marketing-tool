@@ -68,8 +68,8 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: G
             if (addressData.country && addressData.country.toLowerCase() !== 'deutschland' && addressData.country.toLowerCase() !== 'germany') {
               toast({
                 variant: 'destructive',
-                title: t('gps.error'),
-                description: t('gps.germanyOnly'),
+                title: 'Standort nicht verfügbar',
+                description: 'Dieser Service ist nur für Adressen in Deutschland verfügbar.',
               });
               setLoading(false);
               return;
@@ -78,13 +78,24 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: G
             setAddress(addressData);
             setDetected(true);
             onAddressDetected?.(addressData);
-          } catch (error) {
+          } catch (error: any) {
             console.error('Geocoding error:', error);
-            toast({
-              variant: 'destructive',
-              title: t('gps.error'),
-              description: 'Unable to detect address from location',
-            });
+            
+            // Check for postal code restriction error
+            if (error?.response?.data?.errorCode === 'POSTAL_CODE_RESTRICTED') {
+              toast({
+                variant: 'destructive',
+                title: 'Postleitzahl nicht erlaubt',
+                description: error.response.data.error,
+                duration: 8000,
+              });
+            } else {
+              toast({
+                variant: 'destructive',
+                title: 'Standort-Fehler',
+                description: 'Die Adresse konnte nicht vom Standort erkannt werden. Bitte versuchen Sie es erneut.',
+              });
+            }
           } finally {
             setLoading(false);
           }
@@ -94,8 +105,8 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: G
           console.error('Geolocation error:', error);
           toast({
             variant: 'destructive',
-            title: t('gps.error'),
-            description: 'Location permission denied',
+            title: 'Standort-Berechtigung',
+            description: 'Die Standort-Berechtigung wurde verweigert. Bitte erlauben Sie den Standortzugriff in Ihren Browsereinstellungen.',
           });
         }
       );
@@ -103,8 +114,8 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: G
       setLoading(false);
       toast({
         variant: 'destructive',
-        title: t('gps.error'),
-        description: 'Geolocation not supported',
+        title: 'Standort nicht verfügbar',
+        description: 'Ihr Browser unterstützt keine Standorterkennung. Bitte geben Sie die Adresse manuell ein.',
       });
     }
   };

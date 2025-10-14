@@ -1,4 +1,5 @@
 import { google } from 'googleapis';
+import crypto from 'crypto';
 import type { AddressDataset, EditableResident } from '../../shared/schema';
 
 // Helper function to get current time in Berlin timezone (MEZ/MESZ)
@@ -204,7 +205,7 @@ class GoogleSheetsService implements SheetsService {
     try {
       const response = await sheetsClient.spreadsheets.values.get({
         spreadsheetId: this.SHEET_ID,
-        range: `${this.WORKSHEET_NAME}!${this.RANGE}`,
+        range: `${this.WORKSHEET_NAME}!A2:C`, // Extended to column C for postal codes
       });
 
       const rows = response.data.values || [];
@@ -226,6 +227,61 @@ class GoogleSheetsService implements SheetsService {
       console.error('Error fetching password-username data from Google Sheets:', error);
       throw new Error('Failed to load authentication data');
     }
+  }
+
+  async getUserPostalCodes(username: string): Promise<string[]> {
+    if (!sheetsEnabled || !sheetsClient) {
+      console.warn('Google Sheets API not available');
+      return [];
+    }
+
+    try {
+      const response = await sheetsClient.spreadsheets.values.get({
+        spreadsheetId: this.SHEET_ID,
+        range: `${this.WORKSHEET_NAME}!A2:C`,
+      });
+
+      const rows = response.data.values || [];
+      
+      // Find the user's row
+      for (const row of rows) {
+        const rowUsername = row[1]?.trim();
+        const postalCodesString = row[2]?.trim();
+        
+        if (rowUsername === username && postalCodesString) {
+          // Split by comma and clean up
+          const postalCodes = postalCodesString
+            .split(',')
+            .map((code: string) => code.trim())
+            .filter((code: string) => code.length > 0);
+          
+          console.log(`[PLZ-Check] User ${username} has postal codes: ${postalCodes.join(', ')}`);
+          return postalCodes;
+        }
+      }
+
+      console.log(`[PLZ-Check] User ${username} has no postal code restrictions`);
+      return []; // No postal codes = no restriction
+    } catch (error) {
+      console.error('Error fetching user postal codes:', error);
+      return []; // On error, allow all
+    }
+  }
+
+  async validatePostalCodeForUser(username: string, postalCode: string): Promise<boolean> {
+    const allowedCodes = await this.getUserPostalCodes(username);
+    
+    // No postal codes assigned = no restriction
+    if (allowedCodes.length === 0) {
+      return true;
+    }
+    
+    // Check if postal code is in allowed list
+    const normalizedSearch = postalCode.trim();
+    const isAllowed = allowedCodes.includes(normalizedSearch);
+    
+    console.log(`[PLZ-Check] Postal code ${normalizedSearch} for user ${username}: ${isAllowed ? 'ALLOWED' : 'DENIED'}`);
+    return isAllowed;
   }
 
   async getUserByPassword(password: string): Promise<string | null> {
@@ -468,6 +524,45 @@ class AddressDatasetService implements AddressSheetsService {
     return datasets.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
+  async getCallBackAddresses(username: string, date: Date): Promise<Array<{
+    datasetId: string;
+    address: string;
+    notReachedCount: number;
+    interestLaterCount: number;
+    createdAt: Date;
+  }>> {
+    const datasets = await this.getUserDatasetsByDate(username, date);
+    
+    const callBacks = datasets
+      .map(dataset => {
+        // Count residents with "not_reached" and "interest_later" status
+        const notReachedCount = dataset.editableResidents.filter(r => r.status === 'not_reached').length;
+        const interestLaterCount = dataset.editableResidents.filter(r => r.status === 'interest_later').length;
+        
+        // Only include datasets with at least one call back status
+        if (notReachedCount > 0 || interestLaterCount > 0) {
+          return {
+            datasetId: dataset.id,
+            address: dataset.normalizedAddress,
+            notReachedCount,
+            interestLaterCount,
+            createdAt: dataset.createdAt
+          };
+        }
+        return null;
+      })
+      .filter(cb => cb !== null) as Array<{
+        datasetId: string;
+        address: string;
+        notReachedCount: number;
+        interestLaterCount: number;
+        createdAt: Date;
+      }>;
+    
+    console.log(`[getCallBackAddresses] Found ${callBacks.length} call back addresses for ${username}`);
+    return callBacks;
+  }
+
   // Load all datasets from Google Sheets (for cache initialization)
   async loadAllDatasetsFromSheets(): Promise<AddressDataset[]> {
     if (!sheetsEnabled || !sheetsClient) {
@@ -574,6 +669,483 @@ if (sheetsEnabled) {
     .then(() => console.log('[DatasetCache] Cache initialization complete'))
     .catch((error) => console.error('[DatasetCache] Cache initialization failed:', error));
 }
+
+// Category Change Logging Service
+class CategoryChangeLoggingService {
+  private readonly SHEET_ID = '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+  private readonly WORKSHEET_NAME = 'Log_Änderung_Kategorie';
+
+  // Get Sheets client dynamically to avoid initialization issues
+  private get sheetsAPI() {
+    const auth = new google.auth.GoogleAuth({
+      credentials: JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON || process.env.GOOGLE_SHEETS_KEY || '{}'),
+      scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
+    return google.sheets({ version: 'v4', auth });
+  }
+
+  private async ensureSheetExists(): Promise<void> {
+    try {
+      const client = this.sheetsAPI;
+      const response = await client.spreadsheets.get({
+        spreadsheetId: this.SHEET_ID,
+      });
+
+      const sheetExists = response.data.sheets?.some(
+        (sheet: any) => sheet.properties?.title === this.WORKSHEET_NAME
+      );
+
+      if (!sheetExists) {
+        // Create the sheet
+        const client = this.sheetsAPI;
+        await client.spreadsheets.batchUpdate({
+          spreadsheetId: this.SHEET_ID,
+          requestBody: {
+            requests: [{
+              addSheet: {
+                properties: {
+                  title: this.WORKSHEET_NAME,
+                }
+              }
+            }]
+          }
+        });
+
+        // Add headers
+        await client.spreadsheets.values.update({
+          spreadsheetId: this.SHEET_ID,
+          range: `${this.WORKSHEET_NAME}!A1:I1`,
+          valueInputOption: 'RAW',
+          requestBody: {
+            values: [[
+              'ID', 'Dataset-ID', 'Original Name', 'Current Name', 
+              'Old Category', 'New Category', 'Changed By', 'Changed At', 'Dataset Snapshot'
+            ]]
+          }
+        });
+
+        console.log(`[CategoryChangeLogging] Created sheet "${this.WORKSHEET_NAME}" with headers`);
+      }
+    } catch (error) {
+      console.error('[CategoryChangeLogging] Error ensuring sheet exists:', error);
+      throw error;
+    }
+  }
+
+  async logCategoryChange(
+    datasetId: string,
+    residentOriginalName: string,
+    residentCurrentName: string,
+    oldCategory: string,
+    newCategory: string,
+    changedBy: string,
+    addressDatasetSnapshot: string
+  ): Promise<void> {
+    await this.ensureSheetExists();
+
+    const id = `cc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const changedAt = formatBerlinTimeISO(getBerlinTime());
+
+    const rowData = [
+      id,
+      datasetId,
+      residentOriginalName,
+      residentCurrentName,
+      oldCategory,
+      newCategory,
+      changedBy,
+      changedAt,
+      addressDatasetSnapshot
+    ];
+
+    try {
+      const client = this.sheetsAPI;
+      await client.spreadsheets.values.append({
+        spreadsheetId: this.SHEET_ID,
+        range: `${this.WORKSHEET_NAME}!A:I`,
+        valueInputOption: 'RAW',
+        requestBody: {
+          values: [rowData]
+        }
+      });
+
+      console.log(`[CategoryChangeLogging] Logged category change: ${oldCategory} → ${newCategory} for ${residentOriginalName} by ${changedBy}`);
+    } catch (error) {
+      console.error('[CategoryChangeLogging] Error logging category change:', error);
+      throw error;
+    }
+  }
+}
+
+export const categoryChangeLoggingService = new CategoryChangeLoggingService();
+
+// Appointment Service with RAM cache
+class AppointmentService {
+  private appointmentsCache: Map<string, any> = new Map();
+  private lastSync: Date | null = null;
+  private readonly SHEET_NAME = "Termine";
+  private readonly SYNC_INTERVAL = 60000; // 60 seconds
+  private readonly ADDRESSES_SHEET_ID = '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+
+  // Ensure "Termine" sheet exists with proper headers
+  async ensureSheetExists(): Promise<void> {
+    if (!sheetsEnabled || !sheetsClient) {
+      throw new Error('Google Sheets API not available');
+    }
+
+    try {
+      const sheets = sheetsClient.spreadsheets;
+      
+      // Get all sheets
+      const response = await sheets.get({
+        spreadsheetId: this.ADDRESSES_SHEET_ID,
+      });
+
+      const sheetExists = response.data.sheets?.some(
+        (sheet: any) => sheet.properties?.title === this.SHEET_NAME
+      );
+
+      if (!sheetExists) {
+        // Create the sheet
+        await sheets.batchUpdate({
+          spreadsheetId: this.ADDRESSES_SHEET_ID,
+          requestBody: {
+            requests: [
+              {
+                addSheet: {
+                  properties: {
+                    title: this.SHEET_NAME,
+                  },
+                },
+              },
+            ],
+          },
+        });
+
+        // Add headers
+        const headers = [
+          "ID",
+          "Dataset-ID",
+          "Resident Name",
+          "Address",
+          "Appointment Date",
+          "Appointment Time",
+          "Notes",
+          "Created By",
+          "Created At",
+        ];
+
+        await sheets.values.update({
+          spreadsheetId: this.ADDRESSES_SHEET_ID,
+          range: `${this.SHEET_NAME}!A1:I1`,
+          valueInputOption: "RAW",
+          requestBody: {
+            values: [headers],
+          },
+        });
+
+        console.log(`[AppointmentService] Created sheet: ${this.SHEET_NAME}`);
+      }
+    } catch (error) {
+      console.error("[AppointmentService] Error ensuring sheet exists:", error);
+      throw error;
+    }
+  }
+
+  // Sync appointments from Google Sheets to RAM cache
+  async syncFromSheets(): Promise<void> {
+    if (!sheetsEnabled || !sheetsClient) {
+      throw new Error('Google Sheets API not available');
+    }
+
+    console.log(`[AppointmentService] === SYNC FROM SHEETS START ===`);
+    
+    try {
+      await this.ensureSheetExists();
+
+      const sheets = sheetsClient.spreadsheets;
+      const response = await sheets.values.get({
+        spreadsheetId: this.ADDRESSES_SHEET_ID,
+        range: `${this.SHEET_NAME}!A2:I`,
+      });
+
+      const rows = response.data.values || [];
+      console.log(`[AppointmentService] Retrieved ${rows.length} data rows from Google Sheets`);
+      
+      const previousCacheSize = this.appointmentsCache.size;
+      this.appointmentsCache.clear();
+
+      let validCount = 0;
+      for (const row of rows) {
+        if (row.length >= 8) {
+          const appointment = {
+            id: row[0],
+            datasetId: row[1],
+            residentName: row[2],
+            address: row[3],
+            appointmentDate: row[4],
+            appointmentTime: row[5],
+            notes: row[6] || "",
+            createdBy: row[7],
+            createdAt: new Date(row[8]),
+          };
+          this.appointmentsCache.set(appointment.id, appointment);
+          validCount++;
+        } else {
+          console.log(`[AppointmentService] Skipping invalid row (length: ${row.length}): [${row.join(', ')}]`);
+        }
+      }
+
+      this.lastSync = new Date();
+      console.log(`[AppointmentService] ✓ Synced ${validCount} valid appointments from Sheets`);
+      console.log(`[AppointmentService] Cache: ${previousCacheSize} → ${this.appointmentsCache.size} appointments`);
+      console.log(`[AppointmentService] === SYNC FROM SHEETS END ===`);
+    } catch (error) {
+      console.error("[AppointmentService] ✗ Error syncing from Sheets:", error);
+      throw error;
+    }
+  }
+
+  // Create new appointment
+  async createAppointment(
+    datasetId: string,
+    residentName: string,
+    address: string,
+    appointmentDate: string,
+    appointmentTime: string,
+    notes: string,
+    createdBy: string
+  ): Promise<any> {
+    console.log(`[AppointmentService] === CREATE APPOINTMENT START ===`);
+    console.log(`[AppointmentService] Resident: ${residentName}, Date: ${appointmentDate}, Time: ${appointmentTime}`);
+    
+    try {
+      await this.ensureSheetExists();
+
+      const id = crypto.randomUUID();
+      const createdAt = formatBerlinTimeISO(getBerlinTime());
+
+      const appointment = {
+        id,
+        datasetId,
+        residentName,
+        address,
+        appointmentDate,
+        appointmentTime,
+        notes: notes || "",
+        createdBy,
+        createdAt: new Date(createdAt),
+      };
+
+      console.log(`[AppointmentService] Generated appointment ID: ${id}`);
+
+      // Write to Sheets first
+      if (!sheetsEnabled || !sheetsClient) {
+        throw new Error('Google Sheets API not available');
+      }
+      const sheets = sheetsClient.spreadsheets;
+      const appendResult = await sheets.values.append({
+        spreadsheetId: this.ADDRESSES_SHEET_ID,
+        range: `${this.SHEET_NAME}!A:I`,
+        valueInputOption: "RAW",
+        requestBody: {
+          values: [[
+            id,
+            datasetId,
+            residentName,
+            address,
+            appointmentDate,
+            appointmentTime,
+            notes || "",
+            createdBy,
+            createdAt,
+          ]],
+        },
+      });
+
+      console.log(`[AppointmentService] ✓ Written to Google Sheets at range: ${appendResult.data.updates?.updatedRange}`);
+
+      // Add to cache
+      this.appointmentsCache.set(id, appointment);
+      console.log(`[AppointmentService] ✓ Added to cache. Cache size: ${this.appointmentsCache.size}`);
+      
+      // Update lastSync to prevent immediate re-sync
+      this.lastSync = new Date();
+      
+      console.log(`[AppointmentService] ✓ Successfully created appointment: ${id}`);
+      console.log(`[AppointmentService] === CREATE APPOINTMENT END ===`);
+      
+      return appointment;
+    } catch (error) {
+      console.error("[AppointmentService] Error creating appointment:", error);
+      throw error;
+    }
+  }
+
+  // Get appointments for a user
+  async getUserAppointments(username: string): Promise<any[]> {
+    console.log(`[AppointmentService] Getting appointments for user: ${username}`);
+    
+    // Sync if cache is stale
+    const cacheAge = this.lastSync ? Date.now() - this.lastSync.getTime() : Infinity;
+    const needsSync = !this.lastSync || cacheAge > this.SYNC_INTERVAL;
+    
+    console.log(`[AppointmentService] Cache age: ${cacheAge}ms, Needs sync: ${needsSync}`);
+    
+    if (needsSync) {
+      console.log(`[AppointmentService] Cache stale, syncing from sheets...`);
+      await this.syncFromSheets();
+    }
+
+    const allAppointments = Array.from(this.appointmentsCache.values());
+    console.log(`[AppointmentService] Total appointments in cache: ${allAppointments.length}`);
+    
+    const userAppointments = allAppointments
+      .filter(apt => {
+        const matches = apt.createdBy === username;
+        if (!matches) {
+          console.log(`[AppointmentService] Filtering out appointment created by: ${apt.createdBy}`);
+        }
+        return matches;
+      })
+      .sort((a, b) => {
+        // Sort by date and time
+        const dateCompare = a.appointmentDate.localeCompare(b.appointmentDate);
+        if (dateCompare !== 0) return dateCompare;
+        return a.appointmentTime.localeCompare(b.appointmentTime);
+      });
+
+    console.log(`[AppointmentService] User appointments found: ${userAppointments.length}`);
+    return userAppointments;
+  }
+
+  // Get upcoming appointments for a user
+  async getUpcomingAppointments(username: string): Promise<any[]> {
+    const allAppointments = await this.getUserAppointments(username);
+    const today = new Date().toISOString().split('T')[0];
+
+    return allAppointments.filter(apt => apt.appointmentDate >= today);
+  }
+
+  // Delete appointment from "Termine" sheet only
+  // Note: This keeps the resident's status as "appointment" and their floor data intact
+  // It only removes the specific appointment entry (date, time, notes) from the calendar
+  async deleteAppointment(id: string): Promise<void> {
+    if (!sheetsEnabled || !sheetsClient) {
+      throw new Error('Google Sheets API not available');
+    }
+
+    console.log(`[AppointmentService] === DELETE APPOINTMENT START === ID: ${id}`);
+
+    try {
+      // First, get the sheet ID
+      const sheetId = await this.getSheetId();
+      console.log(`[AppointmentService] Sheet ID for "${this.SHEET_NAME}": ${sheetId}`);
+
+      // Get all rows to find the appointment
+      const sheets = sheetsClient.spreadsheets;
+      const response = await sheets.values.get({
+        spreadsheetId: this.ADDRESSES_SHEET_ID,
+        range: `${this.SHEET_NAME}!A:I`, // Get full row to verify data
+      });
+
+      const rows = response.data.values || [];
+      console.log(`[AppointmentService] Total rows in sheet (including header): ${rows.length}`);
+      
+      // Find the row with matching ID (skip header row 0)
+      const rowIndex = rows.findIndex((row: any, index: number) => {
+        const matches = row[0] === id;
+        if (index === 0) {
+          console.log(`[AppointmentService] Row 0 (header): [${row.join(', ')}]`);
+        } else if (matches) {
+          console.log(`[AppointmentService] Found matching row at index ${index}: [${row.join(', ')}]`);
+        }
+        return matches;
+      });
+
+      if (rowIndex === -1) {
+        console.log(`[AppointmentService] ERROR: Appointment ${id} not found in sheet!`);
+        console.log(`[AppointmentService] Searched through ${rows.length} rows`);
+        console.log(`[AppointmentService] First few IDs in sheet: ${rows.slice(1, 4).map((r: any) => r[0]).join(', ')}`);
+        
+        // Remove from cache anyway
+        this.appointmentsCache.delete(id);
+        return;
+      }
+
+      console.log(`[AppointmentService] Found appointment at rowIndex: ${rowIndex} (0-based)`);
+      console.log(`[AppointmentService] Row content: [${rows[rowIndex].join(', ')}]`);
+
+      // For deletion: rowIndex is 0-based
+      // Row 0 = header
+      // Row 1 = first data row (index 1)
+      // To delete row at index N, we use startIndex: N, endIndex: N+1
+      
+      const startIndex = rowIndex;
+      const endIndex = rowIndex + 1;
+      
+      console.log(`[AppointmentService] Deleting with startIndex: ${startIndex}, endIndex: ${endIndex}`);
+
+      // Delete the row
+      await sheets.batchUpdate({
+        spreadsheetId: this.ADDRESSES_SHEET_ID,
+        requestBody: {
+          requests: [{
+            deleteDimension: {
+              range: {
+                sheetId: sheetId,
+                dimension: 'ROWS',
+                startIndex: startIndex,
+                endIndex: endIndex,
+              },
+            },
+          }],
+        },
+      });
+
+      console.log(`[AppointmentService] ✓ Successfully sent delete request to Google Sheets API`);
+      
+      // Remove from cache
+      this.appointmentsCache.delete(id);
+      console.log(`[AppointmentService] ✓ Removed from cache`);
+      
+      // Force a sync to verify deletion
+      console.log(`[AppointmentService] Forcing cache sync to verify deletion...`);
+      await this.syncFromSheets();
+      
+      if (this.appointmentsCache.has(id)) {
+        console.error(`[AppointmentService] ✗ ERROR: Appointment ${id} still in cache after sync!`);
+      } else {
+        console.log(`[AppointmentService] ✓ Verified: Appointment ${id} successfully deleted`);
+      }
+      
+      console.log(`[AppointmentService] === DELETE APPOINTMENT END ===`);
+    } catch (error) {
+      console.error("[AppointmentService] ✗ Error deleting appointment:", error);
+      console.log(`[AppointmentService] === DELETE APPOINTMENT FAILED ===`);
+      throw error;
+    }
+  }
+
+  // Helper to get sheet ID
+  private async getSheetId(): Promise<number> {
+    if (!sheetsEnabled || !sheetsClient) {
+      throw new Error('Google Sheets API not available');
+    }
+    const sheets = sheetsClient.spreadsheets;
+    const response = await sheets.get({
+      spreadsheetId: this.ADDRESSES_SHEET_ID,
+    });
+
+    const sheet = response.data.sheets?.find(
+      (s: any) => s.properties?.title === this.SHEET_NAME
+    );
+
+    return sheet?.properties?.sheetId || 0;
+  }
+}
+
+export const appointmentService = new AppointmentService();
 
 // Address normalization function using Google Geocoding API
 export async function normalizeAddress(

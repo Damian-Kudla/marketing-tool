@@ -20,8 +20,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { User, LogOut, ChevronDown, History, LayoutGrid, List } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+} from '@/components/ui/dialog';
+import { User, LogOut, ChevronDown, History, LayoutGrid, List, ArrowLeftToLine, Calendar } from 'lucide-react';
 import { UserHistory } from './UserHistory';
+import { CallBackList } from './CallBackList';
+import { AppointmentsList } from './AppointmentsList';
 import { datasetAPI } from '@/services/api';
 
 interface UserButtonProps {
@@ -33,6 +39,8 @@ export function UserButton({ onDatasetLoad }: UserButtonProps) {
   const { viewMode, setViewMode } = useViewMode();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showCallBacks, setShowCallBacks] = useState(false);
+  const [showAppointments, setShowAppointments] = useState(false);
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -100,6 +108,22 @@ export function UserButton({ onDatasetLoad }: UserButtonProps) {
         >
           <History className="w-4 h-4 mr-2" />
           Verlauf
+        </DropdownMenuItem>
+        
+        <DropdownMenuItem 
+          className="cursor-pointer"
+          onClick={() => setShowCallBacks(true)}
+        >
+          <ArrowLeftToLine className="w-4 h-4 mr-2" />
+          Call Back Liste
+        </DropdownMenuItem>
+
+        <DropdownMenuItem 
+          className="cursor-pointer"
+          onClick={() => setShowAppointments(true)}
+        >
+          <Calendar className="w-4 h-4 mr-2" />
+          Termine
         </DropdownMenuItem>
         
         {/* Hide view toggle on narrow screens (< 700px) */}
@@ -172,6 +196,30 @@ export function UserButton({ onDatasetLoad }: UserButtonProps) {
         onLoadDataset={handleLoadDataset}
       />
     )}
+
+    {/* Call Back List Dialog */}
+    <Dialog open={showCallBacks} onOpenChange={setShowCallBacks}>
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <CallBackList 
+          onLoadDataset={async (datasetId) => {
+            await handleLoadDataset(datasetId);
+            setShowCallBacks(false); // Close dialog after loading
+          }} 
+        />
+      </DialogContent>
+    </Dialog>
+
+    {/* Appointments Dialog */}
+    <Dialog open={showAppointments} onOpenChange={setShowAppointments}>
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+        <AppointmentsList 
+          onLoadDataset={async (datasetId) => {
+            await handleLoadDataset(datasetId);
+            setShowAppointments(false); // Close dialog after loading
+          }} 
+        />
+      </DialogContent>
+    </Dialog>
     </>
   );
 }

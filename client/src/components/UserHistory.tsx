@@ -11,7 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent } from '@/components/ui/card';
-import { Calendar, MapPin, Users, Loader2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Calendar, MapPin, Users, Loader2, ArrowLeftToLine, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { datasetAPI } from '@/services/api';
 
@@ -22,6 +23,8 @@ interface HistoryItem {
   postalCode: string;
   createdAt: string;
   residentCount: number;
+  notReachedCount?: number;
+  interestLaterCount?: number;
 }
 
 interface UserHistoryProps {
@@ -159,6 +162,22 @@ export function UserHistory({ isOpen, onClose, username, onLoadDataset }: UserHi
                                 {formatDate(item.createdAt)}
                               </div>
                             </div>
+                            {/* Call Back badges */}
+                            {((item.notReachedCount ?? 0) > 0 || (item.interestLaterCount ?? 0) > 0) && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <ArrowLeftToLine className="h-3 w-3 text-orange-600" />
+                                {(item.notReachedCount ?? 0) > 0 && (
+                                  <Badge variant="secondary" className="text-xs px-1.5 py-0">
+                                    {item.notReachedCount}× Nicht erreicht
+                                  </Badge>
+                                )}
+                                {(item.interestLaterCount ?? 0) > 0 && (
+                                  <Badge variant="secondary" className="text-xs px-1.5 py-0">
+                                    {item.interestLaterCount}× Interesse später
+                                  </Badge>
+                                )}
+                              </div>
+                            )}
                           </div>
                           <Button
                             variant="outline"

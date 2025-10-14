@@ -120,7 +120,17 @@ export const geocodeAPI = {
   reverseGeocode: async (latitude: number, longitude: number) => {
     const response = await apiService.post('/geocode', { latitude, longitude });
     if (!response.ok) {
-      throw new Error('Geocoding failed');
+      // Try to extract error details from response
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch {
+        errorData = { error: 'Geocoding fehlgeschlagen' };
+      }
+      
+      const error: any = new Error(errorData.error || 'Geocoding fehlgeschlagen');
+      error.response = { status: response.status, data: errorData };
+      throw error;
     }
     return response.json();
   },

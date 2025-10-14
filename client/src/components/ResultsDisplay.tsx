@@ -198,6 +198,8 @@ export default function ResultsDisplay({
       name,
       category: 'potential_new_customer' as ResidentCategory,
       isFixed: false,
+      originalName: name, // Store original name for category change tracking
+      originalCategory: 'potential_new_customer' as ResidentCategory, // Store original category
     }));
 
     // Create editable residents from existing customers (these can be edited)
@@ -205,6 +207,8 @@ export default function ResultsDisplay({
       name: customer.name,
       category: 'existing_customer' as ResidentCategory,
       isFixed: false, // Make them editable
+      originalName: customer.name, // Store original name for category change tracking
+      originalCategory: 'existing_customer' as ResidentCategory, // Store original category
     }));
 
     // Create fixed customers from allCustomersAtAddress (these are read-only)
@@ -1149,6 +1153,12 @@ export default function ResultsDisplay({
         }}
         resident={editingResident}
         isEditing={editingResident !== null}
+        currentDatasetId={currentDatasetId}
+        addressDataset={address ? {
+          address,
+          editableResidents,
+          fixedCustomers
+        } : undefined}
       />
 
       {/* Data Storage Confirmation */}

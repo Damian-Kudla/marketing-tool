@@ -257,15 +257,22 @@ router.get('/history/:username/:date', async (req, res) => {
 
     const datasets = await addressDatasetService.getUserDatasetsByDate(username, targetDate);
     
-    // Return simplified data for history view
-    const historyItems = datasets.map(dataset => ({
-      id: dataset.id,
-      address: `${dataset.street} ${dataset.houseNumber}`,
-      city: dataset.city,
-      postalCode: dataset.postalCode,
-      createdAt: dataset.createdAt,
-      residentCount: dataset.editableResidents.length + dataset.fixedCustomers.length,
-    }));
+    // Return simplified data for history view with call back counts
+    const historyItems = datasets.map(dataset => {
+      const notReachedCount = dataset.editableResidents.filter(r => r.status === 'not_reached').length;
+      const interestLaterCount = dataset.editableResidents.filter(r => r.status === 'interest_later').length;
+      
+      return {
+        id: dataset.id,
+        address: `${dataset.street} ${dataset.houseNumber}`,
+        city: dataset.city,
+        postalCode: dataset.postalCode,
+        createdAt: dataset.createdAt,
+        residentCount: dataset.editableResidents.length + dataset.fixedCustomers.length,
+        notReachedCount,
+        interestLaterCount,
+      };
+    });
 
     res.json(historyItems);
   } catch (error) {
