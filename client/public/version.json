@@ -1,5 +1,11 @@
 {
-  "version": "1.0.0",
-  "buildTime": "2025-01-10T12:00:00.000Z",
-  "buildNumber": "local"
+  "version": "2.1.0",
+  "buildTime": "2025-10-14T12:00:00.000Z",
+  "buildNumber": "appointments-callback-release",
+  "features": [
+    "Termine-Feature vollständig",
+    "CallBack-Liste mit Datensatz-Laden",
+    "Deutsche Zeitzone (MEZ/MESZ)",
+    "Optimierte Tabellenansicht"
+  ]
 }

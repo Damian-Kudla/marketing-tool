@@ -13,7 +13,10 @@
     "noip": "node ./server/noip.js",
     "version:bump": "npm version patch && tsx scripts/update-sw-version.ts",
     "version:bump:minor": "npm version minor && tsx scripts/update-sw-version.ts",
-    "version:bump:major": "npm version major && tsx scripts/update-sw-version.ts"
+    "version:bump:major": "npm version major && tsx scripts/update-sw-version.ts",
+    "deploy": "tsx scripts/update-version.js && npm run build && git add . && git commit -m \"Auto-deploy: Version update\" && git push origin main",
+    "deploy:patch": "npm run version:bump && npm run build && git add . && git commit -m \"Release: Patch version update\" && git push origin main",
+    "deploy:minor": "npm run version:bump:minor && npm run build && git add . && git commit -m \"Release: Minor version update\" && git push origin main"
   },
   "dependencies": {
     "@google-cloud/vision": "^5.3.3",
