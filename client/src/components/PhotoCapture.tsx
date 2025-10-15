@@ -188,6 +188,16 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
       return;
     }
 
+    // Check for dash in house number
+    if (address.number && address.number.includes('-')) {
+      toast({
+        variant: 'destructive',
+        title: t('photo.error'),
+        description: 'Bitte verwende keine "-" im Hausnummernfeld. Gebe alle Hausnummern mit Komma getrennt ein.',
+      });
+      return;
+    }
+
     setProcessing(true);
 
     try {
@@ -474,7 +484,7 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
             
             <Button
               onClick={processPhoto}
-              disabled={processing || correcting || rotating}
+              disabled={processing || correcting || rotating || (address?.number?.includes('-') || false)}
               size="lg"
               className="w-full min-h-12 gap-2"
               data-testid="button-process-photo"

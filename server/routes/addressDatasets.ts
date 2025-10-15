@@ -41,22 +41,36 @@ router.post('/', async (req, res) => {
       data.address.postal
     );
 
-    // Check if dataset already exists for today
-    const existingDataset = await addressDatasetService.getTodaysDatasetByAddress(normalizedAddress);
+    // Check if dataset already exists for today (with flexible house number matching)
+    const existingDataset = await addressDatasetService.getTodaysDatasetByAddress(normalizedAddress, data.address.number);
     if (existingDataset) {
+      // Check if house numbers are different (non-exact match)
+      const isNonExactMatch = existingDataset.houseNumber !== data.address.number;
+      const existingAddress = isNonExactMatch 
+        ? `${existingDataset.street} ${existingDataset.houseNumber}` 
+        : 'hier';
+      
       if (existingDataset.createdBy !== username) {
         return res.status(409).json({ 
           error: 'A dataset for this address already exists today',
-          message: `${existingDataset.createdBy} war heute schon hier. Du kannst seinen Datensatz ansehen aber nicht bearbeiten.`,
+          message: `${existingDataset.createdBy} war heute schon ${existingAddress}. Du kannst seinen Datensatz ansehen aber nicht bearbeiten.`,
           existingCreator: existingDataset.createdBy,
-          isOwnDataset: false
+          isOwnDataset: false,
+          existingDataset: isNonExactMatch ? {
+            street: existingDataset.street,
+            houseNumber: existingDataset.houseNumber
+          } : undefined
         });
       } else {
         return res.status(409).json({ 
           error: 'A dataset for this address already exists today',
-          message: 'Du hast heute schon einen Datensatz hier angelegt. Bitte gehe auf Verlauf und bearbeite den angelegten Datensatz.',
+          message: `Du hast heute schon einen Datensatz ${existingAddress} angelegt. Bitte gehe auf Verlauf und bearbeite den angelegten Datensatz.`,
           existingCreator: existingDataset.createdBy,
-          isOwnDataset: true
+          isOwnDataset: true,
+          existingDataset: isNonExactMatch ? {
+            street: existingDataset.street,
+            houseNumber: existingDataset.houseNumber
+          } : undefined
         });
       }
     }
@@ -100,13 +114,14 @@ router.get('/', async (req, res) => {
       address.postal
     );
 
-    const datasets = await addressDatasetService.getAddressDatasets(normalizedAddress, 5);
+    // Pass house number for flexible matching (e.g., "30" should match "30,31,32,33")
+    const datasets = await addressDatasetService.getAddressDatasets(normalizedAddress, 5, address.number);
     
-    // Check if today's dataset exists and who created it
-    const todaysDataset = await addressDatasetService.getTodaysDatasetByAddress(normalizedAddress);
+    // Check if today's dataset exists and who created it (with flexible house number matching)
+    const todaysDataset = await addressDatasetService.getTodaysDatasetByAddress(normalizedAddress, address.number);
     const username = (req as any).username;
     
-    // Add canEdit property to each dataset
+    // Add canEdit property and non-exact match flag to each dataset
     const now = getBerlinTime();
     const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     
@@ -115,10 +130,12 @@ router.get('/', async (req, res) => {
       const creationDateOnly = new Date(creationDate.getFullYear(), creationDate.getMonth(), creationDate.getDate());
       const isToday = nowDateOnly.getTime() === creationDateOnly.getTime();
       const isCreator = dataset.createdBy === username;
+      const isNonExactMatch = dataset.houseNumber !== address.number;
       
       return {
         ...dataset,
         canEdit: isCreator && isToday,
+        isNonExactMatch,
       };
     });
     

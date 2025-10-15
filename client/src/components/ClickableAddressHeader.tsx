@@ -10,13 +10,17 @@ interface ClickableAddressHeaderProps {
   residents?: EditableResident[];
   canEdit?: boolean;
   datasetCreatedAt?: string | null;
+  onResidentsUpdate?: (residents: EditableResident[]) => void;
+  currentDatasetId?: string | null;
 }
 
 export function ClickableAddressHeader({ 
   address, 
   residents = [], 
   canEdit, 
-  datasetCreatedAt 
+  datasetCreatedAt,
+  onResidentsUpdate,
+  currentDatasetId
 }: ClickableAddressHeaderProps) {
   const { t } = useTranslation();
   const [showOverview, setShowOverview] = useState(false);
@@ -91,6 +95,9 @@ export function ClickableAddressHeader({
         onClose={() => setShowOverview(false)}
         address={fullAddressString}
         residents={residentsWithStatus}
+        canEdit={canEdit}
+        onResidentUpdate={onResidentsUpdate}
+        currentDatasetId={currentDatasetId}
       />
     </>
   );

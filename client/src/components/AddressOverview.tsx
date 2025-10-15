@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Dialog,
@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { ResidentEditPopup } from './ResidentEditPopup';
 import type { EditableResident, ResidentStatus } from '@/../../shared/schema';
 
 interface AddressOverviewProps {
@@ -15,6 +16,11 @@ interface AddressOverviewProps {
   onClose: () => void;
   address: string;
   residents: EditableResident[];
+  asDialog?: boolean; // Optional: render as Dialog (default) or Card
+  onResidentClick?: (resident: EditableResident, index: number) => void; // Optional: callback when resident is clicked
+  canEdit?: boolean; // Optional: whether editing is allowed
+  onResidentUpdate?: (residents: EditableResident[]) => void; // Optional: callback when residents are updated
+  currentDatasetId?: string | null; // Optional: dataset ID for saving changes
 }
 
 interface FloorData {
@@ -22,16 +28,24 @@ interface FloorData {
   residents: EditableResident[];
 }
 
-export function AddressOverview({ isOpen, onClose, address, residents }: AddressOverviewProps) {
+export function AddressOverview({ isOpen, onClose, address, residents, asDialog = true, onResidentClick, canEdit = false, onResidentUpdate, currentDatasetId }: AddressOverviewProps) {
   const { t } = useTranslation();
+  
+  // State for editing
+  const [showEditPopup, setShowEditPopup] = useState(false);
+  const [editingResident, setEditingResident] = useState<EditableResident | null>(null);
+  const [editingResidentIndex, setEditingResidentIndex] = useState<number | null>(null);
 
   // Group residents by floor and organize data
   const floorData = useMemo(() => {
     const floors = new Map<number, EditableResident[]>();
     const residentsWithoutFloor: EditableResident[] = [];
     
+    // Filter out residents without status
+    const residentsWithStatus = residents.filter(resident => resident.status);
+    
     // Group residents by floor
-    residents.forEach(resident => {
+    residentsWithStatus.forEach(resident => {
       if (resident.floor !== undefined && resident.floor !== null) {
         if (!floors.has(resident.floor)) {
           floors.set(resident.floor, []);
@@ -97,32 +111,42 @@ export function AddressOverview({ isOpen, onClose, address, residents }: Address
     return translations[status] || t(`resident.status.${status}`, status);
   };
 
-  if (floorData.length === 0) {
-    return (
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-lg">
-              {t('address.overview.title', 'Adressübersicht')}: {address}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="py-8 text-center text-muted-foreground">
-            {t('address.overview.noFloorData', 'Keine Etagendaten verfügbar')}
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
+  // Handle resident click for editing
+  const handleResidentClick = (resident: EditableResident, index: number) => {
+    if (canEdit) {
+      setEditingResident(resident);
+      setEditingResidentIndex(index);
+      setShowEditPopup(true);
+      
+      // Also call the external callback if provided
+      onResidentClick?.(resident, index);
+    }
+  };
 
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[80vh]">
-        <DialogHeader>
-          <DialogTitle className="text-lg">
-            {t('address.overview.title', 'Adressübersicht')}: {address}
-          </DialogTitle>
-        </DialogHeader>
-        
+  // Handle resident save
+  const handleResidentSave = async (updatedResident: EditableResident) => {
+    if (editingResidentIndex !== null && onResidentUpdate) {
+      const updatedResidents = [...residents];
+      updatedResidents[editingResidentIndex] = updatedResident;
+      onResidentUpdate(updatedResidents);
+    }
+    setShowEditPopup(false);
+    setEditingResident(null);
+    setEditingResidentIndex(null);
+  };
+
+  // Content component (shared between Dialog and Card view)
+  const OverviewContent = () => {
+    if (floorData.length === 0) {
+      return (
+        <div className="py-8 text-center text-muted-foreground">
+          {t('address.overview.noFloorData', 'Keine Etagendaten verfügbar')}
+        </div>
+      );
+    }
+
+    return (
+      <>
         <ScrollArea className="h-full max-h-[60vh] w-full">
           <div className="overflow-x-auto overflow-y-auto">
             <table className="w-full border-collapse border border-gray-300 min-w-max">
@@ -149,30 +173,29 @@ export function AddressOverview({ isOpen, onClose, address, residents }: Address
                     </td>
                     {Array.from({ length: maxResidentsPerFloor }, (_, index) => {
                       const resident = floorResidents[index];
+                      // Find original index in full residents array
+                      const originalIndex = resident ? residents.findIndex(r => 
+                        r.name === resident.name && 
+                        r.floor === resident.floor && 
+                        r.door === resident.door
+                      ) : -1;
+                      
                       return (
                         <td key={index} className="border border-gray-300 px-1 py-1">
                           {resident ? (
                             <div 
                               className={`
-                                p-2 rounded border cursor-pointer transition-all duration-200 
+                                p-2 rounded border transition-all duration-200 
                                 hover:shadow-md hover:scale-105 max-w-[180px]
+                                ${canEdit && onResidentClick ? 'cursor-pointer' : 'cursor-default'}
                                 ${getStatusColor(resident.status)}
                               `}
-                              onClick={(e) => {
-                                // Toggle highlight on click
-                                const target = e.currentTarget;
-                                if (target.classList.contains('ring-2')) {
-                                  target.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-1');
-                                } else {
-                                  // Remove highlight from other cells
-                                  document.querySelectorAll('.ring-2').forEach(el => {
-                                    el.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-1');
-                                  });
-                                  // Add highlight to clicked cell
-                                  target.classList.add('ring-2', 'ring-blue-500', 'ring-offset-1');
+                              onClick={() => {
+                                if (canEdit && originalIndex !== -1) {
+                                  handleResidentClick(resident, originalIndex);
                                 }
                               }}
-                              title={`${resident.name}${resident.status ? ` - ${getStatusText(resident.status)}` : ''}`}
+                              title={`${resident.name}${resident.status ? ` - ${getStatusText(resident.status)}` : ''}${canEdit ? ' (Klicken zum Bearbeiten)' : ''}`}
                             >
                               <div className="text-sm font-medium truncate leading-tight">
                                 {resident.name}
@@ -189,7 +212,7 @@ export function AddressOverview({ isOpen, onClose, address, residents }: Address
                               )}
                             </div>
                           ) : (
-                            <div className="h-16 w-full"></div> // Empty cell placeholder
+                            <div className="h-16 w-full"></div>
                           )}
                         </td>
                       );
@@ -225,7 +248,67 @@ export function AddressOverview({ isOpen, onClose, address, residents }: Address
             <div className="italic">*Den Anwohnern in dieser Zeile wurde keine Etage zugeordnet.</div>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </>
+    );
+  };
+
+  // Render as Dialog or Card depending on asDialog prop
+  if (!isOpen && asDialog) return null;
+
+  if (asDialog) {
+    return (
+      <>
+        <Dialog open={isOpen} onOpenChange={onClose}>
+          <DialogContent className="max-w-6xl max-h-[80vh]">
+            <DialogHeader>
+              <DialogTitle className="text-lg">
+                {t('address.overview.title', 'Adressübersicht')}: {address}
+              </DialogTitle>
+            </DialogHeader>
+            <OverviewContent />
+          </DialogContent>
+        </Dialog>
+        
+        {/* Edit Popup */}
+        {editingResident && (
+          <ResidentEditPopup
+            isOpen={showEditPopup}
+            onClose={() => {
+              setShowEditPopup(false);
+              setEditingResident(null);
+              setEditingResidentIndex(null);
+            }}
+            resident={editingResident}
+            onSave={handleResidentSave}
+          />
+        )}
+      </>
+    );
+  }
+
+  // Card view for Call Back mode
+  return (
+    <>
+      <div className="border rounded-lg p-4 bg-card">
+        <h3 className="text-lg font-semibold mb-4">
+          {t('address.overview.title', 'Adressübersicht')}: {address}
+        </h3>
+        <OverviewContent />
+      </div>
+      
+      {/* Edit Popup */}
+      {editingResident && (
+        <ResidentEditPopup
+          isOpen={showEditPopup}
+          onClose={() => {
+            setShowEditPopup(false);
+            setEditingResident(null);
+            setEditingResidentIndex(null);
+          }}
+          resident={editingResident}
+          onSave={handleResidentSave}
+        />
+      )}
+    </>
   );
 }

@@ -1,11 +1,14 @@
 {
-  "version": "2.1.0",
-  "buildTime": "2025-10-14T12:00:00.000Z",
-  "buildNumber": "appointments-callback-release",
+  "version": "2.2.0",
+  "buildTime": "2025-10-15T01:30:00.000Z",
+  "buildNumber": "feature-complete-release",
   "features": [
-    "Termine-Feature vollständig",
-    "CallBack-Liste mit Datensatz-Laden",
-    "Deutsche Zeitzone (MEZ/MESZ)",
-    "Optimierte Tabellenansicht"
+    "Nächster-Button im Call Back Modus",
+    "Bidirektionales Hausnummern-Matching optimiert",
+    "Nicht-exakte Hausnummern-Matches werden angezeigt",
+    "Anwohner ohne Foto anlegen möglich",
+    "Edit-Funktionalität in AddressOverview-Tabellen",
+    "Optimierte Performance & Logs",
+    "Verbesserte Fehlermeldungen mit Adressen"
   ]
 }

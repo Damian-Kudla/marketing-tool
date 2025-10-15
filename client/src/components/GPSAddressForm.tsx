@@ -27,6 +27,7 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: G
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
   const [detected, setDetected] = useState(false);
+  const [houseNumberError, setHouseNumberError] = useState(false);
   const [address, setAddress] = useState<Address>({
     street: '',
     number: '',
@@ -121,20 +122,41 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: G
   };
 
   const searchAddress = async () => {
+    // Check for dash in house number
+    if (address.number && address.number.includes('-')) {
+      return; // Don't search if there's a dash
+    }
+    
     setSearching(true);
     
     try {
-      // Only send non-empty address fields
-      const searchParams: Partial<Address> = {};
-      if (address.street.trim()) searchParams.street = address.street;
-      if (address.number.trim()) searchParams.number = address.number;
-      if (address.postal.trim()) searchParams.postal = address.postal;
-      if (address.city.trim()) searchParams.city = address.city;
-      if (address.country.trim()) searchParams.country = address.country;
+      // Handle multiple house numbers separated by comma
+      const houseNumbers = address.number
+        .split(',')
+        .map(n => n.trim())
+        .filter(n => n.length > 0);
       
-      const customers = await addressAPI.searchAddress(searchParams);
+      let allCustomers: any[] = [];
       
-      if (customers.length === 0) {
+      // Search for each house number
+      for (const houseNumber of houseNumbers) {
+        const searchParams: Partial<Address> = {};
+        if (address.street.trim()) searchParams.street = address.street;
+        searchParams.number = houseNumber;
+        if (address.postal.trim()) searchParams.postal = address.postal;
+        if (address.city.trim()) searchParams.city = address.city;
+        if (address.country.trim()) searchParams.country = address.country;
+        
+        const customers = await addressAPI.searchAddress(searchParams);
+        allCustomers = [...allCustomers, ...customers];
+      }
+      
+      // Remove duplicates based on customer ID
+      const uniqueCustomers = Array.from(
+        new Map(allCustomers.map(c => [c.id || c.name, c])).values()
+      );
+      
+      if (uniqueCustomers.length === 0) {
         toast({
           title: t('address.searchSuccess'),
           description: t('results.empty'),
@@ -142,11 +164,11 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: G
       } else {
         toast({
           title: t('address.searchSuccess'),
-          description: `${customers.length} ${t('address.searchSuccessDesc')}`,
+          description: `${uniqueCustomers.length} ${t('address.searchSuccessDesc')}`,
         });
       }
       
-      onAddressSearch?.(customers);
+      onAddressSearch?.(uniqueCustomers);
     } catch (error) {
       console.error('Address search error:', error);
       toast({
@@ -159,7 +181,15 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: G
     }
   };
 
+  // Check if house number contains dash
+  const hasDashInNumber = address.number && address.number.includes('-');
   const hasAddressData = address.postal || address.street;
+  const isSearchDisabled = searching || !!hasDashInNumber;
+
+  // Update house number error state
+  useEffect(() => {
+    setHouseNumberError(!!hasDashInNumber);
+  }, [hasDashInNumber]);
 
   return (
     <Card data-testid="card-gps-address">
@@ -201,8 +231,13 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: G
               value={address.number}
               onChange={(e) => setAddress({ ...address, number: e.target.value })}
               data-testid="input-number"
-              className="mt-1.5 min-h-11"
+              className={`mt-1.5 min-h-11 ${houseNumberError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
             />
+            {houseNumberError && (
+              <p className="text-sm text-red-600 mt-1.5">
+                Wenn das Klingelschild mehrere Hausnummern abdeckt, gebe bitte alle Hausnummern mit Komma getrennt ein. Anstatt 1-5, schreibe bitte beispielsweise 1,2,3,4,5 falls zutreffend.
+              </p>
+            )}
           </div>
         </div>
         
@@ -220,7 +255,7 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: G
         {hasAddressData && (
           <Button
             onClick={searchAddress}
-            disabled={searching}
+            disabled={isSearchDisabled}
             size="lg"
             variant="outline"
             data-testid="button-search-address"

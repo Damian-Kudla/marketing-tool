@@ -13,7 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, MapPin, Users, Loader2, ArrowLeftToLine, Clock } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { useFilteredToast } from '@/hooks/use-filtered-toast';
 import { datasetAPI } from '@/services/api';
 
 interface HistoryItem {
@@ -36,7 +36,7 @@ interface UserHistoryProps {
 
 export function UserHistory({ isOpen, onClose, username, onLoadDataset }: UserHistoryProps) {
   const { t } = useTranslation();
-  const { toast } = useToast();
+  const { toast } = useFilteredToast();
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(false);

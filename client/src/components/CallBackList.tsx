@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, MapPin, Clock, ArrowLeftToLine } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { useToast } from "@/hooks/use-toast";
+import { useFilteredToast } from "@/hooks/use-filtered-toast";
+import { useCallBackSession } from "@/contexts/CallBackSessionContext";
 
 interface CallBackItem {
   datasetId: string;
@@ -24,8 +25,9 @@ interface CallBackListProps {
 export function CallBackList({ onLoadDataset }: CallBackListProps) {
   const [period, setPeriod] = useState<CallBackPeriod | null>(null);
   const [, setLocation] = useLocation();
-  const { toast } = useToast();
+  const { toast } = useFilteredToast();
   const [loading, setLoading] = useState(false);
+  const { startCallBackSession } = useCallBackSession();
 
   const { data: callBacks, isLoading } = useQuery<CallBackItem[]>({
     queryKey: ['/api/callbacks', period],
@@ -46,12 +48,27 @@ export function CallBackList({ onLoadDataset }: CallBackListProps) {
     setPeriod(selectedPeriod);
   };
 
-  const handleAddressClick = async (datasetId: string, address: string) => {
-    if (onLoadDataset) {
-      // Load dataset in current view (like UserHistory does)
+  const handleAddressClick = async (datasetId: string, address: string, clickedIndex: number, fromCallBack: boolean = true) => {
+    if (onLoadDataset && callBacks && period) {
+      // Start Call Back session with full list and set current index
+      startCallBackSession(callBacks, period, clickedIndex);
+      
+      // Load dataset in current view - mark as loaded from CallBack
       try {
         setLoading(true);
+        // Verify dataset exists before loading
+        const response = await fetch(`/api/address-datasets/${datasetId}`, {
+          credentials: 'include'
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch dataset: ${response.status}`);
+        }
+        
+        const dataset = await response.json();
+        
         await onLoadDataset(datasetId);
+        
         toast({
           title: "Adresse geladen",
           description: `${address} wurde geöffnet`,
@@ -130,11 +147,11 @@ export function CallBackList({ onLoadDataset }: CallBackListProps) {
           {/* Call backs list */}
           {!isLoading && callBacks && callBacks.length > 0 && (
             <div className="space-y-2">
-              {callBacks.map((item) => (
+              {callBacks.map((item, index) => (
                 <Card
                   key={item.datasetId}
                   className="cursor-pointer hover:bg-accent transition-colors"
-                  onClick={() => handleAddressClick(item.datasetId, item.address)}
+                  onClick={() => handleAddressClick(item.datasetId, item.address, index)}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between">

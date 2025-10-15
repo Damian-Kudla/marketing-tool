@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useViewMode } from '@/contexts/ViewModeContext';
+import { useUIPreferences } from '@/contexts/UIPreferencesContext';
+import { useCallBackSession } from '@/contexts/CallBackSessionContext';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,6 +22,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -24,27 +30,37 @@ import {
   Dialog,
   DialogContent,
 } from '@/components/ui/dialog';
-import { User, LogOut, ChevronDown, History, LayoutGrid, List, ArrowLeftToLine, Calendar } from 'lucide-react';
+import { User, LogOut, ChevronDown, History, LayoutGrid, List, ArrowLeftToLine, Calendar, Languages, MessageSquare, Phone } from 'lucide-react';
 import { UserHistory } from './UserHistory';
 import { CallBackList } from './CallBackList';
 import { AppointmentsList } from './AppointmentsList';
 import { datasetAPI } from '@/services/api';
 
 interface UserButtonProps {
-  onDatasetLoad?: (dataset: any) => void;
+  onDatasetLoad?: (dataset: any, fromCallBack?: boolean) => void;
 }
 
 export function UserButton({ onDatasetLoad }: UserButtonProps) {
   const { username, userId, logout } = useAuth();
   const { viewMode, setViewMode } = useViewMode();
+  const { callBackMode, setCallBackMode, showSystemMessages, setShowSystemMessages } = useUIPreferences();
+  const { clearSession } = useCallBackSession();
+  const { i18n } = useTranslation();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showCallBacks, setShowCallBacks] = useState(false);
   const [showAppointments, setShowAppointments] = useState(false);
 
+  const toggleLanguage = () => {
+    const newLang = i18n.language === 'en' ? 'de' : 'en';
+    i18n.changeLanguage(newLang);
+  };
+
   const handleLogout = async () => {
     setIsLoggingOut(true);
     try {
+      // Clear Call Back session before logout
+      clearSession();
       await logout();
     } catch (error) {
       console.error('Logout failed:', error);
@@ -53,11 +69,11 @@ export function UserButton({ onDatasetLoad }: UserButtonProps) {
     }
   };
 
-  const handleLoadDataset = async (datasetId: string) => {
+  const handleLoadDataset = async (datasetId: string, fromCallBack: boolean = false) => {
     try {
       const dataset = await datasetAPI.getDatasetById(datasetId);
       if (onDatasetLoad) {
-        onDatasetLoad(dataset);
+        onDatasetLoad(dataset, fromCallBack);
       }
     } catch (error) {
       console.error('Failed to load dataset:', error);
@@ -126,23 +142,65 @@ export function UserButton({ onDatasetLoad }: UserButtonProps) {
           Termine
         </DropdownMenuItem>
         
-        {/* Hide view toggle on narrow screens (< 700px) */}
-        <DropdownMenuItem 
-          className="cursor-pointer hidden min-[700px]:flex"
-          onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
-        >
-          {viewMode === 'list' ? (
-            <>
-              <LayoutGrid className="w-4 h-4 mr-2" />
-              Kachelansicht
-            </>
-          ) : (
-            <>
-              <List className="w-4 h-4 mr-2" />
-              Listenansicht
-            </>
-          )}
-        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        
+        <DropdownMenuLabel className="font-normal text-muted-foreground px-2 py-1.5">
+          Einstellungen
+        </DropdownMenuLabel>
+        
+        <div className="px-2 py-2 space-y-3">
+          <div className="flex items-center justify-between space-x-2">
+            <Label htmlFor="callback-mode" className="flex items-center gap-2 cursor-pointer text-sm font-normal">
+              <Phone className="w-4 h-4" />
+              Call Back Modus
+            </Label>
+            <Switch
+              id="callback-mode"
+              checked={callBackMode}
+              onCheckedChange={setCallBackMode}
+            />
+          </div>
+          
+          <div className="flex items-center justify-between space-x-2">
+            <Label htmlFor="system-messages" className="flex items-center gap-2 cursor-pointer text-sm font-normal">
+              <MessageSquare className="w-4 h-4" />
+              Systemmeldungen
+            </Label>
+            <Switch
+              id="system-messages"
+              checked={showSystemMessages}
+              onCheckedChange={setShowSystemMessages}
+            />
+          </div>
+          
+          {/* Hide view toggle on narrow screens (< 700px) */}
+          <div className="hidden min-[700px]:block">
+            <DropdownMenuItem 
+              className="cursor-pointer px-0 hover:bg-transparent focus:bg-transparent"
+              onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
+            >
+              {viewMode === 'list' ? (
+                <>
+                  <LayoutGrid className="w-4 h-4 mr-2" />
+                  Kachelansicht
+                </>
+              ) : (
+                <>
+                  <List className="w-4 h-4 mr-2" />
+                  Listenansicht
+                </>
+              )}
+            </DropdownMenuItem>
+          </div>
+          
+          <DropdownMenuItem 
+            className="cursor-pointer px-0 hover:bg-transparent focus:bg-transparent"
+            onClick={toggleLanguage}
+          >
+            <Languages className="w-4 h-4 mr-2" />
+            Sprache: {i18n.language.toUpperCase()}
+          </DropdownMenuItem>
+        </div>
         
         <DropdownMenuSeparator />
         
@@ -202,7 +260,7 @@ export function UserButton({ onDatasetLoad }: UserButtonProps) {
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
         <CallBackList 
           onLoadDataset={async (datasetId) => {
-            await handleLoadDataset(datasetId);
+            await handleLoadDataset(datasetId, true); // Mark as loaded from Call Back
             setShowCallBacks(false); // Close dialog after loading
           }} 
         />

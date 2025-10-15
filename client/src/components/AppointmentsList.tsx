@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Calendar, Clock, MapPin, Trash2, Plus } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
+import { useFilteredToast } from "@/hooks/use-filtered-toast";
 import {
   Dialog,
   DialogContent,
@@ -35,7 +35,7 @@ interface AppointmentsListProps {
 export function AppointmentsList({ onLoadDataset }: AppointmentsListProps) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
+  const { toast } = useFilteredToast();
   const queryClient = useQueryClient();
 
   const { data: appointments, isLoading } = useQuery<Appointment[]>({

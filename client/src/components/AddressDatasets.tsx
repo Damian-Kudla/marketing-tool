@@ -11,6 +11,9 @@ interface AddressDataset {
   createdBy: string;
   createdAt: string;
   residentCount: number;
+  street?: string;
+  houseNumber?: string;
+  isNonExactMatch?: boolean;
 }
 
 interface AddressDatasetsProps {
@@ -39,6 +42,9 @@ export function AddressDatasets({ address, onLoadDataset }: AddressDatasetsProps
         createdBy: ds.createdBy,
         createdAt: ds.createdAt,
         residentCount: (ds.editableResidents?.length || 0) + (ds.fixedCustomers?.length || 0),
+        street: ds.street,
+        houseNumber: ds.houseNumber,
+        isNonExactMatch: ds.isNonExactMatch,
       }));
       
       setDatasets(addressDatasets);
@@ -104,13 +110,18 @@ export function AddressDatasets({ address, onLoadDataset }: AddressDatasetsProps
               className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-gray-50 transition-colors cursor-pointer"
               onClick={() => onLoadDataset(dataset.id)}
             >
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
                   <User className="h-4 w-4 text-blue-600" />
                 </div>
-                <div>
+                <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">{dataset.createdBy}</p>
-                  <p className="text-xs text-muted-foreground">
+                  {dataset.isNonExactMatch && dataset.street && dataset.houseNumber && (
+                    <p className="text-xs font-medium text-blue-600 truncate">
+                      {dataset.street} {dataset.houseNumber}
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground truncate">
                     {formatDate(dataset.createdAt)} • {dataset.residentCount} {t('datasets.residents', 'Bewohner')}
                   </p>
                 </div>
@@ -118,6 +129,7 @@ export function AddressDatasets({ address, onLoadDataset }: AddressDatasetsProps
               <Button
                 variant="outline"
                 size="sm"
+                className="flex-shrink-0 ml-2"
                 onClick={(e) => {
                   e.stopPropagation();
                   onLoadDataset(dataset.id);

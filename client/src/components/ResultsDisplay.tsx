@@ -26,7 +26,7 @@ import { ResidentEditPopup } from './ResidentEditPopup';
 import { DataStorageConfirmation } from './DataStorageConfirmation';
 import { ClickableAddressHeader } from './ClickableAddressHeader';
 import { MaximizeButton } from './MaximizeButton';
-import { useToast } from '@/hooks/use-toast';
+import { useFilteredToast } from '@/hooks/use-filtered-toast';
 import { datasetAPI } from '@/services/api';
 import type { Address } from '@/components/GPSAddressForm';
 import type { 
@@ -80,7 +80,7 @@ export default function ResultsDisplay({
   hideImageOverlays = false
 }: ResultsDisplayProps) {
   const { t } = useTranslation();
-  const { toast } = useToast();
+  const { toast } = useFilteredToast();
   
   // State for editable residents
   const [editableResidents, setEditableResidentsInternal] = useState<EditableResident[]>([]);
@@ -93,10 +93,12 @@ export default function ResultsDisplay({
     onDatasetIdChange?.(id);
   };
   
-  // Sync external dataset ID to internal state
-  if (externalDatasetId !== currentDatasetId) {
-    setCurrentDatasetIdInternal(externalDatasetId);
-  }
+  // Sync external dataset ID to internal state using useEffect
+  useEffect(() => {
+    if (externalDatasetId !== currentDatasetId) {
+      setCurrentDatasetIdInternal(externalDatasetId);
+    }
+  }, [externalDatasetId, currentDatasetId]);
   
   // Wrapper to update both internal state and parent
   const setEditableResidents = (residents: EditableResident[] | ((prev: EditableResident[]) => EditableResident[])) => {
@@ -643,26 +645,118 @@ export default function ResultsDisplay({
     return text;
   };
 
-  if (!result || (result.existingCustomers.length === 0 && result.newProspects.length === 0 && (!result.allCustomersAtAddress || result.allCustomersAtAddress.length === 0))) {
+  // Handler to create a new resident when no OCR results exist
+  const handleCreateResidentWithoutPhoto = () => {
+    if (!address) {
+      toast({
+        variant: "destructive",
+        title: t('error.noAddress', 'Keine Adresse'),
+        description: t('error.noAddressDesc', 'Bitte gib zuerst eine Adresse ein'),
+      });
+      return;
+    }
+    
+    // Show confirmation dialog
+    setShowDataStorageConfirmation(true);
+  };
+
+  // Show empty state only if no results AND no dataset loaded
+  if ((!result || (result.existingCustomers.length === 0 && result.newProspects.length === 0 && (!result.allCustomersAtAddress || result.allCustomersAtAddress.length === 0))) && !externalDatasetId) {
     return (
-      <Card data-testid="card-results">
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold">{t('results.title')}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col items-center justify-center py-8 text-center">
-            <AlertCircle className="h-12 w-12 text-muted-foreground mb-3" />
-            <p className="text-sm text-muted-foreground" data-testid="text-empty">
-              {t('results.empty')}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <>
+        <Card data-testid="card-results">
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold">{t('results.title')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <AlertCircle className="h-12 w-12 text-muted-foreground mb-3" />
+              <p className="text-sm text-muted-foreground mb-4" data-testid="text-empty">
+                {t('results.empty')}
+              </p>
+              
+              {/* Show "Create Resident" button if address exists */}
+              {address && canEdit && (
+                <Button
+                  onClick={handleCreateResidentWithoutPhoto}
+                  className="gap-2"
+                  data-testid="button-create-resident-no-photo"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  {t('resident.create', 'Anwohner anlegen')}
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Dataset Creation Confirmation Dialog */}
+        {address && (
+          <DataStorageConfirmation
+            isOpen={showDataStorageConfirmation}
+            onConfirm={async () => {
+              setShowDataStorageConfirmation(false);
+              
+              try {
+                // Create dataset with empty residents array
+                const newDataset = await datasetAPI.createDataset({
+                  address: {
+                    street: address.street,
+                    number: address.number,
+                    city: address.city,
+                    postal: address.postal,
+                  },
+                  editableResidents: [],
+                  rawResidentData: [],
+                });
+
+                setCurrentDatasetId(newDataset.id);
+                onDatasetCreatedAtChange?.(newDataset.createdAt.toString());
+                setEditableResidents([]);
+                
+                toast({
+                  title: t('dataset.created', 'Datensatz angelegt'),
+                  description: t('dataset.createdNoPhoto', 'Du kannst jetzt Anwohner hinzufügen'),
+                });
+
+                // Open edit popup to add first resident
+                const newResident: EditableResident = {
+                  name: '',
+                  category: 'potential_new_customer',
+                  isFixed: false,
+                };
+                setEditingResident(newResident);
+                setEditingResidentIndex(null);
+                setShowEditPopup(true);
+              } catch (error: any) {
+                // Handle 409 error (dataset already exists)
+                if (error.response?.status === 409) {
+                  const errorData = error.response?.data;
+                  
+                  toast({
+                    variant: "destructive",
+                    title: t('dataset.alreadyExists', 'Datensatz existiert bereits'),
+                    description: errorData?.message || t('dataset.alreadyExistsDesc', 'Ein Datensatz existiert bereits für diese Adresse heute'),
+                  });
+                } else {
+                  toast({
+                    variant: "destructive",
+                    title: t('dataset.createError', 'Fehler beim Anlegen'),
+                    description: t('dataset.createErrorDesc', 'Datensatz konnte nicht angelegt werden'),
+                  });
+                }
+              }
+            }}
+            onCancel={() => setShowDataStorageConfirmation(false)}
+            address={address}
+          />
+        )}
+      </>
     );
   }
 
   // Show image with overlays if we have photo and vision response
-  const showImageOverlays = photoImageSrc && result.fullVisionResponse && result.residentNames.length > 0;
+  const showImageOverlays = photoImageSrc && result?.fullVisionResponse && result?.residentNames.length > 0;
   
   // Show resident lists if we have overlays OR if we have a loaded dataset
   const showResidentLists = showImageOverlays || externalDatasetId !== null;
@@ -673,10 +767,10 @@ export default function ResultsDisplay({
 
   // Helper to determine what to display in the Bestandskunden section
   const getMatchedNames = (): Array<{name: string, isPhotoName: boolean}> => {
-    if (result.residentNames.length > 0) {
+    if (result && result.residentNames.length > 0) {
       const photoMatchedNames = result.residentNames.filter(name => !result.newProspects.includes(name));
       return photoMatchedNames.map(name => ({name, isPhotoName: true}));
-    } else if (result.existingCustomers.length > 0) {
+    } else if (result && result.existingCustomers.length > 0) {
       return result.existingCustomers.map(customer => ({name: customer.name, isPhotoName: false}));
     }
     return [];
@@ -687,7 +781,7 @@ export default function ResultsDisplay({
 
   return (
     <>
-      {showImageOverlays && !hideImageOverlays && (
+      {showImageOverlays && !hideImageOverlays && result && (
         <div className="mb-4">
           <ImageWithOverlays
             imageSrc={photoImageSrc!}
@@ -743,7 +837,7 @@ export default function ResultsDisplay({
             {/* Show all customers at address from Google Sheets first */}
             {/* Only show this list when NOT loading a dataset (externalDatasetId is null) */}
             {/* When a dataset is loaded, show only editable lists below */}
-            {!externalDatasetId && result.allCustomersAtAddress && result.allCustomersAtAddress.length > 0 && (
+            {!externalDatasetId && result && result.allCustomersAtAddress && result.allCustomersAtAddress.length > 0 && (
               <AccordionItem value="allCustomers">
                 <AccordionTrigger className="hover:no-underline">
                   <div className="flex items-center gap-2">
@@ -789,7 +883,7 @@ export default function ResultsDisplay({
 
             {/* Show duplicate names */}
           {/* Only show when we have residentNames (from OCR), not when loading a dataset */}
-          {!externalDatasetId && result.residentNames && result.residentNames.length > 0 && (() => {
+          {!externalDatasetId && result && result.residentNames && result.residentNames.length > 0 && (() => {
             const normalizeToWords = (name: string): string[] => {
               return name
                 .toLowerCase()
@@ -1100,7 +1194,7 @@ export default function ResultsDisplay({
 
             {/* Show prospects if no image overlays (address-only search) */}
             {/* This section is for NEW OCR results without photo - do NOT show for loaded datasets */}
-            {!showImageOverlays && !externalDatasetId && result.newProspects.length > 0 && (
+            {!showImageOverlays && !externalDatasetId && result && result.newProspects.length > 0 && (
               <AccordionItem value="addressProspects">
                 <AccordionTrigger className="hover:no-underline">
                   <div className="flex items-center gap-2">

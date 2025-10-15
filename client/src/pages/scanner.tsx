@@ -3,17 +3,20 @@ import { useTranslation } from 'react-i18next';
 import GPSAddressForm, { type Address } from '@/components/GPSAddressForm';
 import PhotoCapture from '@/components/PhotoCapture';
 import ResultsDisplay, { type OCRResult } from '@/components/ResultsDisplay';
-import LanguageToggle from '@/components/LanguageToggle';
 import { UserButton } from '@/components/UserButton';
 import { ClickableAddressHeader } from '@/components/ClickableAddressHeader';
 import { AddressDatasets } from '@/components/AddressDatasets';
+import { AddressOverview } from '@/components/AddressOverview';
 import { MaximizeButton } from '@/components/MaximizeButton';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DataStorageConfirmation } from '@/components/DataStorageConfirmation';
-import { RotateCcw, Edit } from 'lucide-react';
+import { RotateCcw, ArrowRight, X, Info } from 'lucide-react';
 import { ocrAPI, datasetAPI } from '@/services/api';
-import { useToast } from '@/hooks/use-toast';
+import { useFilteredToast } from '@/hooks/use-filtered-toast';
 import { useViewMode } from '@/contexts/ViewModeContext';
+import { useUIPreferences } from '@/contexts/UIPreferencesContext';
+import { useCallBackSession } from '@/contexts/CallBackSessionContext';
 import ImageWithOverlays from '@/components/ImageWithOverlays';
 
 // Helper function to create normalized address string for comparison
@@ -25,8 +28,10 @@ const createNormalizedAddressString = (address: Address | null): string | null =
 
 export default function ScannerPage() {
   const { t } = useTranslation();
-  const { toast } = useToast();
+  const { toast } = useFilteredToast();
   const { viewMode, maximizedPanel, setMaximizedPanel } = useViewMode();
+  const { callBackMode } = useUIPreferences();
+  const { hasNext, moveToNext, loadedFromCallBack, setLoadedFromCallBack } = useCallBackSession();
   const [address, setAddress] = useState<Address | null>(null);
   const [normalizedAddress, setNormalizedAddress] = useState<string | null>(null);
   const [ocrResult, setOcrResult] = useState<OCRResult | null>(null);
@@ -38,6 +43,8 @@ export default function ScannerPage() {
   const [editableResidents, setEditableResidents] = useState<any[]>([]);
   const [showDataStorageConfirmation, setShowDataStorageConfirmation] = useState(false);
   const [datasetCreationResolver, setDatasetCreationResolver] = useState<((value: string | null) => void) | null>(null);
+  const [showAddressOverview, setShowAddressOverview] = useState(false);
+  const [showCallBackModeBanner, setShowCallBackModeBanner] = useState(false);
 
   // Auto-reset when address changes to a different normalized address
   useEffect(() => {
@@ -71,9 +78,14 @@ export default function ScannerPage() {
     setNormalizedAddress(newNormalizedAddress);
   }, [address, currentDatasetId, normalizedAddress, t, toast]);
 
-  const handleDatasetLoad = (dataset: any) => {
+  const handleDatasetLoad = (dataset: any, fromCallBack: boolean = false) => {
     try {
       console.log('[handleDatasetLoad] Loading dataset:', dataset);
+      
+      // Show Call Back Mode banner if loaded from Call Back List and mode is not active
+      if (fromCallBack && !callBackMode) {
+        setShowCallBackModeBanner(true);
+      }
       
       // Validate dataset structure
       if (!dataset || !dataset.street || !dataset.houseNumber) {
@@ -186,12 +198,12 @@ export default function ScannerPage() {
     }
   };
 
-  const handleDatasetLoadById = async (datasetId: string) => {
+  const handleDatasetLoadById = async (datasetId: string, fromCallBack: boolean = false) => {
     try {
       console.log('[handleDatasetLoadById] Loading dataset with ID:', datasetId);
       const dataset = await datasetAPI.getDatasetById(datasetId);
       console.log('[handleDatasetLoadById] Received dataset:', JSON.stringify(dataset, null, 2));
-      handleDatasetLoad(dataset);
+      handleDatasetLoad(dataset, fromCallBack);
     } catch (error) {
       console.error('[handleDatasetLoadById] Error loading dataset by ID:', error);
       toast({
@@ -335,6 +347,15 @@ export default function ScannerPage() {
     setAddress(null);
     setNormalizedAddress(null);
     setShowDatasets(false);
+    setShowCallBackModeBanner(false);
+  };
+
+  const handleNextCallBack = async () => {
+    const nextDatasetId = moveToNext();
+    if (nextDatasetId) {
+      setLoadedFromCallBack(false); // Don't show banner again on "Nächster" click
+      await handleDatasetLoadById(nextDatasetId);
+    }
   };
 
   const handleNamesUpdated = async (updatedNames: string[]) => {
@@ -361,7 +382,98 @@ export default function ScannerPage() {
   };
 
   const hasResults = ocrResult && (ocrResult.existingCustomers.length > 0 || ocrResult.newProspects.length > 0);
+  const hasResidents = editableResidents && editableResidents.length > 0;
 
+  // Call Back Mode: Show only the table
+  if (callBackMode && address && hasResidents) {
+    return (
+      <div className="min-h-screen bg-background">
+        <header className="sticky top-0 z-50 bg-background border-b safe-area-top">
+          <div className="container mx-auto px-4 py-3 overflow-x-auto header-scroll-container">
+            <div className="flex items-center justify-between gap-4 min-w-max">
+              <div className="flex items-center gap-4 flex-shrink-0">
+                <h1 className="text-xl font-bold whitespace-nowrap" data-testid="text-app-title">
+                  {t('app.title')}
+                </h1>
+                {address && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-md">
+                    <span className="text-sm font-medium">
+                      {address.street} {address.number}, {address.postal} {address.city}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <UserButton onDatasetLoad={handleDatasetLoad} />
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main className="container mx-auto px-4 py-4 pb-32">
+          {/* Call Back Mode: Show editable list and table side by side */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold mb-4">
+              {address.street} {address.number}, {address.postal} {address.city}
+            </h2>
+            
+            {/* Table Overview (full width in Call Back Mode) */}
+            <AddressOverview
+              isOpen={true}
+              onClose={() => {}}
+              address={`${address.street} ${address.number}, ${address.postal} ${address.city}`}
+              residents={editableResidents}
+              asDialog={false}
+              canEdit={canEdit}
+              onResidentUpdate={setEditableResidents}
+              currentDatasetId={currentDatasetId}
+            />
+          </div>
+        </main>
+
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t safe-area-bottom">
+          <div className="container mx-auto">
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={handleReset}
+                className="flex-1 min-h-12 gap-2"
+                data-testid="button-reset"
+              >
+                <RotateCcw className="h-4 w-4" />
+                {t('action.reset')}
+              </Button>
+              {hasNext() && (
+                <Button
+                  variant="default"
+                  size="lg"
+                  onClick={handleNextCallBack}
+                  className="flex-1 min-h-12 gap-2 bg-blue-600 hover:bg-blue-700"
+                  data-testid="button-next-callback"
+                >
+                  Nächster
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Dataset Creation Confirmation Dialog */}
+        {address && (
+          <DataStorageConfirmation
+            isOpen={showDataStorageConfirmation}
+            onConfirm={confirmDatasetCreation}
+            onCancel={cancelDatasetCreation}
+            address={address}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // Normal Mode
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 bg-background border-b safe-area-top">
@@ -377,12 +489,13 @@ export default function ScannerPage() {
                   residents={editableResidents} 
                   canEdit={canEdit}
                   datasetCreatedAt={datasetCreatedAt}
+                  onResidentsUpdate={setEditableResidents}
+                  currentDatasetId={currentDatasetId}
                 />
               )}
             </div>
             <div className="flex items-center gap-3 flex-shrink-0">
               <UserButton onDatasetLoad={handleDatasetLoad} />
-              <LanguageToggle />
             </div>
           </div>
         </div>
@@ -522,19 +635,54 @@ export default function ScannerPage() {
         )}
       </main>
 
+      {/* Call Back Mode Banner */}
+      {showCallBackModeBanner && loadedFromCallBack && !callBackMode && (
+        <div className="fixed top-20 left-0 right-0 z-40 px-4">
+          <div className="container mx-auto">
+            <Alert className="bg-blue-50 border-blue-200 relative">
+              <Info className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-sm text-blue-900 pr-8">
+                Es wird empfohlen für eine bessere Übersichtlichkeit den Call Back Modus zu aktivieren, wenn du eine Call Back runde startest. Klicke dafür auf den Nutzernamen oben und aktiviere den Call Back Modus.
+              </AlertDescription>
+              <button
+                onClick={() => setShowCallBackModeBanner(false)}
+                className="absolute top-3 right-3 p-1 rounded-md hover:bg-blue-100 transition-colors"
+                aria-label="Banner schließen"
+              >
+                <X className="h-4 w-4 text-blue-600" />
+              </button>
+            </Alert>
+          </div>
+        </div>
+      )}
+
       {hasResults && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t safe-area-bottom">
           <div className="container mx-auto">
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={handleReset}
-              className="w-full min-h-12 gap-2"
-              data-testid="button-reset"
-            >
-              <RotateCcw className="h-4 w-4" />
-              {t('action.reset')}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={handleReset}
+                className="flex-1 min-h-12 gap-2"
+                data-testid="button-reset"
+              >
+                <RotateCcw className="h-4 w-4" />
+                {t('action.reset')}
+              </Button>
+              {hasNext() && (
+                <Button
+                  variant="default"
+                  size="lg"
+                  onClick={handleNextCallBack}
+                  className="flex-1 min-h-12 gap-2 bg-blue-600 hover:bg-blue-700"
+                  data-testid="button-next-callback"
+                >
+                  Nächster
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       )}

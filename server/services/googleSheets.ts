@@ -23,6 +23,77 @@ class DatasetCache {
   private syncInterval: NodeJS.Timeout | null = null;
   private sheetsService: AddressDatasetService | null = null;
 
+  // Helper function to extract and normalize house numbers from a string
+  private extractHouseNumbers(houseNumberStr: string): string[] {
+    // Split by comma and trim whitespace, filter out empty strings
+    return houseNumberStr
+      .split(',')
+      .map(num => num.trim())
+      .filter(num => num.length > 0);
+  }
+
+  // Helper function to check if address matches considering house numbers
+  private addressMatches(
+    searchNormalizedAddress: string, 
+    searchHouseNumbers: string[],
+    datasetNormalizedAddress: string,
+    datasetHouseNumbers: string[]
+  ): boolean {
+    // Extract street and postal code from normalized addresses
+    // We use postal code as the primary matching criterion (city is optional)
+    const extractPostalAndStreet = (normalizedAddr: string): string => {
+      // Extract postal code (5 digits in Germany)
+      const postalMatch = normalizedAddr.match(/\b\d{5}\b/);
+      const postal = postalMatch ? postalMatch[0] : '';
+      
+      // Extract street name (take part before postal code)
+      let streetPart = normalizedAddr;
+      if (postal) {
+        const postalIndex = normalizedAddr.indexOf(postal);
+        if (postalIndex > 0) {
+          streetPart = normalizedAddr.substring(0, postalIndex);
+        }
+      }
+      
+      // Normalize street name: remove numbers, punctuation, and common words
+      let street = streetPart
+        .replace(/\d+[a-zA-Z]?(?:,?\s*\d+[a-zA-Z]?)*/g, '') // Remove house numbers
+        .replace(/[,\.]/g, '') // Remove punctuation
+        .replace(/straße/gi, 'str') // Normalize street names
+        .replace(/strasse/gi, 'str')
+        .replace(/\s+/g, ' ') // Normalize spaces
+        .trim()
+        .toLowerCase();
+      
+      return `${street}|${postal}`;
+    };
+
+    const searchBase = extractPostalAndStreet(searchNormalizedAddress);
+    const datasetBase = extractPostalAndStreet(datasetNormalizedAddress);
+
+    // First check: street + postal must match (city is ignored as it's optional)
+    if (searchBase !== datasetBase) {
+      return false;
+    }
+
+    // Second check: BIDIRECTIONAL matching with overlap detection
+    // Check if there's ANY overlap between the two sets of house numbers
+    // Examples: "1" matches "1,2" | "1,2" matches "1" | "1" does NOT match "3,4"
+    for (const searchNum of searchHouseNumbers) {
+      if (datasetHouseNumbers.includes(searchNum)) {
+        return true;
+      }
+    }
+    
+    for (const datasetNum of datasetHouseNumbers) {
+      if (searchHouseNumbers.includes(datasetNum)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   // Load all datasets from Google Sheets into RAM
   async initialize(sheetsService: AddressDatasetService) {
     this.sheetsService = sheetsService;
@@ -94,13 +165,30 @@ class DatasetCache {
     return dataset;
   }
 
-  // Get datasets by normalized address
-  getByAddress(normalizedAddress: string, limit?: number): AddressDataset[] {
-    const datasets = Array.from(this.cache.values())
-      .filter(ds => ds.normalizedAddress === normalizedAddress)
+  // Get datasets by normalized address with flexible house number matching
+  getByAddress(normalizedAddress: string, limit?: number, houseNumber?: string): AddressDataset[] {
+    const searchHouseNumbers = houseNumber ? this.extractHouseNumbers(houseNumber) : [];
+
+    const matchingDatasets = Array.from(this.cache.values())
+      .filter(ds => {
+        const datasetHouseNumbers = this.extractHouseNumbers(ds.houseNumber);
+        
+        // Use flexible matching if house numbers are provided
+        if (searchHouseNumbers.length > 0 && datasetHouseNumbers.length > 0) {
+          return this.addressMatches(
+            normalizedAddress,
+            searchHouseNumbers,
+            ds.normalizedAddress,
+            datasetHouseNumbers
+          );
+        }
+        
+        // Fallback to exact match if no house numbers provided
+        return ds.normalizedAddress === normalizedAddress;
+      })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     
-    return limit ? datasets.slice(0, limit) : datasets;
+    return limit ? matchingDatasets.slice(0, limit) : matchingDatasets;
   }
 
   // Get all datasets
@@ -173,11 +261,11 @@ export interface SheetsService {
 
 export interface AddressSheetsService {
   createAddressDataset(dataset: Omit<AddressDataset, 'id' | 'createdAt'>): Promise<AddressDataset>;
-  getAddressDatasets(normalizedAddress: string, limit?: number): Promise<AddressDataset[]>;
+  getAddressDatasets(normalizedAddress: string, limit?: number, houseNumber?: string): Promise<AddressDataset[]>;
   getDatasetById(datasetId: string): Promise<AddressDataset | null>;
   updateResidentInDataset(datasetId: string, residentIndex: number, resident: EditableResident | null): Promise<void>;
   bulkUpdateResidentsInDataset(datasetId: string, editableResidents: EditableResident[]): Promise<void>;
-  getTodaysDatasetByAddress(normalizedAddress: string): Promise<AddressDataset | null>;
+  getTodaysDatasetByAddress(normalizedAddress: string, houseNumber?: string): Promise<AddressDataset | null>;
   getUserDatasetsByDate(username: string, date: Date): Promise<AddressDataset[]>;
 }
 
@@ -407,9 +495,9 @@ class AddressDatasetService implements AddressSheetsService {
     }
   }
 
-  async getAddressDatasets(normalizedAddress: string, limit: number = 5): Promise<AddressDataset[]> {
-    // Use cache instead of reading from sheets
-    return datasetCache.getByAddress(normalizedAddress, limit);
+  async getAddressDatasets(normalizedAddress: string, limit: number = 5, houseNumber?: string): Promise<AddressDataset[]> {
+    // Use cache instead of reading from sheets, pass house number for flexible matching
+    return datasetCache.getByAddress(normalizedAddress, limit, houseNumber);
   }
 
   async getDatasetById(datasetId: string): Promise<AddressDataset | null> {
@@ -492,12 +580,13 @@ class AddressDatasetService implements AddressSheetsService {
     console.log(`[bulkUpdateResidentsInDataset] Updated ${editableResidents.length} residents in cache for dataset ${datasetId} (will sync to sheets in next batch)`);
   }
 
-  async getTodaysDatasetByAddress(normalizedAddress: string): Promise<AddressDataset | null> {
-    const today = getBerlinTime(); // Use Berlin timezone
+  async getTodaysDatasetByAddress(normalizedAddress: string, houseNumber?: string): Promise<AddressDataset | null> {
+    const today = getBerlinTime();
     const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
 
-    const datasets = await this.getAddressDatasets(normalizedAddress, 50); // Get more to check dates
+    // Use flexible house number matching when searching for today's dataset
+    const datasets = await this.getAddressDatasets(normalizedAddress, 50, houseNumber);
     
     for (const dataset of datasets) {
       if (dataset.createdAt >= todayStart && dataset.createdAt < todayEnd) {

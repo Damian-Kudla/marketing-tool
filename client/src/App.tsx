@@ -8,6 +8,8 @@ import { I18nextProvider } from 'react-i18next';
 import i18n from './i18n';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ViewModeProvider } from '@/contexts/ViewModeContext';
+import { UIPreferencesProvider } from '@/contexts/UIPreferencesContext';
+import { CallBackSessionProvider } from '@/contexts/CallBackSessionContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { PWAUpdatePrompt } from '@/components/PWAUpdatePrompt';
 import ScannerPage from "@/pages/scanner";
@@ -31,13 +33,17 @@ function App() {
       <I18nextProvider i18n={i18n}>
         <AuthProvider>
           <ViewModeProvider>
-            <TooltipProvider>
-              <Toaster />
-              <PWAUpdatePrompt />
-              <ProtectedRoute>
-                <Router />
-              </ProtectedRoute>
-            </TooltipProvider>
+            <UIPreferencesProvider>
+              <CallBackSessionProvider>
+                <TooltipProvider>
+                  <Toaster />
+                  <PWAUpdatePrompt />
+                  <ProtectedRoute>
+                    <Router />
+                  </ProtectedRoute>
+                </TooltipProvider>
+              </CallBackSessionProvider>
+            </UIPreferencesProvider>
           </ViewModeProvider>
         </AuthProvider>
       </I18nextProvider>
