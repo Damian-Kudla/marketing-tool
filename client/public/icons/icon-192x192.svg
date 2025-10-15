@@ -1,13 +1,22 @@
 <svg width="192" height="192" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
   <rect width="192" height="192" rx="24" fill="#2563eb"/>
-  <g transform="translate(24, 24)">
-    <!-- Energy/Lightning bolt icon -->
-    <path d="M48 24L96 24L72 72L108 72L84 120L48 120L72 72L36 72L48 24Z" fill="#ffffff" stroke="#ffffff" stroke-width="2" stroke-linejoin="round"/>
-    <!-- Camera/Scan frame -->
-    <rect x="36" y="96" width="72" height="48" rx="8" fill="none" stroke="#ffffff" stroke-width="3"/>
-    <circle cx="72" cy="120" r="12" fill="none" stroke="#ffffff" stroke-width="3"/>
-    <!-- GPS/Location indicator -->
-    <circle cx="132" cy="36" r="8" fill="#ffffff"/>
-    <circle cx="132" cy="36" r="4" fill="#2563eb"/>
+  <g transform="translate(36, 36)">
+    <!-- House/Building icon -->
+    <path d="M60 28L100 12L100 60L60 60Z" fill="#ffffff"/>
+    <path d="M20 28L60 12L60 60L20 60Z" fill="#ffffff" opacity="0.8"/>
+    <rect x="28" y="40" width="8" height="12" fill="#2563eb"/>
+    <rect x="44" y="40" width="8" height="12" fill="#2563eb"/>
+    <rect x="68" y="40" width="8" height="12" fill="#2563eb"/>
+    <rect x="84" y="40" width="8" height="12" fill="#2563eb"/>
+    
+    <!-- Briefcase/Business icon -->
+    <rect x="20" y="72" width="80" height="40" rx="4" fill="#ffffff"/>
+    <rect x="46" y="68" width="28" height="8" rx="2" fill="#ffffff"/>
+    <path d="M20 84L100 84" stroke="#2563eb" stroke-width="3"/>
+    <rect x="54" y="92" width="12" height="8" fill="#2563eb" rx="2"/>
+    
+    <!-- Checkmark indicator -->
+    <circle cx="104" cy="24" r="12" fill="#10b981"/>
+    <path d="M98 24L102 28L110 20" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
 </svg>

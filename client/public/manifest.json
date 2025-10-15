@@ -1,7 +1,7 @@
 {
-  "name": "Energy Scan Capture - Sales Acquisition Tool",
-  "short_name": "EnergyScan",
-  "description": "Mobile sales acquisition tool for energy provider sales reps with GPS address detection and nameplate photo recognition",
+  "name": "Akquise-Tool - Sales Acquisition Tool",
+  "short_name": "Akquise-Tool",
+  "description": "Mobiles Akquise-Tool für Vertriebsmitarbeiter mit GPS-Adresserkennung und Klingelschild-Fotografie",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -33,9 +33,9 @@
   "prefer_related_applications": false,
   "shortcuts": [
     {
-      "name": "Scan Energy Meter",
-      "short_name": "Scan",
-      "description": "Quickly scan energy meter nameplate",
+      "name": "Klingelschild scannen",
+      "short_name": "Scannen",
+      "description": "Schnell Klingelschild scannen",
       "url": "/scanner",
       "icons": [
         {
