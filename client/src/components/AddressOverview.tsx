@@ -7,7 +7,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { ResidentEditPopup } from './ResidentEditPopup';
 import type { EditableResident, ResidentStatus } from '@/../../shared/schema';
 
@@ -147,24 +146,23 @@ export function AddressOverview({ isOpen, onClose, address, residents, asDialog 
 
     return (
       <>
-        <ScrollArea className="h-full max-h-[60vh] w-full">
-          <div className="overflow-x-auto overflow-y-auto">
-            <table className="w-full border-collapse border border-gray-300 min-w-max">
-              <thead>
-                <tr className="bg-gray-50">
-                  <th className="border border-gray-300 px-3 py-2 text-left font-medium text-sm">
-                    {t('address.overview.floor', 'Etage')}
+        <div className="max-h-[60vh] w-full table-scroll-container">
+          <table className="w-full border-collapse border border-gray-300 min-w-max">
+            <thead>
+              <tr className="bg-gray-50">
+                <th className="border border-gray-300 px-3 py-2 text-left font-medium text-sm">
+                  {t('address.overview.floor', 'Etage')}
+                </th>
+                {Array.from({ length: maxResidentsPerFloor }, (_, index) => (
+                  <th 
+                    key={index} 
+                    className="border border-gray-300 px-3 py-2 text-left font-medium text-sm min-w-[120px] max-w-[200px]"
+                  >
+                    {t('address.overview.resident', 'Bewohner')} {index + 1}
                   </th>
-                  {Array.from({ length: maxResidentsPerFloor }, (_, index) => (
-                    <th 
-                      key={index} 
-                      className="border border-gray-300 px-3 py-2 text-left font-medium text-sm min-w-[120px] max-w-[200px]"
-                    >
-                      {t('address.overview.resident', 'Bewohner')} {index + 1}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
+                ))}
+              </tr>
+            </thead>
               <tbody>
                 {floorData.map(({ floor, residents: floorResidents }) => (
                   <tr key={floor} className="hover:bg-gray-50">
@@ -221,8 +219,7 @@ export function AddressOverview({ isOpen, onClose, address, residents, asDialog 
                 ))}
               </tbody>
             </table>
-          </div>
-        </ScrollArea>
+        </div>
 
         <div className="mt-4 text-sm text-muted-foreground space-y-2">
           <div className="font-medium">{t('address.overview.legend', 'Legende')}:</div>

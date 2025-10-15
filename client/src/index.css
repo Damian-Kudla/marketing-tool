@@ -44,6 +44,20 @@
   height: auto;
 }
 
+/* Enhanced touch scrolling for tables on mobile devices */
+.table-scroll-container {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+  overflow-x: auto;
+  overflow-y: auto;
+}
+
+/* Prevent touch delay on table cells when they're clickable */
+.table-scroll-container table td,
+.table-scroll-container table th {
+  touch-action: manipulation;
+}
+
 /* LIGHT MODE */
 :root {
   --button-outline: rgba(0,0,0, .10);

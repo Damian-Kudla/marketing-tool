@@ -1,14 +1,17 @@
 {
-  "version": "2.2.0",
-  "buildTime": "2025-10-15T01:30:00.000Z",
-  "buildNumber": "feature-complete-release",
+  "version": "2.2.1",
+  "buildTime": "2025-10-15T02:00:00.000Z",
+  "buildNumber": "touch-scroll-fix",
   "features": [
+    "Touch-Scrolling auf mobilen Geräten (iPhone) behoben",
+    "Tabellen horizontal scrollbar auf allen Touch-Geräten",
+    "Optimiertes Scroll-Verhalten mit -webkit-overflow-scrolling",
+    "Native Touch-Events für bessere Performance"
+  ],
+  "previousFeatures": [
     "Nächster-Button im Call Back Modus",
     "Bidirektionales Hausnummern-Matching optimiert",
-    "Nicht-exakte Hausnummern-Matches werden angezeigt",
     "Anwohner ohne Foto anlegen möglich",
-    "Edit-Funktionalität in AddressOverview-Tabellen",
-    "Optimierte Performance & Logs",
-    "Verbesserte Fehlermeldungen mit Adressen"
+    "Edit-Funktionalität in AddressOverview-Tabellen"
   ]
 }
