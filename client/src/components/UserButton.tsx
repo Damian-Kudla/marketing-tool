@@ -30,7 +30,7 @@ import {
   Dialog,
   DialogContent,
 } from '@/components/ui/dialog';
-import { User, LogOut, ChevronDown, History, LayoutGrid, List, ArrowLeftToLine, Calendar, Languages, MessageSquare, Zap } from 'lucide-react';
+import { User, LogOut, ChevronDown, History, LayoutGrid, List, ArrowLeftToLine, Calendar, Languages, MessageSquare, FastForward } from 'lucide-react';
 import { UserHistory } from './UserHistory';
 import { CallBackList } from './CallBackList';
 import { AppointmentsList } from './AppointmentsList';
@@ -151,7 +151,7 @@ export function UserButton({ onDatasetLoad }: UserButtonProps) {
         <div className="px-2 py-2 space-y-3">
           <div className="flex items-center justify-between space-x-2">
             <Label htmlFor="callback-mode" className="flex items-center gap-2 cursor-pointer text-sm font-normal">
-              <Zap className="w-4 h-4" />
+              <FastForward className="w-4 h-4" />
               Call Back Modus
             </Label>
             <Switch
