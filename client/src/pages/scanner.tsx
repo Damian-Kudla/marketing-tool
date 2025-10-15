@@ -11,7 +11,7 @@ import { MaximizeButton } from '@/components/MaximizeButton';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DataStorageConfirmation } from '@/components/DataStorageConfirmation';
-import { RotateCcw, ArrowRight, X, Info } from 'lucide-react';
+import { RotateCcw, ArrowRight, ArrowLeft, X, Info } from 'lucide-react';
 import { ocrAPI, datasetAPI } from '@/services/api';
 import { useFilteredToast } from '@/hooks/use-filtered-toast';
 import { useViewMode } from '@/contexts/ViewModeContext';
@@ -31,7 +31,7 @@ export default function ScannerPage() {
   const { toast } = useFilteredToast();
   const { viewMode, maximizedPanel, setMaximizedPanel } = useViewMode();
   const { callBackMode } = useUIPreferences();
-  const { hasNext, moveToNext, loadedFromCallBack, setLoadedFromCallBack } = useCallBackSession();
+  const { hasNext, hasPrevious, moveToNext, moveToPrevious, loadedFromCallBack, setLoadedFromCallBack } = useCallBackSession();
   const [address, setAddress] = useState<Address | null>(null);
   const [normalizedAddress, setNormalizedAddress] = useState<string | null>(null);
   const [ocrResult, setOcrResult] = useState<OCRResult | null>(null);
@@ -358,6 +358,14 @@ export default function ScannerPage() {
     }
   };
 
+  const handlePreviousCallBack = async () => {
+    const prevDatasetId = moveToPrevious();
+    if (prevDatasetId) {
+      setLoadedFromCallBack(false); // Don't show banner again on "Vorheriger" click
+      await handleDatasetLoadById(prevDatasetId);
+    }
+  };
+
   const handleNamesUpdated = async (updatedNames: string[]) => {
     if (!address) return;
 
@@ -444,6 +452,18 @@ export default function ScannerPage() {
                 <RotateCcw className="h-4 w-4" />
                 {t('action.reset')}
               </Button>
+              {hasPrevious() && (
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={handlePreviousCallBack}
+                  className="flex-1 min-h-12 gap-2"
+                  data-testid="button-previous-callback"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Vorheriger
+                </Button>
+              )}
               {hasNext() && (
                 <Button
                   variant="default"
@@ -670,6 +690,18 @@ export default function ScannerPage() {
                 <RotateCcw className="h-4 w-4" />
                 {t('action.reset')}
               </Button>
+              {hasPrevious() && (
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={handlePreviousCallBack}
+                  className="flex-1 min-h-12 gap-2"
+                  data-testid="button-previous-callback"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Vorheriger
+                </Button>
+              )}
               {hasNext() && (
                 <Button
                   variant="default"

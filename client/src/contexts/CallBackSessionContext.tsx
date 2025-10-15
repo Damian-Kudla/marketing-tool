@@ -6,7 +6,9 @@ interface CallBackSessionContextType {
   callBackPeriod: 'today' | 'yesterday' | null;
   startCallBackSession: (list: any[], period: 'today' | 'yesterday', startIndex?: number) => void;
   moveToNext: () => string | null; // Returns next dataset ID or null if at end
+  moveToPrevious: () => string | null; // Returns previous dataset ID or null if at beginning
   hasNext: () => boolean;
+  hasPrevious: () => boolean;
   clearSession: () => void;
   loadedFromCallBack: boolean;
   setLoadedFromCallBack: (value: boolean) => void;
@@ -36,8 +38,21 @@ export function CallBackSessionProvider({ children }: { children: ReactNode }) {
     return null;
   };
 
+  const moveToPrevious = (): string | null => {
+    if (currentCallBackIndex > 0) {
+      const prevIndex = currentCallBackIndex - 1;
+      setCurrentCallBackIndex(prevIndex);
+      return currentCallBackList[prevIndex].datasetId;
+    }
+    return null;
+  };
+
   const hasNext = (): boolean => {
     return currentCallBackIndex < currentCallBackList.length - 1;
+  };
+
+  const hasPrevious = (): boolean => {
+    return currentCallBackIndex > 0;
   };
 
   const clearSession = () => {
@@ -55,7 +70,9 @@ export function CallBackSessionProvider({ children }: { children: ReactNode }) {
         callBackPeriod,
         startCallBackSession,
         moveToNext,
+        moveToPrevious,
         hasNext,
+        hasPrevious,
         clearSession,
         loadedFromCallBack,
         setLoadedFromCallBack,
