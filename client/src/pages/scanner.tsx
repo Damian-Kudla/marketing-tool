@@ -441,41 +441,47 @@ export default function ScannerPage() {
 
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t safe-area-bottom">
           <div className="container mx-auto">
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2">
+              {/* Navigation buttons row */}
+              {(hasPrevious() || hasNext()) && (
+                <div className="flex gap-2">
+                  {hasPrevious() && (
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      onClick={handlePreviousCallBack}
+                      className="flex-1 min-h-12 gap-2"
+                      data-testid="button-previous-callback"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      Vorheriger
+                    </Button>
+                  )}
+                  {hasNext() && (
+                    <Button
+                      variant="default"
+                      size="lg"
+                      onClick={handleNextCallBack}
+                      className="flex-1 min-h-12 gap-2 bg-blue-600 hover:bg-blue-700"
+                      data-testid="button-next-callback"
+                    >
+                      Nächster
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              )}
+              {/* Reset button row */}
               <Button
                 variant="outline"
                 size="lg"
                 onClick={handleReset}
-                className="flex-1 min-h-12 gap-2"
+                className="w-full min-h-12 gap-2"
                 data-testid="button-reset"
               >
                 <RotateCcw className="h-4 w-4" />
                 {t('action.reset')}
               </Button>
-              {hasPrevious() && (
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onClick={handlePreviousCallBack}
-                  className="flex-1 min-h-12 gap-2"
-                  data-testid="button-previous-callback"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  Vorheriger
-                </Button>
-              )}
-              {hasNext() && (
-                <Button
-                  variant="default"
-                  size="lg"
-                  onClick={handleNextCallBack}
-                  className="flex-1 min-h-12 gap-2 bg-blue-600 hover:bg-blue-700"
-                  data-testid="button-next-callback"
-                >
-                  Nächster
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              )}
             </div>
           </div>
         </div>
@@ -679,41 +685,47 @@ export default function ScannerPage() {
       {hasResults && (
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t safe-area-bottom">
           <div className="container mx-auto">
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2">
+              {/* Navigation buttons row */}
+              {(hasPrevious() || hasNext()) && (
+                <div className="flex gap-2">
+                  {hasPrevious() && (
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      onClick={handlePreviousCallBack}
+                      className="flex-1 min-h-12 gap-2"
+                      data-testid="button-previous-callback"
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                      Vorheriger
+                    </Button>
+                  )}
+                  {hasNext() && (
+                    <Button
+                      variant="default"
+                      size="lg"
+                      onClick={handleNextCallBack}
+                      className="flex-1 min-h-12 gap-2 bg-blue-600 hover:bg-blue-700"
+                      data-testid="button-next-callback"
+                    >
+                      Nächster
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              )}
+              {/* Reset button row */}
               <Button
                 variant="outline"
                 size="lg"
                 onClick={handleReset}
-                className="flex-1 min-h-12 gap-2"
+                className="w-full min-h-12 gap-2"
                 data-testid="button-reset"
               >
                 <RotateCcw className="h-4 w-4" />
                 {t('action.reset')}
               </Button>
-              {hasPrevious() && (
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onClick={handlePreviousCallBack}
-                  className="flex-1 min-h-12 gap-2"
-                  data-testid="button-previous-callback"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  Vorheriger
-                </Button>
-              )}
-              {hasNext() && (
-                <Button
-                  variant="default"
-                  size="lg"
-                  onClick={handleNextCallBack}
-                  className="flex-1 min-h-12 gap-2 bg-blue-600 hover:bg-blue-700"
-                  data-testid="button-next-callback"
-                >
-                  Nächster
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              )}
             </div>
           </div>
         </div>

@@ -30,8 +30,8 @@ export function CallBackSessionProvider({ children }: { children: ReactNode }) {
   };
 
   const moveToNext = (): string | null => {
-    if (currentCallBackIndex < currentCallBackList.length - 1) {
-      const nextIndex = currentCallBackIndex + 1;
+    if (currentCallBackIndex > 0) {
+      const nextIndex = currentCallBackIndex - 1;
       setCurrentCallBackIndex(nextIndex);
       return currentCallBackList[nextIndex].datasetId;
     }
@@ -39,8 +39,8 @@ export function CallBackSessionProvider({ children }: { children: ReactNode }) {
   };
 
   const moveToPrevious = (): string | null => {
-    if (currentCallBackIndex > 0) {
-      const prevIndex = currentCallBackIndex - 1;
+    if (currentCallBackIndex < currentCallBackList.length - 1) {
+      const prevIndex = currentCallBackIndex + 1;
       setCurrentCallBackIndex(prevIndex);
       return currentCallBackList[prevIndex].datasetId;
     }
@@ -48,11 +48,11 @@ export function CallBackSessionProvider({ children }: { children: ReactNode }) {
   };
 
   const hasNext = (): boolean => {
-    return currentCallBackIndex < currentCallBackList.length - 1;
+    return currentCallBackIndex > 0;
   };
 
   const hasPrevious = (): boolean => {
-    return currentCallBackIndex > 0;
+    return currentCallBackIndex < currentCallBackList.length - 1;
   };
 
   const clearSession = () => {
