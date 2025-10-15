@@ -637,7 +637,7 @@ export default function ScannerPage() {
 
       {/* Call Back Mode Banner */}
       {showCallBackModeBanner && loadedFromCallBack && !callBackMode && (
-        <div className="fixed top-20 left-0 right-0 z-40 px-4">
+        <div className="fixed top-20 left-0 right-0 z-[60] px-4">
           <div className="container mx-auto">
             <Alert className="bg-blue-50 border-blue-200 relative">
               <Info className="h-4 w-4 text-blue-600" />
