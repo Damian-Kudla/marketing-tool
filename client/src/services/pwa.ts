@@ -142,6 +142,25 @@ export class PWAService {
     if (data.type === 'PWA_LOG') {
       this.logPWAAction('SW_MESSAGE', data);
     }
+    
+    // Handle localStorage clear request from service worker
+    if (data.type === 'CLEAR_LOCAL_STORAGE') {
+      this.clearLocalStorageItems(data.items || []);
+    }
+  }
+  
+  // Clear specific localStorage items
+  private clearLocalStorageItems(items: string[]): void {
+    try {
+      items.forEach(item => {
+        localStorage.removeItem(item);
+        this.logPWAAction('LOCAL_STORAGE_ITEM_CLEARED', { item });
+      });
+    } catch (error) {
+      this.logPWAAction('LOCAL_STORAGE_CLEAR_ERROR', { 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      });
+    }
   }
 
   // Show install prompt to user

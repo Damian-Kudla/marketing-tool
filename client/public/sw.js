@@ -69,29 +69,33 @@ self.addEventListener('install', event => {
   );
 });
 
-// Activate event - clean up old caches
+// Activate event - clean up old caches and IndexedDB
 self.addEventListener('activate', event => {
   logPWAAction('SW_ACTIVATE');
   
   event.waitUntil(
-    caches.keys().then(cacheNames => {
-      const deletePromises = cacheNames
-        .filter(cacheName => 
-          cacheName !== STATIC_CACHE && 
-          cacheName !== API_CACHE && 
-          cacheName !== IMAGE_CACHE &&
-          cacheName.startsWith('energy-scan-') || 
-          cacheName.startsWith('static-cache-') ||
-          cacheName.startsWith('api-cache-') ||
-          cacheName.startsWith('image-cache-')
-        )
-        .map(cacheName => {
-          logPWAAction('DELETING_OLD_CACHE', { cacheName });
-          return caches.delete(cacheName);
-        });
+    Promise.all([
+      // 1. Delete ALL old caches (including old versions with images)
+      caches.keys().then(cacheNames => {
+        const currentCaches = [STATIC_CACHE, API_CACHE, IMAGE_CACHE];
+        
+        const deletePromises = cacheNames
+          .filter(cacheName => !currentCaches.includes(cacheName))
+          .map(cacheName => {
+            logPWAAction('DELETING_OLD_CACHE', { cacheName });
+            return caches.delete(cacheName);
+          });
+        
+        return Promise.all(deletePromises);
+      }),
       
-      return Promise.all(deletePromises);
-    }).then(() => {
+      // 2. Clear IndexedDB (old OCR images stored as Base64)
+      clearIndexedDB(),
+      
+      // 3. Clear old localStorage items
+      clearOldLocalStorage()
+      
+    ]).then(() => {
       logPWAAction('SW_ACTIVATE_COMPLETE');
       return self.clients.claim();
     }).catch(error => {
@@ -99,6 +103,54 @@ self.addEventListener('activate', event => {
     })
   );
 });
+
+// Clear IndexedDB to remove old OCR images
+async function clearIndexedDB() {
+  try {
+    // Delete the entire EnergyScanner database (contains Base64 images)
+    const deleteRequest = indexedDB.deleteDatabase('EnergyScanner');
+    
+    return new Promise((resolve) => {
+      deleteRequest.onsuccess = () => {
+        logPWAAction('INDEXEDDB_CLEARED', { database: 'EnergyScanner' });
+        resolve();
+      };
+      
+      deleteRequest.onerror = () => {
+        logPWAAction('INDEXEDDB_CLEAR_ERROR', { error: deleteRequest.error });
+        resolve(); // Continue even if clear fails
+      };
+      
+      deleteRequest.onblocked = () => {
+        logPWAAction('INDEXEDDB_CLEAR_BLOCKED');
+        resolve(); // Continue even if blocked
+      };
+    });
+  } catch (error) {
+    logPWAAction('INDEXEDDB_CLEAR_EXCEPTION', { error: error.message });
+  }
+}
+
+// Clear old localStorage items
+function clearOldLocalStorage() {
+  try {
+    // These items are only needed during runtime, not stored long-term
+    const itemsToRemove = ['pwa-logs', 'pwa-metrics'];
+    
+    self.clients.matchAll().then(clients => {
+      clients.forEach(client => {
+        client.postMessage({
+          type: 'CLEAR_LOCAL_STORAGE',
+          items: itemsToRemove
+        });
+      });
+    });
+    
+    logPWAAction('LOCAL_STORAGE_CLEAR_REQUESTED');
+  } catch (error) {
+    logPWAAction('LOCAL_STORAGE_CLEAR_ERROR', { error: error.message });
+  }
+}
 
 // Fetch event - implement caching strategies
 self.addEventListener('fetch', event => {

@@ -284,77 +284,29 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
 
   // Handle offline processing
   const handleOfflineProcessing = async (file: File, imageDataUrl: string, onlineError?: Error) => {
+    // ⚠️ DISABLED: IndexedDB storage removed to save storage space
+    // OCR images are NOT stored offline anymore - only works with server connection
+    
     try {
-      await offlineStorage.saveOCRResult({
-        imageData: imageDataUrl,
-        ocrResults: null, // Will be processed when back online
-        address: address ? {
-          street: address.street,
-          city: address.city || '',
-          state: '', // Address interface doesn't have state
-          zipCode: address.postal || '',
-          latitude: undefined, // Address interface doesn't have coordinates
-          longitude: undefined
-        } : undefined,
-        deviceInfo: {
-          userAgent: navigator.userAgent,
-          timestamp: new Date().toISOString(),
-          orientation: orientationInfo?.orientationInfo.detectionMethod
-        }
-      });
-
-      // Show offline success message
-      toast({
-        title: onlineError ? t('photo.fallbackOffline', 'Saved Offline') : t('photo.savedOffline', 'Saved Offline'),
-        description: onlineError 
-          ? t('photo.willRetryOnline', 'Processing failed. Saved offline for retry when back online.')
-          : t('photo.offlineDesc', 'Photo saved offline. Will process when connection is restored.'),
-        duration: 5000,
-      });
-
-      // Trigger background sync when back online
-      pwaService.triggerBackgroundSync();
-      
-    } catch (offlineError) {
-      console.error('Offline storage error:', offlineError);
+      // Show offline error message (no offline storage anymore)
       toast({
         variant: 'destructive',
-        title: t('photo.offlineError', 'Offline Save Failed'),
-        description: t('photo.offlineErrorDesc', 'Could not save photo offline. Please try again.'),
+        title: t('photo.offlineError', 'Offline - Not Available'),
+        description: t('photo.offlineErrorDesc', 'OCR processing requires internet connection. Please connect and try again.'),
+        duration: 5000,
       });
+      
+    } catch (error) {
+      console.error('Offline handling error:', error);
     }
   };
 
   // Save successful result to offline storage
   const saveResultToOfflineStorage = async (result: any, imageDataUrl: string) => {
-    try {
-      await offlineStorage.saveOCRResult({
-        imageData: imageDataUrl,
-        ocrResults: result,
-        address: address ? {
-          street: address.street,
-          city: address.city || '',
-          state: '', // Address interface doesn't have state
-          zipCode: address.postal || '',
-          latitude: undefined, // Address interface doesn't have coordinates
-          longitude: undefined
-        } : undefined,
-        deviceInfo: {
-          userAgent: navigator.userAgent,
-          timestamp: new Date().toISOString(),
-          orientation: orientationInfo?.orientationInfo.detectionMethod
-        }
-      });
-
-      // Mark as synced since it came from successful online request
-      const pendingResults = await offlineStorage.getPendingOCRResults();
-      const latestResult = pendingResults[pendingResults.length - 1];
-      if (latestResult) {
-        await offlineStorage.updateOCRResultSyncStatus(latestResult.id, 'synced');
-      }
-    } catch (error) {
-      console.warn('Could not save result to offline storage:', error);
-    }
+    // ⚠️ DISABLED: IndexedDB storage removed to save storage space
+    // Results are stored on server only - no local caching of images
+    // This saves 40-100 MB of storage space per user
+    console.log('Offline storage disabled - results stored on server only');
   };
 
   // Convert file to base64
