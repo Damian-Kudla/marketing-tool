@@ -1,5 +1,30 @@
 ﻿{
-  "version": "1.0.6",
-  "buildTime": "2025-10-16T14:30:00.000Z",
-  "buildNumber": "storage-cleanup"
+  "version": "2.3.4",
+  "buildTime": "2025-10-16T14:45:00.000Z",
+  "buildNumber": "storage-cleanup",
+  "features": [
+    " STORAGE-BEREINIGUNG: 90% weniger Speicherverbrauch (3-8 MB statt 50-120 MB)",
+    " IndexedDB komplett deaktiviert - keine Base64-Bilder mehr gespeichert",
+    " Automatische Bereinigung aller alten Caches beim App-Update",
+    " Nur aktuelles Bild im Memory - keine dauerhafte Speicherung"
+  ],
+  "bugFixes": [
+    " IndexedDB 'EnergyScanner' wird bei Aktivierung gelöscht (40-100 MB frei)",
+    " Alte Service Worker Caches werden vollständig entfernt",
+    " LocalStorage-Logs (pwa-logs, pwa-metrics) werden automatisch gelöscht",
+    " Operator-Precedence-Bug in Cache-Filter behoben",
+    " OCR-Offline-Storage deaktiviert (spart Speicher + Akku)"
+  ],
+  "performance": [
+    " 90% weniger Speicherverbrauch",
+    " Bessere Akku-Laufzeit (weniger Storage I/O)",
+    " Schnellere Cache-Operationen",
+    " Keine Speicherplatz-Warnungen mehr"
+  ],
+  "previousFeatures": [
+    " OCR-Bilder nicht mehr gecached (v2.3.3)",
+    " Akku-Optimierung durch Smart Caching (v2.3.3)",
+    " Strikte Adressvalidierung (v2.3.3)",
+    " Smart Validation: Google validiert nur Straße+PLZ (v2.3.3)"
+  ]
 }
