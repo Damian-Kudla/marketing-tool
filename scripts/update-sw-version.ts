@@ -19,17 +19,25 @@ function updateServiceWorkerVersion() {
     const swPath = join(process.cwd(), 'client', 'public', 'sw.js');
     let swContent = readFileSync(swPath, 'utf-8');
 
-    // Replace version in cache name
-    // Pattern: const CACHE_NAME = 'energy-scan-v1.0.0';
-    const cacheNameRegex = /const CACHE_NAME = ['"]energy-scan-v[\d.]+['"];/;
-    const newCacheName = `const CACHE_NAME = 'energy-scan-v${version}';`;
-    
-    if (cacheNameRegex.test(swContent)) {
-      swContent = swContent.replace(cacheNameRegex, newCacheName);
-      console.log(`✅ Updated CACHE_NAME to: energy-scan-v${version}`);
-    } else {
-      console.warn('⚠️ Could not find CACHE_NAME pattern in sw.js');
-    }
+    // Replace version in all cache names
+    // Pattern: const CACHE_NAME = 'akquise-tool-v1.0.0';
+    swContent = swContent.replace(
+      /const CACHE_NAME = ['"]akquise-tool-v[\d.]+['"];/g,
+      `const CACHE_NAME = 'akquise-tool-v${version}';`
+    );
+    swContent = swContent.replace(
+      /const STATIC_CACHE = ['"]static-cache-v[\d.]+['"];/g,
+      `const STATIC_CACHE = 'static-cache-v${version}';`
+    );
+    swContent = swContent.replace(
+      /const API_CACHE = ['"]api-cache-v[\d.]+['"];/g,
+      `const API_CACHE = 'api-cache-v${version}';`
+    );
+    swContent = swContent.replace(
+      /const IMAGE_CACHE = ['"]image-cache-v[\d.]+['"];/g,
+      `const IMAGE_CACHE = 'image-cache-v${version}';`
+    );
+    console.log(`✅ Updated all cache names to version ${version}`);
 
     // Also update version constant if exists
     const versionRegex = /const VERSION = ['"][\d.]+['"];/;
@@ -40,7 +48,7 @@ function updateServiceWorkerVersion() {
       console.log(`✅ Updated VERSION constant to: ${version}`);
     } else {
       // Add VERSION constant if it doesn't exist
-      const firstLine = '// Service Worker for Energy Scan Capture PWA\n';
+      const firstLine = '// Akquise-Tool PWA Service Worker\n';
       if (swContent.startsWith(firstLine)) {
         swContent = swContent.replace(
           firstLine,

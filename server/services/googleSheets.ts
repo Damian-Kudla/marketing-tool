@@ -1393,23 +1393,32 @@ export async function normalizeAddress(
       
       // If we have high precision (ROOFTOP or RANGE_INTERPOLATED), always accept it
       if (locationType === 'ROOFTOP' || locationType === 'RANGE_INTERPOLATED') {
+        console.log('[normalizeAddress] Accepted: High precision location type');
         return extractAddressComponents(result);
       }
       
-      // For lower precision: Check if the formatted address contains the street name and number
+      // For lower precision: Check if the formatted address contains the street name
       const formattedLower = result.formatted_address.toLowerCase();
       const streetLower = street.toLowerCase();
-      const numberStr = number.toString();
+      const postalStr = postal?.toString() || '';
       
-      // Accept if formatted address contains both street name and number
-      if (formattedLower.includes(streetLower) && formattedLower.includes(numberStr)) {
-        console.log('[normalizeAddress] Accepted: Formatted address contains street and number');
+      // Accept if formatted address contains street name and postal code
+      // Note: Some addresses don't include house number in formatted_address (e.g., "Neusser Weyhe")
+      if (formattedLower.includes(streetLower) && formattedLower.includes(postalStr)) {
+        console.log('[normalizeAddress] Accepted: Formatted address contains street and postal code');
         return extractAddressComponents(result);
       }
       
       // Fallback: If route component exists, accept it
       if (hasRoute) {
         console.log('[normalizeAddress] Accepted: Has route component');
+        return extractAddressComponents(result);
+      }
+      
+      // Last resort: Check if postal code matches and location is reasonably close
+      // This handles edge cases where street names are formatted differently
+      if (formattedLower.includes(postalStr)) {
+        console.log('[normalizeAddress] Accepted: Postal code matches (last resort)');
         return extractAddressComponents(result);
       }
       
