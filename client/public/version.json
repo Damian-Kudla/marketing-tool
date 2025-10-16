@@ -1,25 +1,30 @@
 {
-  "version": "2.3.3",
-  "buildTime": "2025-10-16T13:58:00.000Z",
-  "buildNumber": "critical-fixes",
+  "version": "1.0.5",
+  "buildTime": "2025-10-16T14:00:00.000Z",
+  "buildNumber": "cache-optimization",
   "features": [
-    "🔧 Adress-Normalisierung: Alle Adressen werden jetzt mit Google-Standard gespeichert",
-    "📅 Custom Date Picker für Call Back Liste",
-    "⚡ Quick Start Button lädt ältesten Datensatz automatisch",
-    "📆 Termine-System mit automatischer Cache-Verwaltung"
+    "⚡ PERFORMANCE: OCR-Bilder werden nicht mehr gecached (40-100 MB Speicher gespart)",
+    "� Akku-Optimierung: Weniger Storage I/O durch Smart Caching",
+    "🎯 Strikte Adressvalidierung: Straße, Hausnummer und PLZ sind Pflichtfelder",
+    "🏠 Smart Validation: Google validiert nur Straße+PLZ, Hausnummer bleibt vom User"
   ],
   "bugFixes": [
-    "🚨 KRITISCH: Datensätze können jetzt am Erstellungstag bearbeitet werden",
-    "🚨 KRITISCH: Timezone-Bug in formatBerlinTimeISO behoben (UTC Timestamps korrekt)",
-    "✅ Scroll-Verhalten: Scrollen öffnet nicht mehr das Bearbeiten-Formular",
-    "✅ Reset-Button überlagert nicht mehr die Hauptseite beim Scrollen",
-    "✅ Adressvalidierung flexibler für ungewöhnliche Straßennamen (z.B. 'Neusser Weyhe')",
-    "✅ Bearbeitungsfenster erweitert auf ±30 Tage (statt nur -30 Tage)"
+    "✅ Service Worker cached nur noch App-Icons (keine OCR-Uploads mehr)",
+    "✅ /api/ocr vom API-Caching ausgeschlossen (große Payloads)",
+    "✅ MAX_IMAGE_CACHE_SIZE von 20 auf 10 reduziert (nur Icons)",
+    "✅ Fehlende Adressfelder zeigen spezifische Fehlermeldungen",
+    "✅ Hausnummer wird nie von Google überschrieben"
   ],
   "previousFeatures": [
-    "Rate Limit Probleme behoben",
-    "Termine-Cache Management",
-    "Adress-Header Info zweizeilig",
-    "Konsistente Adressspeicherung"
+    "🔧 Adress-Normalisierung mit Google-Standard",
+    "📅 Custom Date Picker für Call Back Liste",
+    "⚡ Quick Start Button",
+    "📆 Termine-System mit Cache-Verwaltung"
+  ],
+  "previousBugFixes": [
+    "🚨 Timezone-Bug in formatBerlinTimeISO behoben",
+    "✅ Scroll-Verhalten korrigiert",
+    "✅ Reset-Button Positionierung",
+    "✅ Flexible Adressvalidierung für ungewöhnliche Straßennamen"
   ]
 }
