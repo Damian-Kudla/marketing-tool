@@ -132,39 +132,43 @@ router.post('/', async (req, res) => {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    // Validate address completeness: street, number, and postal are required
-    if (!data.address.street || !data.address.number || !data.address.postal) {
+    // Validate address completeness: street, number, and postal are REQUIRED
+    const missingFields: string[] = [];
+    if (!data.address.street?.trim()) missingFields.push('Straße');
+    if (!data.address.number?.trim()) missingFields.push('Hausnummer');
+    if (!data.address.postal?.trim()) missingFields.push('Postleitzahl');
+
+    if (missingFields.length > 0) {
       return res.status(400).json({ 
         error: 'Incomplete address', 
-        message: 'Straße, Hausnummer und Postleitzahl müssen angegeben werden',
-        details: {
-          street: !data.address.street ? 'Straße fehlt' : undefined,
-          number: !data.address.number ? 'Hausnummer fehlt' : undefined,
-          postal: !data.address.postal ? 'Postleitzahl fehlt' : undefined,
-        }
+        message: `Folgende Pflichtfelder fehlen: ${missingFields.join(', ')}`,
+        missingFields: missingFields,
       });
     }
 
     // Normalize and validate the address using Geocoding API
-    const normalized = await normalizeAddress(
-      data.address.street,
-      data.address.number,
-      data.address.city,
-      data.address.postal,
-      username // Pass username for rate limiting
-    );
+    let normalized;
+    try {
+      normalized = await normalizeAddress(
+        data.address.street,
+        data.address.number,
+        data.address.city,
+        data.address.postal,
+        username // Pass username for rate limiting
+      );
+    } catch (error: any) {
+      // Handle validation errors from normalizeAddress
+      return res.status(400).json({ 
+        error: 'Address validation failed', 
+        message: error.message || 'Adressvalidierung fehlgeschlagen',
+      });
+    }
 
     // Verify that normalization produced a valid result
     if (!normalized) {
       return res.status(400).json({ 
         error: 'Address validation failed', 
-        message: `Die Adresse "${data.address.street} ${data.address.number}, ${data.address.postal}" konnte nicht gefunden werden. Bitte überprüfe die Schreibweise der Straße.`,
-        details: {
-          street: data.address.street,
-          number: data.address.number,
-          postal: data.address.postal,
-          hint: 'Die Google Geocoding API konnte diese Adresse nicht verifizieren. Stelle sicher, dass die Straße korrekt geschrieben ist.'
-        }
+        message: `Die Adresse "${data.address.street} ${data.address.number}, ${data.address.postal}" konnte nicht gefunden werden. Bitte überprüfe die Eingabe.`,
       });
     }
 

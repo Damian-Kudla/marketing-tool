@@ -211,6 +211,29 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
   };
 
   const searchAddress = async () => {
+    // VALIDATION: Check required fields before searching
+    const missingFields: string[] = [];
+    if (!address.street || !address.street.trim()) {
+      missingFields.push(t('address.street'));
+    }
+    if (!address.number || !address.number.trim()) {
+      missingFields.push(t('address.number'));
+    }
+    if (!address.postal || !address.postal.trim()) {
+      missingFields.push(t('address.postal'));
+    }
+
+    if (missingFields.length > 0) {
+      toast({
+        variant: 'destructive',
+        title: t('address.missingFields', 'Fehlende Pflichtfelder'),
+        description: t('address.missingFieldsDesc', 'Folgende Felder müssen ausgefüllt werden: {{fields}}', {
+          fields: missingFields.join(', ')
+        }),
+      });
+      return;
+    }
+
     setSearching(true);
     
     try {

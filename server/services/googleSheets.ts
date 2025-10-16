@@ -1300,23 +1300,23 @@ export interface NormalizedAddress {
 }
 
 // Helper function to extract address components from Google Geocoding API result
-function extractAddressComponents(geocodingResult: any): NormalizedAddress {
+// Note: The house number parameter is the user's input, not from Google
+function extractAddressComponents(geocodingResult: any, userHouseNumber: string): NormalizedAddress {
   const addressComponents = geocodingResult.address_components;
   const formattedAddress = geocodingResult.formatted_address;
   
   let street = '';
-  let number = '';
   let city = '';
   let postal = '';
   
   // Extract components from Google's address_components array
+  // We only use street name, city, and postal from Google
+  // House number comes from user input
   for (const component of addressComponents) {
     const types = component.types;
     
     if (types.includes('route')) {
       street = component.long_name;
-    } else if (types.includes('street_number')) {
-      number = component.long_name;
     } else if (types.includes('locality')) {
       city = component.long_name;
     } else if (types.includes('postal_code')) {
@@ -1327,7 +1327,7 @@ function extractAddressComponents(geocodingResult: any): NormalizedAddress {
   return {
     formattedAddress,
     street,
-    number,
+    number: userHouseNumber, // Always use the user's house number
     city,
     postal,
   };
@@ -1341,6 +1341,20 @@ export async function normalizeAddress(
   username?: string // Added username parameter for rate limiting
 ): Promise<NormalizedAddress | null> {
   try {
+    // VALIDATION: Street, number, and postal are REQUIRED
+    if (!street || !street.trim()) {
+      console.warn('[normalizeAddress] Validation failed: Street is required');
+      throw new Error('Straße muss angegeben werden');
+    }
+    if (!number || !number.trim()) {
+      console.warn('[normalizeAddress] Validation failed: House number is required');
+      throw new Error('Hausnummer muss angegeben werden');
+    }
+    if (!postal || !postal.trim()) {
+      console.warn('[normalizeAddress] Validation failed: Postal code is required');
+      throw new Error('Postleitzahl muss angegeben werden');
+    }
+
     const apiKey = process.env.GOOGLE_GEOCODING_API_KEY;
     if (!apiKey) {
       console.warn('Google Geocoding API key not configured - address validation disabled');
@@ -1360,6 +1374,7 @@ export async function normalizeAddress(
     }
 
     // Construct address string for geocoding
+    // We validate street name and postal code with Google, but keep the user's house number
     const addressString = `${street} ${number}, ${postal} ${city || ''}, Deutschland`.trim();
     const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addressString)}&key=${apiKey}&language=de`;
     
@@ -1394,7 +1409,7 @@ export async function normalizeAddress(
       // If we have high precision (ROOFTOP or RANGE_INTERPOLATED), always accept it
       if (locationType === 'ROOFTOP' || locationType === 'RANGE_INTERPOLATED') {
         console.log('[normalizeAddress] Accepted: High precision location type');
-        return extractAddressComponents(result);
+        return extractAddressComponents(result, number);
       }
       
       // For lower precision: Check if the formatted address contains the street name
@@ -1406,20 +1421,20 @@ export async function normalizeAddress(
       // Note: Some addresses don't include house number in formatted_address (e.g., "Neusser Weyhe")
       if (formattedLower.includes(streetLower) && formattedLower.includes(postalStr)) {
         console.log('[normalizeAddress] Accepted: Formatted address contains street and postal code');
-        return extractAddressComponents(result);
+        return extractAddressComponents(result, number);
       }
       
       // Fallback: If route component exists, accept it
       if (hasRoute) {
         console.log('[normalizeAddress] Accepted: Has route component');
-        return extractAddressComponents(result);
+        return extractAddressComponents(result, number);
       }
       
       // Last resort: Check if postal code matches and location is reasonably close
       // This handles edge cases where street names are formatted differently
       if (formattedLower.includes(postalStr)) {
         console.log('[normalizeAddress] Accepted: Postal code matches (last resort)');
-        return extractAddressComponents(result);
+        return extractAddressComponents(result, number);
       }
       
       // Reject if we can't verify the address
@@ -1429,8 +1444,12 @@ export async function normalizeAddress(
     
     console.warn('[normalizeAddress] Invalid: Geocoding returned no results for:', addressString);
     return null;
-  } catch (error) {
+  } catch (error: any) {
     console.error('[normalizeAddress] Error during address validation:', error);
+    // Re-throw validation errors with the original message
+    if (error.message && (error.message.includes('muss angegeben werden') || error.message.includes('Rate limit'))) {
+      throw error;
+    }
     return null;
   }
 }
