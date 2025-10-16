@@ -1,17 +1,24 @@
 {
-  "version": "2.2.1",
-  "buildTime": "2025-10-15T02:00:00.000Z",
-  "buildNumber": "touch-scroll-fix",
+  "version": "2.3.0",
+  "buildTime": "2025-10-16T01:20:00.000Z",
+  "buildNumber": "address-normalization",
   "features": [
-    "Touch-Scrolling auf mobilen Geräten (iPhone) behoben",
-    "Tabellen horizontal scrollbar auf allen Touch-Geräten",
-    "Optimiertes Scroll-Verhalten mit -webkit-overflow-scrolling",
-    "Native Touch-Events für bessere Performance"
+    "🔧 Adress-Normalisierung: Alle Adressen werden jetzt mit Google-Standard gespeichert",
+    "📅 Custom Date Picker für Call Back Liste",
+    "⚡ Quick Start Button lädt ältesten Datensatz automatisch",
+    "↕️ Sortier-Toggle für Call Back Liste (Neueste/Älteste zuerst)",
+    "🔕 System Messages werden bei Quick Start automatisch deaktiviert"
+  ],
+  "bugFixes": [
+    "✅ Konsistente Adressspeicherung (Str. vs Straße Problem behoben)",
+    "✅ Call Back Navigation korrigiert (Nächster/Vorheriger)",
+    "✅ Toast System mit 5 Kategorien und Filterung",
+    "✅ System Messages dismissible nach 1 Sekunde"
   ],
   "previousFeatures": [
+    "Touch-Scrolling auf mobilen Geräten optimiert",
     "Nächster-Button im Call Back Modus",
-    "Bidirektionales Hausnummern-Matching optimiert",
-    "Anwohner ohne Foto anlegen möglich",
+    "Bidirektionales Hausnummern-Matching",
     "Edit-Funktionalität in AddressOverview-Tabellen"
   ]
 }
