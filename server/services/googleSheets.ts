@@ -12,9 +12,9 @@ function getBerlinTime(): Date {
 
 // Helper function to format date for Berlin timezone as ISO string
 function formatBerlinTimeISO(date: Date): string {
-  // Convert to Berlin timezone and format as ISO string
-  const berlinDate = new Date(date.toLocaleString('en-US', { timeZone: 'Europe/Berlin' }));
-  return berlinDate.toISOString();
+  // Just return the ISO string representation of the date
+  // The date object already contains the correct UTC time
+  return date.toISOString();
 }
 
 // RAM Cache for Address Datasets
@@ -707,6 +707,11 @@ class AddressDatasetService implements AddressSheetsService {
 
       for (const row of rows) {
         if (row[0]) { // Has ID
+          // Parse createdAt: The ISO string in Sheets is Berlin time, but we store it as Date object
+          // We need to parse it correctly to avoid timezone issues
+          const createdAtStr = row[7] || new Date().toISOString();
+          const createdAtDate = new Date(createdAtStr);
+          
           const dataset: AddressDataset = {
             id: row[0],
             normalizedAddress: row[1] || '',
@@ -715,7 +720,7 @@ class AddressDatasetService implements AddressSheetsService {
             city: row[4] || '',
             postalCode: row[5] || '',
             createdBy: row[6] || '',
-            createdAt: new Date(row[7] || Date.now()),
+            createdAt: createdAtDate,
             rawResidentData: JSON.parse(row[8] || '[]'),
             editableResidents: this.deserializeResidents(row[9] || '[]'),
             fixedCustomers: [],
@@ -1386,24 +1391,31 @@ export async function normalizeAddress(
         formatted: result.formatted_address
       });
       
-      // Address must have a street name (route)
-      if (!hasRoute) {
-        console.warn('[normalizeAddress] Invalid: No street found in geocoding result');
-        return null;
-      }
-      
-      // If we have high precision (ROOFTOP or RANGE_INTERPOLATED), accept it
+      // If we have high precision (ROOFTOP or RANGE_INTERPOLATED), always accept it
       if (locationType === 'ROOFTOP' || locationType === 'RANGE_INTERPOLATED') {
         return extractAddressComponents(result);
       }
       
-      // For lower precision, require at least street number to be present
-      if (!hasStreetNumber) {
-        console.warn('[normalizeAddress] Invalid: Low precision and no street number found');
-        return null;
+      // For lower precision: Check if the formatted address contains the street name and number
+      const formattedLower = result.formatted_address.toLowerCase();
+      const streetLower = street.toLowerCase();
+      const numberStr = number.toString();
+      
+      // Accept if formatted address contains both street name and number
+      if (formattedLower.includes(streetLower) && formattedLower.includes(numberStr)) {
+        console.log('[normalizeAddress] Accepted: Formatted address contains street and number');
+        return extractAddressComponents(result);
       }
       
-      return extractAddressComponents(result);
+      // Fallback: If route component exists, accept it
+      if (hasRoute) {
+        console.log('[normalizeAddress] Accepted: Has route component');
+        return extractAddressComponents(result);
+      }
+      
+      // Reject if we can't verify the address
+      console.warn('[normalizeAddress] Invalid: Cannot verify address from geocoding result');
+      return null;
     }
     
     console.warn('[normalizeAddress] Invalid: Geocoding returned no results for:', addressString);

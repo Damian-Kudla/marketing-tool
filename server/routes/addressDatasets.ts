@@ -10,9 +10,13 @@ function getBerlinTime(): Date {
 
 // Helper function to check if a date is within 30 days from now
 function isWithin30Days(date: Date): boolean {
-  const now = getBerlinTime();
+  const now = new Date(); // Use UTC time for comparison
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  return date >= thirtyDaysAgo && date <= now;
+  const thirtyDaysInFuture = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  
+  // Allow editing for datasets created within 30 days in the past OR future
+  // This handles both normal datasets and those with incorrect timezone timestamps
+  return date >= thirtyDaysAgo && date <= thirtyDaysInFuture;
 }
 import { 
   addressDatasetRequestSchema, 
@@ -320,17 +324,14 @@ router.put('/residents', async (req, res) => {
       return res.status(404).json({ error: 'Dataset not found' });
     }
 
-    // Check if user can edit this dataset (only creator can edit, and only on creation day)
-    const now = getBerlinTime(); // Use Berlin timezone
+    // Check if user can edit this dataset (only creator can edit, and only within 30 days)
     const creationDate = new Date(dataset.createdAt);
+    const isEditable = isWithin30Days(creationDate);
+    const usernameMatches = dataset.createdBy === username;
+    const canEdit = usernameMatches && isEditable;
     
-    // Compare dates in local timezone (ignore time, only compare year/month/day)
-    const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const creationDateOnly = new Date(creationDate.getFullYear(), creationDate.getMonth(), creationDate.getDate());
-    const isToday = nowDateOnly.getTime() === creationDateOnly.getTime();
-    
-    if (dataset.createdBy !== username || !isToday) {
-      return res.status(403).json({ error: 'Cannot edit this dataset' });
+    if (!canEdit) {
+      return res.status(403).json({ error: 'Cannot edit this dataset. Editing is only allowed within 30 days of creation by the creator.' });
     }
 
     await addressDatasetService.updateResidentInDataset(
@@ -457,19 +458,10 @@ router.get('/:id', async (req, res) => {
     }
 
     // Check if dataset is editable (only creator within 30 days)
-    const creationDate = new Date(dataset.createdAt);
+    const creationDate = dataset.createdAt instanceof Date ? dataset.createdAt : new Date(dataset.createdAt);
     const isEditable = isWithin30Days(creationDate);
     const usernameMatches = dataset.createdBy === username;
     const canEdit = usernameMatches && isEditable;
-
-    console.log('[GET /:id] Dataset edit permissions (30-day window):');
-    console.log('  datasetId:', id);
-    console.log('  createdBy:', dataset.createdBy);
-    console.log('  requestingUser:', username);
-    console.log('  usernameMatches:', usernameMatches);
-    console.log('  createdAt:', dataset.createdAt);
-    console.log('  isWithin30Days:', isEditable);
-    console.log('  >>> canEdit:', canEdit);
 
     res.json({
       ...dataset,

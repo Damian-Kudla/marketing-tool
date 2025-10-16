@@ -524,7 +524,7 @@ export default function ScannerPage() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-4">
+      <main className="container mx-auto px-4 py-4 pb-32">
         {viewMode === 'list' ? (
           // List view: vertical layout (current design)
           <div className="space-y-4">
@@ -684,7 +684,7 @@ export default function ScannerPage() {
       )}
 
       {hasResults && (
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t safe-area-bottom">
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t safe-area-bottom z-40">
           <div className="container mx-auto">
             <div className="flex flex-col gap-2">
               {/* Navigation buttons row */}

@@ -92,30 +92,34 @@ export function useLongPress(options: LongPressOptions) {
       onLongPress(touch.clientX, touch.clientY);
     }, threshold);
 
-    // Verhindere Standard-Kontextmenü und Textauswahl
-    e.preventDefault();
+    // DON'T preventDefault here - it blocks scrolling!
+    // Only prevent context menu on long press (in handleTouchEnd)
   }, [threshold, onLongPress, triggerHapticFeedback]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!startPosRef.current || !timerRef.current) return;
+    if (!startPosRef.current) return;
 
     const touch = e.touches[0];
     if (!touch) return;
 
-    // Prüfe ob zu weit bewegt -> kein Long Press
+    // Prüfe ob zu weit bewegt -> kein Long Press UND kein Click
     const deltaX = Math.abs(touch.clientX - startPosRef.current.x);
     const deltaY = Math.abs(touch.clientY - startPosRef.current.y);
 
     if (deltaX > moveThreshold || deltaY > moveThreshold) {
+      // Movement detected - cancel both long press and click
       clearTimer();
+      // Mark that we moved, so we don't trigger onClick in handleTouchEnd
+      startPosRef.current = undefined;
     }
   }, [moveThreshold, clearTimer]);
 
   const handleTouchEnd = useCallback((e: React.TouchEvent) => {
     clearTimer();
 
-    // Wenn es kein Long Press war und onClick definiert ist, führe normalen Click aus
-    if (!isLongPressRef.current && onClick) {
+    // Wenn es kein Long Press war, kein Scroll war (startPosRef exists), und onClick definiert ist
+    // dann führe normalen Click aus
+    if (!isLongPressRef.current && startPosRef.current && onClick) {
       onClick();
     }
 
