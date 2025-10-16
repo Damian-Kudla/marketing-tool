@@ -1,7 +1,7 @@
 {
-  "version": "2.3.2",
-  "buildTime": "2025-10-16T10:45:00.000Z",
-  "buildNumber": "rate-limit-fix",
+  "version": "2.3.3",
+  "buildTime": "2025-10-16T13:58:00.000Z",
+  "buildNumber": "critical-fixes",
   "features": [
     "🔧 Adress-Normalisierung: Alle Adressen werden jetzt mit Google-Standard gespeichert",
     "📅 Custom Date Picker für Call Back Liste",
@@ -9,16 +9,17 @@
     "📆 Termine-System mit automatischer Cache-Verwaltung"
   ],
   "bugFixes": [
-    "🚨 KRITISCH: Exzessive Geocoding API Calls beim Tippen verhindert",
-    "✅ Rate Limit Probleme behoben - keine automatischen Calls mehr",
-    "✅ Datasets laden nur bei expliziten Aktionen (Button/Foto/GPS)",
-    "✅ Termine-Cache wird beim User-Wechsel korrekt geleert",
-    "✅ Adress-Suche Crash bei undefined Werten behoben"
+    "🚨 KRITISCH: Datensätze können jetzt am Erstellungstag bearbeitet werden",
+    "🚨 KRITISCH: Timezone-Bug in formatBerlinTimeISO behoben (UTC Timestamps korrekt)",
+    "✅ Scroll-Verhalten: Scrollen öffnet nicht mehr das Bearbeiten-Formular",
+    "✅ Reset-Button überlagert nicht mehr die Hauptseite beim Scrollen",
+    "✅ Adressvalidierung flexibler für ungewöhnliche Straßennamen (z.B. 'Neusser Weyhe')",
+    "✅ Bearbeitungsfenster erweitert auf ±30 Tage (statt nur -30 Tage)"
   ],
   "previousFeatures": [
+    "Rate Limit Probleme behoben",
+    "Termine-Cache Management",
     "Adress-Header Info zweizeilig",
-    "Termine aus Google Sheets laden",
-    "Konsistente Adressspeicherung",
-    "Call Back Navigation optimiert"
+    "Konsistente Adressspeicherung"
   ]
 }
