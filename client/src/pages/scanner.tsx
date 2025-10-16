@@ -10,7 +10,6 @@ import { AddressOverview } from '@/components/AddressOverview';
 import { MaximizeButton } from '@/components/MaximizeButton';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { DataStorageConfirmation } from '@/components/DataStorageConfirmation';
 import { RotateCcw, ArrowRight, ArrowLeft, X, Info } from 'lucide-react';
 import { ocrAPI, datasetAPI } from '@/services/api';
 import { useFilteredToast } from '@/hooks/use-filtered-toast';
@@ -41,10 +40,10 @@ export default function ScannerPage() {
   const [datasetCreatedAt, setDatasetCreatedAt] = useState<string | null>(null);
   const [showDatasets, setShowDatasets] = useState(false);
   const [editableResidents, setEditableResidents] = useState<any[]>([]);
-  const [showDataStorageConfirmation, setShowDataStorageConfirmation] = useState(false);
-  const [datasetCreationResolver, setDatasetCreationResolver] = useState<((value: string | null) => void) | null>(null);
+  // Dataset creation confirmation removed - now creates automatically
   const [showAddressOverview, setShowAddressOverview] = useState(false);
   const [showCallBackModeBanner, setShowCallBackModeBanner] = useState(false);
+  const [resetKey, setResetKey] = useState(0); // Key to force PhotoCapture remount on reset
 
   // Auto-reset when address changes to a different normalized address
   useEffect(() => {
@@ -220,29 +219,19 @@ export default function ScannerPage() {
       return currentDatasetId;
     }
 
-    // Show confirmation dialog and wait for user response
-    return new Promise((resolve) => {
-      setDatasetCreationResolver(() => resolve);
-      setShowDataStorageConfirmation(true);
-    });
-  };
-
-  const confirmDatasetCreation = async () => {
-    setShowDataStorageConfirmation(false);
-    
+    // Automatically create dataset without confirmation dialog
     try {
       if (!address) {
-        console.error('[confirmDatasetCreation] No address available');
+        console.error('[handleRequestDatasetCreation] No address available');
         toast({
           variant: 'destructive',
           title: t('dataset.createError', 'Fehler beim Erstellen'),
           description: t('dataset.createErrorDesc', 'Datensatz konnte nicht erstellt werden'),
         });
-        datasetCreationResolver?.(null);
-        return;
+        return null;
       }
 
-      console.log('[confirmDatasetCreation] Creating dataset for address:', address);
+      console.log('[handleRequestDatasetCreation] Creating dataset for address:', address);
       
       const dataset = await datasetAPI.createDataset({
         address: {
@@ -255,7 +244,7 @@ export default function ScannerPage() {
         rawResidentData: ocrResult?.residentNames || [],
       });
 
-      console.log('[confirmDatasetCreation] Dataset created:', dataset.id);
+      console.log('[handleRequestDatasetCreation] Dataset created:', dataset.id);
       
       // Update state with new dataset ID
       setCurrentDatasetId(dataset.id);
@@ -267,9 +256,9 @@ export default function ScannerPage() {
         description: t('dataset.createdDesc', 'Datensatz wurde erfolgreich erstellt'),
       });
 
-      datasetCreationResolver?.(dataset.id);
+      return dataset.id;
     } catch (error: any) {
-      console.error('[confirmDatasetCreation] Error creating dataset:', error);
+      console.error('[handleRequestDatasetCreation] Error creating dataset:', error);
       
       // Check if it's a 409 conflict (dataset already exists)
       if (error?.response?.status === 409) {
@@ -283,7 +272,7 @@ export default function ScannerPage() {
             ? t('dataset.alreadyExistsOwn', 'Datensatz bereits vorhanden')
             : t('dataset.alreadyExistsOther', 'Datensatz bereits erstellt'),
           description: errorMessage,
-          duration: 8000, // Show longer for important message
+          duration: 8000,
         });
       } else {
         toast({
@@ -292,14 +281,11 @@ export default function ScannerPage() {
           description: error.message || t('dataset.createErrorDesc', 'Datensatz konnte nicht erstellt werden'),
         });
       }
-      datasetCreationResolver?.(null);
+      return null;
     }
   };
 
-  const cancelDatasetCreation = () => {
-    setShowDataStorageConfirmation(false);
-    datasetCreationResolver?.(null);
-  };
+  // confirmDatasetCreation and cancelDatasetCreation removed - dataset creation is now automatic
 
   const handlePhotoProcessed = (result: any, imageSrc?: string) => {
     console.log('OCR result:', result);
@@ -338,16 +324,21 @@ export default function ScannerPage() {
   }, []);
 
   const handleReset = () => {
+    // Reset all state to initial values
     setOcrResult(null);
     setPhotoImageSrc(null);
+    setAddress(null); // This triggers GPSAddressForm to clear via initialAddress prop
+    setNormalizedAddress(null);
     setCanEdit(true);
     setDatasetCreatedAt(null);
     setCurrentDatasetId(null);
     setEditableResidents([]);
-    setAddress(null);
-    setNormalizedAddress(null);
     setShowDatasets(false);
     setShowCallBackModeBanner(false);
+    setResetKey(prev => prev + 1); // Increment key to force PhotoCapture remount
+    
+    // Log for debugging
+    console.log('[Reset] All state cleared, page reset to initial state');
   };
 
   const handleNextCallBack = async () => {
@@ -400,9 +391,16 @@ export default function ScannerPage() {
           <div className="container mx-auto px-4 py-3 overflow-x-auto header-scroll-container">
             <div className="flex items-center justify-between gap-4 min-w-max">
               <div className="flex items-center gap-4 flex-shrink-0">
-                <h1 className="text-xl font-bold whitespace-nowrap" data-testid="text-app-title">
-                  {t('app.title')}
-                </h1>
+                <div className="flex items-center gap-2">
+                  <img 
+                    src="/icons/icon-192x192.svg" 
+                    alt={t('app.title')} 
+                    className="w-8 h-8"
+                  />
+                  <span className="text-xl font-bold whitespace-nowrap sr-only" data-testid="text-app-title">
+                    {t('app.title')}
+                  </span>
+                </div>
                 {address && (
                   <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-md">
                     <span className="text-sm font-medium">
@@ -418,7 +416,7 @@ export default function ScannerPage() {
           </div>
         </header>
 
-        <main className="container mx-auto px-4 py-4 pb-32">
+        <main className="container mx-auto px-4 py-4">
           {/* Call Back Mode: Show editable list and table side by side */}
           <div className="space-y-4">
             <h2 className="text-lg font-semibold mb-4">
@@ -486,15 +484,7 @@ export default function ScannerPage() {
           </div>
         </div>
 
-        {/* Dataset Creation Confirmation Dialog */}
-        {address && (
-          <DataStorageConfirmation
-            isOpen={showDataStorageConfirmation}
-            onConfirm={confirmDatasetCreation}
-            onCancel={cancelDatasetCreation}
-            address={address}
-          />
-        )}
+        {/* Dataset Creation Confirmation Dialog removed - now creates automatically */}
       </div>
     );
   }
@@ -506,9 +496,16 @@ export default function ScannerPage() {
         <div className="container mx-auto px-4 py-3 overflow-x-auto header-scroll-container">
           <div className="flex items-center justify-between gap-4 min-w-max">
             <div className="flex items-center gap-4 flex-shrink-0">
-              <h1 className="text-xl font-bold whitespace-nowrap" data-testid="text-app-title">
-                {t('app.title')}
-              </h1>
+              <div className="flex items-center gap-2">
+                <img 
+                  src="/icons/icon-192x192.svg" 
+                  alt={t('app.title')} 
+                  className="w-8 h-8"
+                />
+                <span className="text-xl font-bold whitespace-nowrap sr-only" data-testid="text-app-title">
+                  {t('app.title')}
+                </span>
+              </div>
               {address && (
                 <ClickableAddressHeader 
                   address={address} 
@@ -527,7 +524,7 @@ export default function ScannerPage() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-4 pb-32">
+      <main className="container mx-auto px-4 py-4">
         {viewMode === 'list' ? (
           // List view: vertical layout (current design)
           <div className="space-y-4">
@@ -536,21 +533,22 @@ export default function ScannerPage() {
               <GPSAddressForm 
                 onAddressDetected={handleAddressDetected}
                 onAddressSearch={handleAddressSearch}
+                initialAddress={address}
               />
             </div>
-            
-            {canEdit && (
-              <div className="relative">
-                <MaximizeButton panel="photo" />
-                <PhotoCapture onPhotoProcessed={handlePhotoProcessed} address={address} />
-              </div>
-            )}
             
             {address && showDatasets && (
               <AddressDatasets 
                 address={address}
                 onLoadDataset={handleDatasetLoadById}
               />
+            )}
+            
+            {canEdit && (
+              <div className="relative">
+                <MaximizeButton panel="photo" />
+                <PhotoCapture key={resetKey} onPhotoProcessed={handlePhotoProcessed} address={address} />
+              </div>
             )}
             
             {/* Image with Overlays in List view - with maximize button */}
@@ -594,13 +592,14 @@ export default function ScannerPage() {
         ) : (
           // Grid view: two-column layout (ab 700px Breite)
           <div className="grid grid-cols-1 min-[700px]:grid-cols-2 gap-4 h-[calc(100vh-12rem)]">
-            {/* Left column: Location, Photo, Overlays - NO SCROLL, auto-scale */}
-            <div className="flex flex-col gap-4">
+            {/* Left column: Location, Photo, Overlays - scrollable when content overflows */}
+            <div className="flex flex-col gap-4 overflow-y-auto">
               <div className="relative">
                 <MaximizeButton panel="location" />
                 <GPSAddressForm 
                   onAddressDetected={handleAddressDetected}
                   onAddressSearch={handleAddressSearch}
+                  initialAddress={address}
                 />
               </div>
               
@@ -750,6 +749,7 @@ export default function ScannerPage() {
                 <GPSAddressForm 
                   onAddressDetected={handleAddressDetected}
                   onAddressSearch={handleAddressSearch}
+                  initialAddress={address}
                 />
               </div>
             </div>
@@ -848,15 +848,7 @@ export default function ScannerPage() {
         </>
       )}
 
-      {/* Dataset Creation Confirmation Dialog */}
-      {address && (
-        <DataStorageConfirmation
-          isOpen={showDataStorageConfirmation}
-          onConfirm={confirmDatasetCreation}
-          onCancel={cancelDatasetCreation}
-          address={address}
-        />
-      )}
+      {/* Dataset Creation Confirmation Dialog removed - now creates automatically */}
     </div>
   );
 }

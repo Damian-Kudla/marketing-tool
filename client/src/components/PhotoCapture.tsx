@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Camera, Upload, Loader2, X, RotateCw, RotateCcw, Wifi, WifiOff } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { Camera, Upload, Loader2, X, RotateCw, RotateCcw, Wifi, WifiOff, Crop } from 'lucide-react';
+import { useFilteredToast } from '@/hooks/use-filtered-toast';
 import type { Address } from '@/components/GPSAddressForm';
 import { ocrAPI } from '@/services/api';
 import { 
@@ -14,6 +14,7 @@ import {
 import OrientationLoggingService from '@/services/orientationLogging';
 import { offlineStorage } from '@/services/offlineStorage';
 import { pwaService } from '@/services/pwa';
+import { ImageCropDialog } from './ImageCropDialog';
 
 interface PhotoCaptureProps {
   onPhotoProcessed?: (results: any, imageSrc?: string) => void;
@@ -22,7 +23,7 @@ interface PhotoCaptureProps {
 
 export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCaptureProps) {
   const { t } = useTranslation();
-  const { toast } = useToast();
+  const { toast } = useFilteredToast();
   const [preview, setPreview] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [correctedFile, setCorrectedFile] = useState<File | null>(null);
@@ -33,6 +34,10 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
   const [manualRotation, setManualRotation] = useState(0); // Track manual rotation steps
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Crop dialog state
+  const [showCropDialog, setShowCropDialog] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
 
   // Setup online/offline listeners
   useEffect(() => {
@@ -188,16 +193,6 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
       return;
     }
 
-    // Check for dash in house number
-    if (address.number && address.number.includes('-')) {
-      toast({
-        variant: 'destructive',
-        title: t('photo.error'),
-        description: 'Bitte verwende keine "-" im Hausnummernfeld. Gebe alle Hausnummern mit Komma getrennt ein.',
-      });
-      return;
-    }
-
     setProcessing(true);
 
     try {
@@ -256,11 +251,22 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
           description: `${t('photo.found')} ${totalNames} ${t('photo.names')}`,
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('OCR error:', error);
       
-      // If online request fails, try offline fallback
-      if (isOnline) {
+      // Check for rate limit error (429)
+      if (error?.response?.status === 429) {
+        const errorData = error.response?.data || {};
+        const errorMessage = errorData.message || 'Zu viele Bildübermittlungen. Bitte warte eine Minute.';
+        
+        toast({
+          variant: 'destructive',
+          title: 'Rate Limit erreicht',
+          description: errorMessage,
+          duration: 10000,
+        });
+      } else if (isOnline) {
+        // If online request fails (but not rate limit), try offline fallback
         const imageDataUrl = await fileToBase64(fileToProcess);
         await handleOfflineProcessing(fileToProcess, imageDataUrl, error as Error);
       } else {
@@ -372,8 +378,86 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
     }
   };
 
+  const handleCropCancel = () => {
+    setShowCropDialog(false);
+    setImageToCrop(null);
+  };
+
+  const handleCropClick = () => {
+    if (!preview) return;
+    setImageToCrop(preview);
+    setShowCropDialog(true);
+  };
+
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    setShowCropDialog(false);
+    setImageToCrop(null);
+    
+    // Convert blob to file
+    const croppedFile = new File([croppedBlob], 'cropped-image.jpg', { type: 'image/jpeg' });
+    setCorrecting(true);
+
+    try {
+      const startTime = Date.now();
+      
+      console.log('Starting native orientation correction for cropped image...');
+      
+      const correctionResult = await correctImageOrientationNative(croppedFile);
+      
+      const processingTime = Date.now() - startTime;
+      
+      console.log('Native orientation correction completed:', {
+        needsCorrection: correctionResult.orientationInfo.needsCorrection,
+        rotation: correctionResult.orientationInfo.rotation,
+        detectionMethod: correctionResult.orientationInfo.detectionMethod,
+        processingTime: `${processingTime}ms`
+      });
+
+      const correctedFile = new File([correctionResult.correctedBlob], 'cropped-corrected-image.jpg', { type: 'image/jpeg' });
+      
+      setSelectedFile(croppedFile);
+      setCorrectedFile(correctedFile);
+      setOrientationInfo(correctionResult);
+      setManualRotation(0); // Reset manual rotation
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreview(reader.result as string);
+      };
+      reader.readAsDataURL(correctedFile);
+
+    } catch (error) {
+      console.error('Native orientation correction failed:', error);
+      
+      setCorrectedFile(croppedFile);
+      setOrientationInfo(null);
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPreview(reader.result as string);
+      };
+      reader.readAsDataURL(croppedFile);
+      
+      toast({
+        title: t('photo.orientationWarning', 'Orientation Detection Failed'),
+        description: t('photo.orientationWarningDesc', 'Using cropped image. Manual rotation may be needed'),
+        duration: 5000,
+      });
+    } finally {
+      setCorrecting(false);
+    }
+  };
+
   return (
-    <Card data-testid="card-photo-capture">
+    <>
+      <ImageCropDialog
+        isOpen={showCropDialog}
+        imageSrc={imageToCrop || ''}
+        onCropComplete={handleCropComplete}
+        onCancel={handleCropCancel}
+      />
+      
+      <Card data-testid="card-photo-capture">
       <CardHeader>
         <CardTitle className="text-lg font-semibold">{t('photo.title')}</CardTitle>
       </CardHeader>
@@ -418,7 +502,7 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
                 <X className="h-4 w-4" />
               </Button>
               
-              {/* Manual rotation controls */}
+              {/* Manual rotation and crop controls */}
               <div className="absolute bottom-2 right-2 flex gap-1">
                 <Button
                   variant="secondary"
@@ -441,6 +525,16 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
                   title={t('photo.rotateRight', 'Rotate clockwise')}
                 >
                   <RotateCw className="h-4 w-4 text-white" />
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  onClick={handleCropClick}
+                  disabled={processing || correcting || rotating}
+                  className="h-8 w-8 bg-black/50 hover:bg-black/70"
+                  title="Bild zuschneiden"
+                >
+                  <Crop className="h-4 w-4 text-white" />
                 </Button>
               </div>
             </div>
@@ -482,22 +576,23 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
               </div>
             )}
             
-            <Button
-              onClick={processPhoto}
-              disabled={processing || correcting || rotating || (address?.number?.includes('-') || false)}
-              size="lg"
-              className="w-full min-h-12 gap-2"
-              data-testid="button-process-photo"
-            >
-              {processing ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  {isOnline ? t('photo.processing') : t('photo.savingOffline', 'Saving offline...')}
-                </>
-              ) : correcting ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  {t('photo.correctingOrientation', 'Correcting orientation...')}
+            <div className="space-y-2">
+              <Button
+                onClick={processPhoto}
+                disabled={processing || correcting || rotating}
+                size="lg"
+                className="w-full min-h-12 gap-2"
+                data-testid="button-process-photo"
+              >
+                {processing ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    {isOnline ? t('photo.processing') : t('photo.savingOffline', 'Saving offline...')}
+                  </>
+                ) : correcting ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    {t('photo.correctingOrientation', 'Correcting orientation...')}
                 </>
               ) : rotating ? (
                 <>
@@ -510,7 +605,31 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
                   {isOnline ? t('photo.process') : t('photo.saveOffline', 'Save Offline')}
                 </>
               )}
-            </Button>
+              </Button>
+              
+              {/* New Image Button - triggers camera for new photo */}
+              <Button
+                onClick={() => {
+                  // Clear current photo first
+                  clearPhoto();
+                  // Then trigger camera
+                  setTimeout(() => {
+                    const input = fileInputRef.current;
+                    if (input) {
+                      input.setAttribute('capture', 'environment');
+                      input.click();
+                    }
+                  }, 100);
+                }}
+                variant="outline"
+                size="lg"
+                className="w-full min-h-12 gap-2"
+                disabled={processing || correcting || rotating}
+              >
+                <Camera className="h-5 w-5" />
+                Neues Bild
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="flex flex-col gap-2">
@@ -555,5 +674,6 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
         )}
       </CardContent>
     </Card>
+    </>
   );
 }

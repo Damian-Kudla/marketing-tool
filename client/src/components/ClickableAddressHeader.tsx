@@ -25,14 +25,19 @@ export function ClickableAddressHeader({
   const { t } = useTranslation();
   const [showOverview, setShowOverview] = useState(false);
 
-  // Format address for display in header
-  const displayAddress = `${address.street} ${address.number}`;
+  // Format address for display in header with street truncation
+  const truncateStreet = (street: string) => {
+    if (street.length <= 10) return street;
+    return `${street.slice(0, 10)}...`;
+  };
+  
+  const displayAddress = `${truncateStreet(address.street)} ${address.number}`;
   const fullAddressString = `${address.street} ${address.number}, ${address.postal} ${address.city || ''}`.trim();
 
   // Filter residents that have status (floor is now optional)
   const residentsWithStatus = residents.filter(r => r.status);
 
-  // Determine dataset state message
+  // Determine dataset state message - split into date part and status part
   const getDatasetStateText = () => {
     // Don't show any status if no dataset exists yet
     if (!datasetCreatedAt) {
@@ -47,9 +52,15 @@ export function ClickableAddressHeader({
     });
     
     if (canEdit) {
-      return t('dataset.state.editable', `Datensatz vom ${formattedDate} - Bearbeitung möglich`);
+      return {
+        prefix: `Datensatz vom ${formattedDate} -`,
+        suffix: 'Bearbeitung möglich'
+      };
     } else {
-      return t('dataset.state.readonly', `Datensatz vom ${formattedDate} - Bearbeitung nicht mehr möglich`);
+      return {
+        prefix: `Datensatz vom ${formattedDate} -`,
+        suffix: 'Bearbeitung nicht mehr möglich'
+      };
     }
   };
 
@@ -70,8 +81,8 @@ export function ClickableAddressHeader({
         onClick={() => setShowOverview(true)}
         title={t('address.header.clickToView', 'Klicken für Übersicht')}
       >
-        <div className="flex flex-col items-start gap-0.5">
-          <div className="flex items-center gap-1">
+        <div className="flex flex-col items-start gap-0.5 min-w-fit">
+          <div className="flex items-center gap-1 whitespace-nowrap">
             <span className="text-sm font-medium">📍</span>
             <div className="text-sm">
               {displayAddress}
@@ -83,8 +94,9 @@ export function ClickableAddressHeader({
             )}
           </div>
           {datasetStateText && (
-            <div className={`text-xs ${getDatasetStateColor()} ml-5`}>
-              {datasetStateText}
+            <div className={`text-xs ${getDatasetStateColor()}`}>
+              <span className="whitespace-nowrap ml-5">{datasetStateText.prefix}</span>{' '}
+              <span className="inline-block ml-5">{datasetStateText.suffix}</span>
             </div>
           )}
         </div>

@@ -118,6 +118,7 @@ export const editableResidentSchema = z.object({
   status: residentStatusSchema.optional(),
   floor: z.number().min(0).max(100).optional(),
   door: z.string().max(30).optional(),
+  notes: z.string().optional(), // General notes for all status types
   isFixed: z.boolean().default(false), // For "All Existing Customers at this Address" entries
   originalName: z.string().optional(), // Original name from OCR for tracking category changes
   originalCategory: residentCategorySchema.optional(), // Original category for tracking changes

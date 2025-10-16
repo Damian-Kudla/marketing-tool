@@ -23,16 +23,18 @@ import {
 import { User, AlertCircle, UserCheck, UserPlus, Edit, Trash2, X } from 'lucide-react';
 import ImageWithOverlays from './ImageWithOverlays';
 import { ResidentEditPopup } from './ResidentEditPopup';
-import { DataStorageConfirmation } from './DataStorageConfirmation';
 import { ClickableAddressHeader } from './ClickableAddressHeader';
 import { MaximizeButton } from './MaximizeButton';
+import { StatusContextMenu } from './StatusContextMenu';
 import { useFilteredToast } from '@/hooks/use-filtered-toast';
+import { useLongPress } from '@/hooks/use-long-press';
 import { datasetAPI } from '@/services/api';
 import type { Address } from '@/components/GPSAddressForm';
 import type { 
   EditableResident, 
   ResidentCategory,
-  AddressDataset 
+  AddressDataset,
+  ResidentStatus
 } from '@/../../shared/schema';
 
 export interface Customer {
@@ -127,12 +129,14 @@ export default function ResultsDisplay({
   const [editingResident, setEditingResident] = useState<EditableResident | null>(null);
   const [editingResidentIndex, setEditingResidentIndex] = useState<number | null>(null);
   
-  // State for data storage confirmation
-  const [showDataStorageConfirmation, setShowDataStorageConfirmation] = useState(false);
-  
   // State for delete confirmation
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [deletingResident, setDeletingResident] = useState<{ name: string; index: number } | null>(null);
+
+  // State for status context menu (Long Press)
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [statusMenuPosition, setStatusMenuPosition] = useState({ x: 0, y: 0 });
+  const [statusMenuResident, setStatusMenuResident] = useState<{ resident: EditableResident; index: number } | null>(null);
 
   // Initialize editable residents from OCR result or initialResidents
   useEffect(() => {
@@ -274,164 +278,53 @@ export default function ResultsDisplay({
     setShowEditPopup(true);
   };
 
-  // Request dataset creation with confirmation and loading state
+  // Request dataset creation automatically without confirmation
   const handleRequestDatasetCreation = async (): Promise<string | null> => {
     // If dataset already exists, return it
     if (currentDatasetId) {
       return currentDatasetId;
     }
     
-    // Show confirmation dialog and wait for user response
-    return new Promise((resolve) => {
-      // Set a flag to indicate we're in dataset creation mode
-      const confirmDatasetCreation = async () => {
-        setShowDataStorageConfirmation(false);
-        
-        try {
-          if (!address) {
-            toast({
-              variant: "destructive",
-              title: t('dataset.createError', 'Error creating'),
-              description: t('dataset.createErrorDesc', 'Dataset could not be created'),
-            });
-            resolve(null);
-            return;
-          }
-
-          // Check if we're updating an existing editable dataset
-          if (currentDatasetId && canEdit) {
-            console.log('[confirmDatasetCreation] Updating existing dataset:', currentDatasetId);
-            await datasetAPI.bulkUpdateResidents(currentDatasetId, editableResidents);
-            
-            toast({
-              title: t('dataset.updated', 'Dataset updated'),
-              description: t('dataset.updatedDesc', 'Dataset was updated successfully'),
-            });
-            
-            resolve(currentDatasetId);
-            return;
-          }
-
-          // Create dataset with 15 second timeout
-          const timeoutPromise = new Promise<AddressDataset | null>((_, reject) => 
-            setTimeout(() => reject(new Error('TIMEOUT_ERROR')), 15000)
-          );
-          
-          const datasetPromise = datasetAPI.createDataset({
-            address: {
-              street: address.street,
-              number: address.number,
-              city: address.city,
-              postal: address.postal,
-            },
-            editableResidents: editableResidents,
-            rawResidentData: result?.residentNames || [],
-          });
-
-          let newDataset: AddressDataset | null = null;
-          try {
-            newDataset = await Promise.race([datasetPromise, timeoutPromise]);
-          } catch (raceError: any) {
-            // Check if it's actually a timeout or another error
-            if (raceError.message === 'TIMEOUT_ERROR') {
-              // Real timeout occurred
-              toast({
-                variant: "destructive",
-                title: t('dataset.timeout', 'Timeout'),
-                description: t('dataset.timeoutDesc', 'Dataset creation took too long. Please try again.'),
-              });
-              setShowDataStorageConfirmation(true);
-              resolve(null);
-              return;
-            }
-            
-            // Not a timeout, it's another error - handle it below
-            throw raceError;
-          }
-          
-          if (!newDataset) throw new Error('Dataset creation failed');
-
-          setCurrentDatasetId(newDataset.id);
-          onDatasetCreatedAtChange?.(newDataset.createdAt.toString());
-          
-          toast({
-            title: t('dataset.created', 'Dataset created'),
-            description: t('dataset.createdDesc', 'New dataset was created successfully'),
-          });
-
-          resolve(newDataset.id);
-        } catch (error: any) {
-          console.error('Error creating dataset:', error);
-          
-          // Check if it's a 409 conflict (dataset already exists)
-          if (error?.response?.status === 409) {
-            const errorData = error.response?.data || {};
-            const errorMessage = errorData.message || 'Ein Datensatz für diese Adresse existiert bereits heute.';
-            const isOwnDataset = errorData.isOwnDataset;
-            
-            toast({
-              variant: "destructive",
-              title: isOwnDataset 
-                ? t('dataset.alreadyExistsOwn', 'Datensatz bereits vorhanden')
-                : t('dataset.alreadyExistsOther', 'Datensatz bereits erstellt'),
-              description: errorMessage,
-              duration: 8000, // Show longer for important message
-            });
-          } else {
-            toast({
-              variant: "destructive",
-              title: t('dataset.createError', 'Fehler beim Erstellen'),
-              description: error.message || t('dataset.createErrorDesc', 'Datensatz konnte nicht erstellt werden'),
-            });
-          }
-          resolve(null);
-        }
-      };
-      
-      const cancelDatasetCreation = () => {
-        setShowDataStorageConfirmation(false);
-        resolve(null);
-      };
-      
-      // Store the callbacks temporarily
-      (window as any).__datasetCreationResolve = confirmDatasetCreation;
-      (window as any).__datasetCreationReject = cancelDatasetCreation;
-      
-      // Show confirmation dialog
-      setShowDataStorageConfirmation(true);
-    });
-  };
-
-  // Handle data storage confirmation
-  const handleDataStorageConfirm = async () => {
-    setShowDataStorageConfirmation(false);
-    
+    // Automatically create dataset without confirmation dialog
     try {
       if (!address) {
         toast({
           variant: "destructive",
-          title: t('dataset.createError', 'Fehler beim Erstellen'),
-          description: t('dataset.createErrorDesc', 'Datensatz konnte nicht erstellt werden'),
+          title: t('dataset.createError', 'Error creating'),
+          description: t('dataset.createErrorDesc', 'Dataset could not be created'),
         });
-        return;
+        return null;
+      }
+
+      // Validate address completeness: street, number, and postal are required
+      if (!address.street || !address.number || !address.postal) {
+        toast({
+          variant: "destructive",
+          title: t('error.incompleteAddress', 'Unvollständige Adresse'),
+          description: t('error.incompleteAddressDesc', 'Straße, Hausnummer und Postleitzahl müssen angegeben werden'),
+        });
+        return null;
       }
 
       // Check if we're updating an existing editable dataset
       if (currentDatasetId && canEdit) {
-        console.log('[handleDataStorageConfirm] Updating existing dataset:', currentDatasetId);
+        console.log('[handleRequestDatasetCreation] Updating existing dataset:', currentDatasetId);
         await datasetAPI.bulkUpdateResidents(currentDatasetId, editableResidents);
         
         toast({
           title: t('dataset.updated', 'Dataset updated'),
           description: t('dataset.updatedDesc', 'Dataset was updated successfully'),
         });
-        return;
+        
+        return currentDatasetId;
       }
 
-      // Create new dataset
-      console.log('[handleDataStorageConfirm] Creating dataset with residents:', JSON.stringify(editableResidents, null, 2));
+      // Create dataset with 15 second timeout
+      const timeoutPromise = new Promise<AddressDataset | null>((_, reject) => 
+        setTimeout(() => reject(new Error('TIMEOUT_ERROR')), 15000)
+      );
       
-      const newDataset = await datasetAPI.createDataset({
+      const datasetPromise = datasetAPI.createDataset({
         address: {
           street: address.street,
           number: address.number,
@@ -442,19 +335,52 @@ export default function ResultsDisplay({
         rawResidentData: result?.residentNames || [],
       });
 
-      console.log('[handleDataStorageConfirm] Dataset created successfully:', newDataset.id);
+      let newDataset: AddressDataset | null = null;
+      try {
+        newDataset = await Promise.race([datasetPromise, timeoutPromise]);
+      } catch (raceError: any) {
+        // Check if it's actually a timeout or another error
+        if (raceError.message === 'TIMEOUT_ERROR') {
+          // Real timeout occurred
+          toast({
+            variant: "destructive",
+            title: t('dataset.timeout', 'Timeout'),
+            description: t('dataset.timeoutDesc', 'Dataset creation took too long. Please try again.'),
+          });
+          return null;
+        }
+        
+        // Not a timeout, it's another error - handle it below
+        throw raceError;
+      }
+      
+      if (!newDataset) throw new Error('Dataset creation failed');
+
       setCurrentDatasetId(newDataset.id);
       onDatasetCreatedAtChange?.(newDataset.createdAt.toString());
       
       toast({
-        title: t('dataset.created', 'Datensatz erstellt'),
-        description: t('dataset.createdDesc', 'Neuer Datensatz wurde erfolgreich erstellt'),
+        title: t('dataset.created', 'Dataset created'),
+        description: t('dataset.createdDesc', 'New dataset was created successfully'),
       });
+
+      return newDataset.id;
     } catch (error: any) {
-      console.error('Error saving dataset:', error);
+      console.error('Error creating dataset:', error);
       
-      // Check if it's a 409 conflict (dataset already exists)
-      if (error?.response?.status === 409) {
+      // Check if it's a 429 rate limit error
+      if (error?.response?.status === 429) {
+        const errorData = error.response?.data || {};
+        const errorMessage = errorData.message || 'Zu viele Anfragen. Bitte warte eine Minute.';
+        
+        toast({
+          variant: "destructive",
+          title: 'Rate Limit erreicht',
+          description: errorMessage,
+          duration: 10000, // Show longer for rate limit message
+        });
+      } else if (error?.response?.status === 409) {
+        // Check if it's a 409 conflict (dataset already exists)
         const errorData = error.response?.data || {};
         const errorMessage = errorData.message || 'Ein Datensatz für diese Adresse existiert bereits heute.';
         const isOwnDataset = errorData.isOwnDataset;
@@ -467,18 +393,26 @@ export default function ResultsDisplay({
           description: errorMessage,
           duration: 8000, // Show longer for important message
         });
+      } else if (error?.response?.status === 400) {
+        // Handle validation errors (e.g., invalid address)
+        const errorData = error.response?.data || {};
+        const errorMessage = errorData.message || 'Die Adresse konnte nicht validiert werden.';
+        
+        toast({
+          variant: "destructive",
+          title: t('dataset.createError', 'Datensatz konnte nicht erstellt werden'),
+          description: errorMessage,
+          duration: 8000, // Show longer for validation errors
+        });
       } else {
         toast({
           variant: "destructive",
-          title: t('dataset.createError', 'Fehler beim Speichern'),
-          description: error.message || t('dataset.createErrorDesc', 'Datensatz konnte nicht gespeichert werden'),
+          title: t('dataset.createError', 'Fehler beim Erstellen'),
+          description: error.message || t('dataset.createErrorDesc', 'Datensatz konnte nicht erstellt werden'),
         });
       }
+      return null;
     }
-  };
-
-  const handleDataStorageCancel = () => {
-    setShowDataStorageConfirmation(false);
   };
 
   // Filter function for real-time search (substring matching)
@@ -595,6 +529,55 @@ export default function ResultsDisplay({
     setShowDeleteConfirmation(true);
   };
 
+  // Handle status change from context menu (Long Press)
+  const handleStatusChange = async (newStatus: ResidentStatus) => {
+    if (!statusMenuResident) return;
+
+    const { resident, index } = statusMenuResident;
+    
+    try {
+      const updatedResident: EditableResident = {
+        ...resident,
+        status: newStatus
+      };
+
+      // Update local state
+      setEditableResidents(prev => {
+        const newResidents = [...prev];
+        newResidents[index] = updatedResident;
+        return newResidents;
+      });
+
+      // Live-sync to backend if dataset exists
+      if (canEdit && currentDatasetId) {
+        console.log('[handleStatusChange] Live-sync: Updating status for resident', resident.name);
+        
+        const allResidents = [...editableResidents];
+        allResidents[index] = updatedResident;
+
+        await datasetAPI.bulkUpdateResidents(currentDatasetId, allResidents);
+
+        toast({
+          title: t('resident.status.updated', 'Status updated'),
+          description: t('resident.status.updatedDescription', `Status changed to {{status}}`, { 
+            status: newStatus 
+          }),
+        });
+      }
+    } catch (error) {
+      console.error('[handleStatusChange] Error updating status:', error);
+      toast({
+        variant: 'destructive',
+        title: t('resident.status.error', 'Error'),
+        description: t('resident.status.errorDescription', 'Failed to update status'),
+      });
+    } finally {
+      // Close menu
+      setStatusMenuOpen(false);
+      setStatusMenuResident(null);
+    }
+  };
+
   // Handle delete confirmation
   const handleDeleteConfirm = async () => {
     if (!deletingResident) return;
@@ -646,7 +629,7 @@ export default function ResultsDisplay({
   };
 
   // Handler to create a new resident when no OCR results exist
-  const handleCreateResidentWithoutPhoto = () => {
+  const handleCreateResidentWithoutPhoto = async () => {
     if (!address) {
       toast({
         variant: "destructive",
@@ -656,8 +639,86 @@ export default function ResultsDisplay({
       return;
     }
     
-    // Show confirmation dialog
-    setShowDataStorageConfirmation(true);
+    // Validate address completeness: street, number, and postal are required
+    if (!address.street || !address.number || !address.postal) {
+      toast({
+        variant: "destructive",
+        title: t('error.incompleteAddress', 'Unvollständige Adresse'),
+        description: t('error.incompleteAddressDesc', 'Straße, Hausnummer und Postleitzahl müssen angegeben werden'),
+      });
+      return;
+    }
+    
+    // Automatically create dataset without confirmation
+    try {
+      // Create dataset with empty residents array
+      const newDataset = await datasetAPI.createDataset({
+        address: {
+          street: address.street,
+          number: address.number,
+          city: address.city,
+          postal: address.postal,
+        },
+        editableResidents: [],
+        rawResidentData: [],
+      });
+
+      setCurrentDatasetId(newDataset.id);
+      onDatasetCreatedAtChange?.(newDataset.createdAt.toString());
+      setEditableResidents([]);
+      
+      toast({
+        title: t('dataset.created', 'Datensatz angelegt'),
+        description: t('dataset.createdNoPhoto', 'Du kannst jetzt Anwohner hinzufügen'),
+      });
+
+      // Open edit popup to add first resident
+      const newResident: EditableResident = {
+        name: '',
+        category: 'potential_new_customer',
+        isFixed: false,
+      };
+      setEditingResident(newResident);
+      setEditingResidentIndex(null);
+      setShowEditPopup(true);
+    } catch (error: any) {
+      // Handle 429 rate limit error
+      if (error.response?.status === 429) {
+        const errorData = error.response?.data;
+        
+        toast({
+          variant: "destructive",
+          title: 'Rate Limit erreicht',
+          description: errorData?.message || 'Zu viele Anfragen. Bitte warte eine Minute.',
+          duration: 10000,
+        });
+      } else if (error.response?.status === 409) {
+        // Handle 409 error (dataset already exists)
+        const errorData = error.response?.data;
+        
+        toast({
+          variant: "destructive",
+          title: t('dataset.alreadyExists', 'Datensatz existiert bereits'),
+          description: errorData?.message || t('dataset.alreadyExistsDesc', 'Ein Datensatz existiert bereits für diese Adresse heute'),
+        });
+      } else if (error.response?.status === 400) {
+        // Handle validation errors (e.g., invalid address)
+        const errorData = error.response?.data;
+        
+        toast({
+          variant: "destructive",
+          title: t('dataset.createError', 'Datensatz konnte nicht erstellt werden'),
+          description: errorData?.message || 'Die Adresse ungültig zu sein scheint. Bitte prüfe die Adresse.',
+          duration: 8000,
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: t('dataset.createError', 'Fehler beim Anlegen'),
+          description: t('dataset.createErrorDesc', 'Datensatz konnte nicht angelegt werden'),
+        });
+      }
+    }
   };
 
   // Show empty state only if no results AND no dataset loaded
@@ -675,8 +736,8 @@ export default function ResultsDisplay({
                 {t('results.empty')}
               </p>
               
-              {/* Show "Create Resident" button if address exists */}
-              {address && canEdit && (
+              {/* Show "Create Resident" button only if address is complete (street, number, postal) */}
+              {address && address.street && address.number && address.postal && canEdit && (
                 <Button
                   onClick={handleCreateResidentWithoutPhoto}
                   className="gap-2"
@@ -689,68 +750,6 @@ export default function ResultsDisplay({
             </div>
           </CardContent>
         </Card>
-
-        {/* Dataset Creation Confirmation Dialog */}
-        {address && (
-          <DataStorageConfirmation
-            isOpen={showDataStorageConfirmation}
-            onConfirm={async () => {
-              setShowDataStorageConfirmation(false);
-              
-              try {
-                // Create dataset with empty residents array
-                const newDataset = await datasetAPI.createDataset({
-                  address: {
-                    street: address.street,
-                    number: address.number,
-                    city: address.city,
-                    postal: address.postal,
-                  },
-                  editableResidents: [],
-                  rawResidentData: [],
-                });
-
-                setCurrentDatasetId(newDataset.id);
-                onDatasetCreatedAtChange?.(newDataset.createdAt.toString());
-                setEditableResidents([]);
-                
-                toast({
-                  title: t('dataset.created', 'Datensatz angelegt'),
-                  description: t('dataset.createdNoPhoto', 'Du kannst jetzt Anwohner hinzufügen'),
-                });
-
-                // Open edit popup to add first resident
-                const newResident: EditableResident = {
-                  name: '',
-                  category: 'potential_new_customer',
-                  isFixed: false,
-                };
-                setEditingResident(newResident);
-                setEditingResidentIndex(null);
-                setShowEditPopup(true);
-              } catch (error: any) {
-                // Handle 409 error (dataset already exists)
-                if (error.response?.status === 409) {
-                  const errorData = error.response?.data;
-                  
-                  toast({
-                    variant: "destructive",
-                    title: t('dataset.alreadyExists', 'Datensatz existiert bereits'),
-                    description: errorData?.message || t('dataset.alreadyExistsDesc', 'Ein Datensatz existiert bereits für diese Adresse heute'),
-                  });
-                } else {
-                  toast({
-                    variant: "destructive",
-                    title: t('dataset.createError', 'Fehler beim Anlegen'),
-                    description: t('dataset.createErrorDesc', 'Datensatz konnte nicht angelegt werden'),
-                  });
-                }
-              }
-            }}
-            onCancel={() => setShowDataStorageConfirmation(false)}
-            address={address}
-          />
-        )}
       </>
     );
   }
@@ -778,6 +777,105 @@ export default function ResultsDisplay({
 
   const matchedNames = getMatchedNames();
   const searchTerm = ''; // Can be connected to a search state later
+
+  // Internal component for Resident Row with Long Press
+  const ResidentRow = ({ 
+    resident, 
+    index, 
+    category 
+  }: { 
+    resident: EditableResident; 
+    index: number; 
+    category: ResidentCategory;
+  }) => {
+    const longPressHandlers = useLongPress({
+      onLongPress: (x, y) => {
+        if (!canEdit) return;
+        setStatusMenuPosition({ x, y });
+        setStatusMenuResident({ resident, index });
+        setStatusMenuOpen(true);
+      },
+      onClick: () => {
+        // Normal click behavior - optional: open edit popup
+        if (canEdit) {
+          handleEditResidentFromList(resident.name, category);
+        }
+      }
+    });
+
+    const isVisible = matchesSearch(resident.name);
+    const iconColor = category === 'existing_customer' ? 'text-success' : 'text-warning';
+    const iconBg = category === 'existing_customer' ? 'bg-success/10' : 'bg-warning/10';
+
+    const { style: longPressStyle, ...restLongPressHandlers } = longPressHandlers;
+
+    return (
+      <div
+        key={index}
+        className="flex items-center gap-3 p-3 rounded-lg border bg-card hover-elevate cursor-pointer"
+        data-testid={`row-${category}-${index}`}
+        style={{ 
+          display: isVisible ? 'flex' : 'none',
+          ...longPressStyle 
+        }}
+        {...restLongPressHandlers}
+      >
+        <div className={`h-9 w-9 rounded-full ${iconBg} flex items-center justify-center flex-shrink-0`}>
+          {category === 'existing_customer' ? (
+            <UserCheck className={`h-4 w-4 ${iconColor}`} />
+          ) : (
+            <User className={`h-4 w-4 ${iconColor}`} />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <span className="font-medium overflow-x-auto whitespace-nowrap" data-testid={`text-${category}-name-${index}`}>
+            {resident.name}
+          </span>
+          {/* Show status, floor, and door if available */}
+          {resident && (resident.status || resident.floor !== undefined || resident.door) && (
+            <div className="text-xs text-muted-foreground mt-1">
+              {resident.status && (
+                <span className="mr-2">
+                  {t('resident.status.status', 'Status')}: {t(`resident.status.${resident.status}`, resident.status)}
+                </span>
+              )}
+              {resident.floor !== undefined && (
+                <span className="mr-2">
+                  {t('resident.floor', 'Floor')}: {resident.floor}
+                </span>
+              )}
+              {resident.door && (
+                <span>
+                  {t('resident.door', 'Door')}: {resident.door}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+        {canEdit && (
+          <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleEditResidentFromList(resident.name, category)}
+              data-testid={`button-edit-${category}-${index}`}
+            >
+              <Edit className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleDeleteResidentRequest(resident.name, category)}
+              data-testid={`button-delete-${category}-${index}`}
+              className="text-destructive hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <>
@@ -851,6 +949,10 @@ export default function ResultsDisplay({
                   <div className="space-y-3 pt-3">
                     {result.allCustomersAtAddress.map((customer, index) => {
                 const isVisible = matchesSearch(customer.name);
+                
+                // Check if multiple house numbers were queried (contains comma)
+                const multipleHouseNumbers = address?.number && address.number.includes(',');
+                
                 return (
                   <div
                     key={index}
@@ -862,12 +964,20 @@ export default function ResultsDisplay({
                       <User className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium overflow-x-auto whitespace-nowrap" data-testid={`text-address-customer-name-${index}`}>
-                        {customer.name}
-                      </p>
-                      {(customer.street || customer.houseNumber || customer.postalCode) && (
+                      <div className="flex items-baseline gap-2">
+                        <p className="font-medium overflow-x-auto whitespace-nowrap" data-testid={`text-address-customer-name-${index}`}>
+                          {customer.name}
+                        </p>
+                        {/* Show house number ONLY when multiple numbers were queried */}
+                        {multipleHouseNumbers && customer.houseNumber && (
+                          <Badge variant="secondary" className="text-xs font-normal shrink-0">
+                            Nr. {customer.houseNumber}
+                          </Badge>
+                        )}
+                      </div>
+                      {(customer.street || customer.postalCode) && (
                         <p className="text-xs text-muted-foreground overflow-x-auto whitespace-nowrap">
-                          {[customer.street, customer.houseNumber, customer.postalCode]
+                          {[customer.street, !multipleHouseNumbers && customer.houseNumber, customer.postalCode]
                             .filter(Boolean)
                             .join(' ')}
                         </p>
@@ -1013,68 +1123,14 @@ export default function ResultsDisplay({
                   </Button>
                 )}
               </div>
-              {currentNewProspects.map((resident, index) => {
-                const isVisible = matchesSearch(resident.name);
-                
-                return (
-                  <div
-                    key={index}
-                    className="flex items-center gap-3 p-3 rounded-lg border bg-card hover-elevate"
-                    data-testid={`row-prospect-${index}`}
-                    style={{ display: isVisible ? 'flex' : 'none' }}
-                  >
-                    <div className="h-9 w-9 rounded-full bg-warning/10 flex items-center justify-center flex-shrink-0">
-                      <User className="h-4 w-4 text-warning" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <span className="font-medium overflow-x-auto whitespace-nowrap" data-testid={`text-prospect-name-${index}`}>
-                        {resident.name}
-                      </span>
-                      {/* Show status, floor, and door if available */}
-                      {resident && (resident.status || resident.floor !== undefined || resident.door) && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          {resident.status && (
-                            <span className="mr-2">
-                              {t('resident.status.status', 'Status')}: {t(`resident.status.${resident.status}`, resident.status)}
-                            </span>
-                          )}
-                          {resident.floor !== undefined && (
-                            <span className="mr-2">
-                              {t('resident.floor', 'Floor')}: {resident.floor}
-                            </span>
-                          )}
-                          {resident.door && (
-                            <span>
-                              {t('resident.door', 'Door')}: {resident.door}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    {canEdit && (
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditResidentFromList(resident.name, 'potential_new_customer')}
-                          data-testid={`button-edit-prospect-${index}`}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteResidentRequest(resident.name, 'potential_new_customer')}
-                          data-testid={`button-delete-prospect-${index}`}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {currentNewProspects.map((resident, index) => (
+                <ResidentRow
+                  key={index}
+                  resident={resident}
+                  index={index}
+                  category="potential_new_customer"
+                />
+              ))}
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -1125,68 +1181,14 @@ export default function ResultsDisplay({
                   </Button>
                 )}
               </div>
-              {currentExistingCustomers.map((resident, index) => {
-                const isVisible = matchesSearch(resident.name);
-                
-                return (
-                  <div
-                    key={index}
-                    className="flex items-center gap-3 p-3 rounded-lg border bg-card hover-elevate"
-                    data-testid={`row-existing-${index}`}
-                    style={{ display: isVisible ? 'flex' : 'none' }}
-                  >
-                    <div className="h-9 w-9 rounded-full bg-success/10 flex items-center justify-center flex-shrink-0">
-                      <User className="h-4 w-4 text-success" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium overflow-x-auto whitespace-nowrap" data-testid={`text-customer-name-${index}`}>
-                        {resident.name}
-                      </p>
-                      {/* Show status, floor, and door if available */}
-                      {resident && (resident.status || resident.floor !== undefined || resident.door) && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          {resident.status && (
-                            <span className="mr-2">
-                              {t('resident.status.status', 'Status')}: {t(`resident.status.${resident.status}`, resident.status)}
-                            </span>
-                          )}
-                          {resident.floor !== undefined && (
-                            <span className="mr-2">
-                              {t('resident.floor', 'Floor')}: {resident.floor}
-                            </span>
-                          )}
-                          {resident.door && (
-                            <span>
-                              {t('resident.door', 'Door')}: {resident.door}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    {canEdit && (
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditResidentFromList(resident.name, 'existing_customer')}
-                          data-testid={`button-edit-existing-${index}`}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteResidentRequest(resident.name, 'existing_customer')}
-                          data-testid={`button-delete-existing-${index}`}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {currentExistingCustomers.map((resident, index) => (
+                <ResidentRow
+                  key={index}
+                  resident={resident}
+                  index={index}
+                  category="existing_customer"
+                />
+              ))}
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -1255,36 +1257,6 @@ export default function ResultsDisplay({
         } : undefined}
       />
 
-      {/* Data Storage Confirmation */}
-      {address && (
-        <DataStorageConfirmation
-          isOpen={showDataStorageConfirmation}
-          onConfirm={async () => {
-            // Check if there's a promise-based callback waiting
-            if ((window as any).__datasetCreationResolve) {
-              await (window as any).__datasetCreationResolve();
-              delete (window as any).__datasetCreationResolve;
-              delete (window as any).__datasetCreationReject;
-            } else {
-              // Fall back to original handler
-              await handleDataStorageConfirm();
-            }
-          }}
-          onCancel={() => {
-            // Check if there's a promise-based callback waiting
-            if ((window as any).__datasetCreationReject) {
-              (window as any).__datasetCreationReject();
-              delete (window as any).__datasetCreationResolve;
-              delete (window as any).__datasetCreationReject;
-            } else {
-              // Fall back to original handler
-              handleDataStorageCancel();
-            }
-          }}
-          address={address}
-        />
-      )}
-
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteConfirmation} onOpenChange={setShowDeleteConfirmation}>
         <AlertDialogContent>
@@ -1306,6 +1278,19 @@ export default function ResultsDisplay({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Status Context Menu (Long Press) */}
+      <StatusContextMenu
+        isOpen={statusMenuOpen}
+        x={statusMenuPosition.x}
+        y={statusMenuPosition.y}
+        onClose={() => {
+          setStatusMenuOpen(false);
+          setStatusMenuResident(null);
+        }}
+        onSelectStatus={handleStatusChange}
+        currentStatus={statusMenuResident?.resident.status}
+      />
     </>
   );
 }

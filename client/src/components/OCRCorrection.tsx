@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Check, X, Plus, Trash2, Loader2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { useFilteredToast } from '@/hooks/use-filtered-toast';
 import type { Address } from '@/components/GPSAddressForm';
 import { ocrAPI } from '@/services/api';
 
@@ -23,7 +23,7 @@ export default function OCRCorrection({
   onCancel 
 }: OCRCorrectionProps) {
   const { t } = useTranslation();
-  const { toast } = useToast();
+  const { toast } = useFilteredToast();
   const [names, setNames] = useState<string[]>(initialNames.length > 0 ? initialNames : ['']);
   const [processing, setProcessing] = useState(false);
 

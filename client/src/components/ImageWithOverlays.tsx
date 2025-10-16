@@ -4,11 +4,13 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { X, Check } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { useFilteredToast } from '@/hooks/use-filtered-toast';
 import { ResidentEditPopup } from './ResidentEditPopup';
+import { StatusContextMenu } from './StatusContextMenu';
+import { useLongPress } from '@/hooks/use-long-press';
 import type { Address } from '@/components/GPSAddressForm';
 import type { Customer } from '@/components/ResultsDisplay';
-import type { EditableResident } from '@/../../shared/schema';
+import type { EditableResident, ResidentStatus } from '@/../../shared/schema';
 import { colorConfig } from '@/../../shared/colorConfig';
 
 interface BoundingBox {
@@ -129,7 +131,7 @@ export default function ImageWithOverlays({
   onRequestDatasetCreation,
 }: ImageWithOverlaysProps) {
   const { t } = useTranslation();
-  const { toast } = useToast();
+  const { toast } = useFilteredToast();
   const [overlays, setOverlays] = useState<OverlayBox[]>([]);
   const [longPressIndex, setLongPressIndex] = useState<number | null>(null);
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
@@ -143,6 +145,11 @@ export default function ImageWithOverlays({
   // State for new resident edit popup
   const [editingResident, setEditingResident] = useState<EditableResident | null>(null);
   const [showEditPopup, setShowEditPopup] = useState(false);
+
+  // State for status context menu (Long Press)
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [statusMenuPosition, setStatusMenuPosition] = useState({ x: 0, y: 0 });
+  const [statusMenuOverlay, setStatusMenuOverlay] = useState<{ overlay: OverlayBox; index: number } | null>(null);
 
   // Track window width for responsive edit modal
   useEffect(() => {
@@ -640,11 +647,11 @@ export default function ImageWithOverlays({
     
     if (!matchingResident) return;
     
-    // If no dataset exists yet, request dataset creation first
+    // If no dataset exists yet, automatically create it without confirmation
     if (!currentDatasetId && onRequestDatasetCreation) {
       const createdDatasetId = await onRequestDatasetCreation();
       if (!createdDatasetId) {
-        // User cancelled or creation failed
+        // Creation failed (not cancelled, as there's no dialog anymore)
         return;
       }
     }
@@ -654,13 +661,45 @@ export default function ImageWithOverlays({
     setShowEditPopup(true);
   };
 
-  // Handle long press start
+  // Handle long press start - now opens status context menu
   const handleLongPressStart = (index: number, e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
+    
     longPressTimerRef.current = setTimeout(() => {
-      setLongPressIndex(index);
+      const overlay = overlays[index];
+      
+      // Get position from event
+      let x: number, y: number;
+      if ('touches' in e.nativeEvent && e.nativeEvent.touches.length > 0) {
+        const touch = e.nativeEvent.touches[0];
+        x = touch.clientX;
+        y = touch.clientY;
+      } else if ('clientX' in e.nativeEvent) {
+        x = e.nativeEvent.clientX;
+        y = e.nativeEvent.clientY;
+      } else {
+        // Fallback to overlay position
+        const rect = (e.target as HTMLElement).getBoundingClientRect();
+        x = rect.left + rect.width / 2;
+        y = rect.top + rect.height / 2;
+      }
+
+      // Haptic feedback
+      if ('vibrate' in navigator) {
+        try {
+          navigator.vibrate(50);
+        } catch (err) {
+          console.debug('Haptic feedback not available');
+        }
+      }
+
+      // Open status context menu
+      setStatusMenuPosition({ x, y });
+      setStatusMenuOverlay({ overlay, index });
+      setStatusMenuOpen(true);
+      
       longPressTimerRef.current = null;
-    }, 500);
+    }, 600); // 600ms for consistent long press timing
   };
 
   // Handle long press end
@@ -672,6 +711,51 @@ export default function ImageWithOverlays({
   };
 
 
+
+  // Handle status change from context menu (Long Press)
+  const handleStatusChange = async (newStatus: ResidentStatus) => {
+    if (!statusMenuOverlay || !editableResidents || !onResidentsUpdated) return;
+
+    const { overlay } = statusMenuOverlay;
+    
+    try {
+      // Find the resident matching this overlay
+      const residentIndex = editableResidents.findIndex(r => r.name === overlay.originalName);
+      
+      if (residentIndex >= 0) {
+        const updatedResidents = [...editableResidents];
+        updatedResidents[residentIndex] = {
+          ...updatedResidents[residentIndex],
+          status: newStatus
+        };
+
+        // Update local state
+        onResidentsUpdated(updatedResidents);
+
+        // Save to backend if dataset exists
+        if (currentDatasetId) {
+          const { datasetAPI } = await import('@/services/api');
+          await datasetAPI.bulkUpdateResidents(currentDatasetId, updatedResidents);
+
+          toast({
+            title: t('resident.status.updated', 'Status updated'),
+            description: t('resident.status.updatedDescription', `Status changed for ${overlay.text}`),
+          });
+        }
+      }
+    } catch (error) {
+      console.error('[handleStatusChange] Error updating status:', error);
+      toast({
+        variant: 'destructive',
+        title: t('resident.status.error', 'Error'),
+        description: t('resident.status.errorDescription', 'Failed to update status'),
+      });
+    } finally {
+      // Close menu
+      setStatusMenuOpen(false);
+      setStatusMenuOverlay(null);
+    }
+  };
 
   // Handlers for new resident edit popup
   const handleResidentSave = async (updatedResident: EditableResident) => {
@@ -951,6 +1035,23 @@ export default function ImageWithOverlays({
           onDelete={handleResidentDelete}
           resident={editingResident}
           isEditing={editingResident !== null}
+        />
+
+        {/* Status Context Menu (Long Press) */}
+        <StatusContextMenu
+          isOpen={statusMenuOpen}
+          x={statusMenuPosition.x}
+          y={statusMenuPosition.y}
+          onClose={() => {
+            setStatusMenuOpen(false);
+            setStatusMenuOverlay(null);
+          }}
+          onSelectStatus={handleStatusChange}
+          currentStatus={
+            statusMenuOverlay && editableResidents
+              ? editableResidents.find(r => r.name === statusMenuOverlay.overlay.originalName)?.status
+              : undefined
+          }
         />
       </CardContent>
     </Card>

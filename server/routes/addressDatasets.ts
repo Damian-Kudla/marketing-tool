@@ -7,6 +7,13 @@ function getBerlinTime(): Date {
   const berlinTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Berlin' }));
   return berlinTime;
 }
+
+// Helper function to check if a date is within 30 days from now
+function isWithin30Days(date: Date): boolean {
+  const now = getBerlinTime();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  return date >= thirtyDaysAgo && date <= now;
+}
 import { 
   addressDatasetRequestSchema, 
   updateResidentRequestSchema,
@@ -23,6 +30,94 @@ import type {
 
 const router = Router();
 
+// Get street name suggestions based on partial input
+router.get('/streets/suggestions', async (req, res) => {
+  try {
+    const { query } = req.query;
+    
+    if (!query || typeof query !== 'string' || query.trim().length < 2) {
+      return res.json({ streets: [] });
+    }
+
+    const searchTerm = query.trim().toLowerCase();
+    
+    // Get all datasets from cache
+    const allDatasets = await addressDatasetService.getAllDatasets();
+    
+    // Extract unique streets that match the search term
+    const matchingStreets = new Set<string>();
+    
+    for (const dataset of allDatasets) {
+      const street = dataset.street?.toLowerCase();
+      if (street && street.includes(searchTerm)) {
+        matchingStreets.add(dataset.street); // Use original casing
+      }
+    }
+
+    // Convert to array and sort
+    const streets = Array.from(matchingStreets).sort();
+    
+    res.json({ streets: streets.slice(0, 10) }); // Limit to 10 suggestions
+  } catch (error) {
+    console.error('Error fetching street suggestions:', error);
+    res.status(500).json({ error: 'Failed to fetch street suggestions' });
+  }
+});
+
+// Get datasets by street (with optional house number filter)
+router.get('/streets/:streetName', async (req, res) => {
+  try {
+    const { streetName } = req.params;
+    const username = (req as any).username;
+    
+    if (!streetName) {
+      return res.status(400).json({ error: 'Street name is required' });
+    }
+
+    // Get all datasets from cache
+    const allDatasets = await addressDatasetService.getAllDatasets();
+    
+    // Filter datasets by street name (case-insensitive)
+    const streetDatasets = allDatasets.filter(dataset => 
+      dataset.street?.toLowerCase() === decodeURIComponent(streetName).toLowerCase()
+    );
+
+    // Group by house number and keep only the most recent dataset per house number
+    const houseNumberMap = new Map<string, AddressDataset>();
+    
+    for (const dataset of streetDatasets) {
+      const existingDataset = houseNumberMap.get(dataset.houseNumber);
+      if (!existingDataset || new Date(dataset.createdAt) > new Date(existingDataset.createdAt)) {
+        houseNumberMap.set(dataset.houseNumber, dataset);
+      }
+    }
+
+    // Convert to array and add canEdit flag
+    const datasets = Array.from(houseNumberMap.values()).map(dataset => {
+      const creationDate = new Date(dataset.createdAt);
+      const isEditable = isWithin30Days(creationDate);
+      const isCreator = dataset.createdBy === username;
+      
+      return {
+        ...dataset,
+        canEdit: isCreator && isEditable,
+      };
+    });
+
+    // Sort by house number (numeric sort)
+    datasets.sort((a, b) => {
+      const numA = parseInt(a.houseNumber.replace(/\D/g, ''), 10) || 0;
+      const numB = parseInt(b.houseNumber.replace(/\D/g, ''), 10) || 0;
+      return numA - numB;
+    });
+
+    res.json({ datasets });
+  } catch (error) {
+    console.error('Error fetching datasets by street:', error);
+    res.status(500).json({ error: 'Failed to fetch datasets by street' });
+  }
+});
+
 // Create new address dataset
 router.post('/', async (req, res) => {
   try {
@@ -33,55 +128,102 @@ router.post('/', async (req, res) => {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    // Normalize the address
-    const normalizedAddress = await normalizeAddress(
+    // Validate address completeness: street, number, and postal are required
+    if (!data.address.street || !data.address.number || !data.address.postal) {
+      return res.status(400).json({ 
+        error: 'Incomplete address', 
+        message: 'Straße, Hausnummer und Postleitzahl müssen angegeben werden',
+        details: {
+          street: !data.address.street ? 'Straße fehlt' : undefined,
+          number: !data.address.number ? 'Hausnummer fehlt' : undefined,
+          postal: !data.address.postal ? 'Postleitzahl fehlt' : undefined,
+        }
+      });
+    }
+
+    // Normalize and validate the address using Geocoding API
+    const normalized = await normalizeAddress(
       data.address.street,
       data.address.number,
       data.address.city,
-      data.address.postal
+      data.address.postal,
+      username // Pass username for rate limiting
     );
 
-    // Check if dataset already exists for today (with flexible house number matching)
-    const existingDataset = await addressDatasetService.getTodaysDatasetByAddress(normalizedAddress, data.address.number);
+    // Verify that normalization produced a valid result
+    if (!normalized) {
+      return res.status(400).json({ 
+        error: 'Address validation failed', 
+        message: `Die Adresse "${data.address.street} ${data.address.number}, ${data.address.postal}" konnte nicht gefunden werden. Bitte überprüfe die Schreibweise der Straße.`,
+        details: {
+          street: data.address.street,
+          number: data.address.number,
+          postal: data.address.postal,
+          hint: 'Die Google Geocoding API konnte diese Adresse nicht verifizieren. Stelle sicher, dass die Straße korrekt geschrieben ist.'
+        }
+      });
+    }
+
+    // Check if an editable dataset exists within the last 30 days (with flexible house number matching)
+    // This ensures we can't create a new dataset while an existing one is still editable
+    const existingDataset = await addressDatasetService.getRecentDatasetByAddress(normalized.formattedAddress, normalized.number, 30);
     if (existingDataset) {
-      // Check if house numbers are different (non-exact match)
-      const isNonExactMatch = existingDataset.houseNumber !== data.address.number;
-      const existingAddress = isNonExactMatch 
-        ? `${existingDataset.street} ${existingDataset.houseNumber}` 
-        : 'hier';
+      // Check if the dataset is still editable (within 30 days)
+      const creationDate = new Date(existingDataset.createdAt);
+      const isEditable = isWithin30Days(creationDate);
       
-      if (existingDataset.createdBy !== username) {
-        return res.status(409).json({ 
-          error: 'A dataset for this address already exists today',
-          message: `${existingDataset.createdBy} war heute schon ${existingAddress}. Du kannst seinen Datensatz ansehen aber nicht bearbeiten.`,
-          existingCreator: existingDataset.createdBy,
-          isOwnDataset: false,
-          existingDataset: isNonExactMatch ? {
-            street: existingDataset.street,
-            houseNumber: existingDataset.houseNumber
-          } : undefined
-        });
+      if (!isEditable) {
+        // Dataset exists but is older than 30 days - allow creation of new dataset
+        console.log('[POST /] Existing dataset found but older than 30 days, allowing new dataset creation');
       } else {
-        return res.status(409).json({ 
-          error: 'A dataset for this address already exists today',
-          message: `Du hast heute schon einen Datensatz ${existingAddress} angelegt. Bitte gehe auf Verlauf und bearbeite den angelegten Datensatz.`,
-          existingCreator: existingDataset.createdBy,
-          isOwnDataset: true,
-          existingDataset: isNonExactMatch ? {
-            street: existingDataset.street,
-            houseNumber: existingDataset.houseNumber
-          } : undefined
-        });
+        // Dataset is still editable - prevent creation
+        const isNonExactMatch = existingDataset.houseNumber !== data.address.number;
+        const existingAddress = isNonExactMatch 
+          ? `${existingDataset.street} ${existingDataset.houseNumber}` 
+          : 'hier';
+        
+        // Calculate days since creation
+        const daysSince = Math.floor((Date.now() - creationDate.getTime()) / (1000 * 60 * 60 * 24));
+        const daysRemaining = 30 - daysSince;
+        
+        if (existingDataset.createdBy !== username) {
+          return res.status(409).json({ 
+            error: 'A dataset for this address already exists within 30 days',
+            message: `${existingDataset.createdBy} hat vor ${daysSince} Tag${daysSince !== 1 ? 'en' : ''} einen Datensatz ${existingAddress} angelegt. Du kannst seinen Datensatz ansehen aber nicht bearbeiten. In ${daysRemaining} Tag${daysRemaining !== 1 ? 'en' : ''} kannst du einen neuen Datensatz anlegen.`,
+            existingCreator: existingDataset.createdBy,
+            isOwnDataset: false,
+            daysSinceCreation: daysSince,
+            daysUntilNewAllowed: daysRemaining,
+            existingDataset: isNonExactMatch ? {
+              street: existingDataset.street,
+              houseNumber: existingDataset.houseNumber
+            } : undefined
+          });
+        } else {
+          return res.status(409).json({ 
+            error: 'A dataset for this address already exists within 30 days',
+            message: `Du hast vor ${daysSince} Tag${daysSince !== 1 ? 'en' : ''} einen Datensatz ${existingAddress} angelegt. Bitte gehe auf Verlauf und bearbeite den angelegten Datensatz. In ${daysRemaining} Tag${daysRemaining !== 1 ? 'en' : ''} kannst du einen neuen Datensatz anlegen.`,
+            existingCreator: existingDataset.createdBy,
+            isOwnDataset: true,
+            daysSinceCreation: daysSince,
+            daysUntilNewAllowed: daysRemaining,
+            existingDataset: isNonExactMatch ? {
+              street: existingDataset.street,
+              houseNumber: existingDataset.houseNumber
+            } : undefined
+          });
+        }
       }
     }
 
-    // Create the dataset
+    // Create the dataset using NORMALIZED address components
+    // This ensures all datasets use Google's standardized address format
     const dataset = await addressDatasetService.createAddressDataset({
-      normalizedAddress,
-      street: data.address.street,
-      houseNumber: data.address.number,
-      city: data.address.city,
-      postalCode: data.address.postal,
+      normalizedAddress: normalized.formattedAddress,
+      street: normalized.street,      // Use normalized street (e.g., "Schnellweider Straße")
+      houseNumber: normalized.number, // Use normalized house number
+      city: normalized.city,          // Use normalized city
+      postalCode: normalized.postal,  // Use normalized postal code
       createdBy: username,
       rawResidentData: data.rawResidentData,
       editableResidents: data.editableResidents,
@@ -106,44 +248,49 @@ router.post('/', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const address = addressSchema.parse(req.query);
+    const username = (req as any).username; // Get username for rate limiting
     
-    const normalizedAddress = await normalizeAddress(
+    const normalized = await normalizeAddress(
       address.street,
       address.number,
       address.city,
-      address.postal
+      address.postal,
+      username // Pass username for rate limiting
     );
 
+    // If address validation failed, return error
+    if (!normalized) {
+      return res.status(400).json({ 
+        error: 'Address validation failed', 
+        message: `Die Adresse "${address.street} ${address.number}, ${address.postal}" konnte nicht gefunden werden.`,
+      });
+    }
+
     // Pass house number for flexible matching (e.g., "30" should match "30,31,32,33")
-    const datasets = await addressDatasetService.getAddressDatasets(normalizedAddress, 5, address.number);
+    const datasets = await addressDatasetService.getAddressDatasets(normalized.formattedAddress, 5, address.number);
     
-    // Check if today's dataset exists and who created it (with flexible house number matching)
-    const todaysDataset = await addressDatasetService.getTodaysDatasetByAddress(normalizedAddress, address.number);
-    const username = (req as any).username;
+    // Check if recent dataset exists (within 30 days) and who created it
+    const recentDataset = await addressDatasetService.getRecentDatasetByAddress(normalized.formattedAddress, address.number, 30);
     
     // Add canEdit property and non-exact match flag to each dataset
-    const now = getBerlinTime();
-    const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
     const datasetsWithEditFlag = datasets.map(dataset => {
       const creationDate = new Date(dataset.createdAt);
-      const creationDateOnly = new Date(creationDate.getFullYear(), creationDate.getMonth(), creationDate.getDate());
-      const isToday = nowDateOnly.getTime() === creationDateOnly.getTime();
+      const isEditable = isWithin30Days(creationDate);
       const isCreator = dataset.createdBy === username;
       const isNonExactMatch = dataset.houseNumber !== address.number;
       
       return {
         ...dataset,
-        canEdit: isCreator && isToday,
+        canEdit: isCreator && isEditable,
         isNonExactMatch,
       };
     });
     
     const response = {
       datasets: datasetsWithEditFlag,
-      canCreateNew: !todaysDataset || todaysDataset.createdBy === username,
-      existingTodayBy: todaysDataset?.createdBy !== username ? todaysDataset?.createdBy : undefined,
-      normalizedAddress,
+      canCreateNew: !recentDataset || recentDataset.createdBy === username,
+      existingTodayBy: recentDataset?.createdBy !== username ? recentDataset?.createdBy : undefined,
+      normalizedAddress: normalized.formattedAddress,
     };
 
     res.json(response);
@@ -219,20 +366,14 @@ router.put('/bulk-residents', async (req, res) => {
       return res.status(404).json({ error: 'Dataset not found' });
     }
 
-    // Check if user can edit this dataset (only creator can edit, and only on creation day)
-    const now = getBerlinTime(); // Use Berlin timezone
+    // Check if user can edit this dataset (only creator can edit, and only within 30 days)
     const creationDate = new Date(dataset.createdAt);
-    
-    // Compare dates in local timezone (ignore time, only compare year/month/day)
-    const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const creationDateOnly = new Date(creationDate.getFullYear(), creationDate.getMonth(), creationDate.getDate());
-    const isToday = nowDateOnly.getTime() === creationDateOnly.getTime();
-    
+    const isEditable = isWithin30Days(creationDate);
     const usernameMatches = dataset.createdBy === username;
-    const canEdit = usernameMatches && isToday;
+    const canEdit = usernameMatches && isEditable;
     
     if (!canEdit) {
-      return res.status(403).json({ error: 'Cannot edit this dataset' });
+      return res.status(403).json({ error: 'Cannot edit this dataset. Editing is only allowed within 30 days of creation by the creator.' });
     }
 
     await addressDatasetService.bulkUpdateResidentsInDataset(
@@ -315,28 +456,19 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Dataset not found' });
     }
 
-    // Check if dataset is editable (only creator on creation day)
-    const now = getBerlinTime(); // Use Berlin timezone
+    // Check if dataset is editable (only creator within 30 days)
     const creationDate = new Date(dataset.createdAt);
-    
-    // Compare dates in local timezone (ignore time, only compare year/month/day)
-    const nowDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const creationDateOnly = new Date(creationDate.getFullYear(), creationDate.getMonth(), creationDate.getDate());
-    const isToday = nowDateOnly.getTime() === creationDateOnly.getTime();
-    
+    const isEditable = isWithin30Days(creationDate);
     const usernameMatches = dataset.createdBy === username;
-    const canEdit = usernameMatches && isToday;
+    const canEdit = usernameMatches && isEditable;
 
-    console.log('[GET /:id] Dataset edit permissions (Berlin time):');
+    console.log('[GET /:id] Dataset edit permissions (30-day window):');
     console.log('  datasetId:', id);
     console.log('  createdBy:', dataset.createdBy);
     console.log('  requestingUser:', username);
     console.log('  usernameMatches:', usernameMatches);
     console.log('  createdAt:', dataset.createdAt);
-    console.log('  now (Berlin):', now.toISOString());
-    console.log('  nowDateOnly:', nowDateOnly.toISOString());
-    console.log('  creationDateOnly:', creationDateOnly.toISOString());
-    console.log('  isToday:', isToday);
+    console.log('  isWithin30Days:', isEditable);
     console.log('  >>> canEdit:', canEdit);
 
     res.json({

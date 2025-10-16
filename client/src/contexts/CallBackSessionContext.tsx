@@ -3,8 +3,8 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 interface CallBackSessionContextType {
   currentCallBackList: any[];
   currentCallBackIndex: number;
-  callBackPeriod: 'today' | 'yesterday' | null;
-  startCallBackSession: (list: any[], period: 'today' | 'yesterday', startIndex?: number) => void;
+  callBackPeriod: 'today' | 'yesterday' | 'custom' | null;
+  startCallBackSession: (list: any[], period: 'today' | 'yesterday' | 'custom', startIndex?: number) => void;
   moveToNext: () => string | null; // Returns next dataset ID or null if at end
   moveToPrevious: () => string | null; // Returns previous dataset ID or null if at beginning
   hasNext: () => boolean;
@@ -19,10 +19,10 @@ const CallBackSessionContext = createContext<CallBackSessionContextType | undefi
 export function CallBackSessionProvider({ children }: { children: ReactNode }) {
   const [currentCallBackList, setCurrentCallBackList] = useState<any[]>([]);
   const [currentCallBackIndex, setCurrentCallBackIndex] = useState(-1);
-  const [callBackPeriod, setCallBackPeriod] = useState<'today' | 'yesterday' | null>(null);
+  const [callBackPeriod, setCallBackPeriod] = useState<'today' | 'yesterday' | 'custom' | null>(null);
   const [loadedFromCallBack, setLoadedFromCallBack] = useState(false);
 
-  const startCallBackSession = (list: any[], period: 'today' | 'yesterday', startIndex: number = 0) => {
+  const startCallBackSession = (list: any[], period: 'today' | 'yesterday' | 'custom', startIndex: number = 0) => {
     setCurrentCallBackList(list);
     setCurrentCallBackIndex(startIndex);
     setCallBackPeriod(period);
@@ -30,8 +30,9 @@ export function CallBackSessionProvider({ children }: { children: ReactNode }) {
   };
 
   const moveToNext = (): string | null => {
-    if (currentCallBackIndex > 0) {
-      const nextIndex = currentCallBackIndex - 1;
+    // Move forward in the list (increase index)
+    if (currentCallBackIndex < currentCallBackList.length - 1) {
+      const nextIndex = currentCallBackIndex + 1;
       setCurrentCallBackIndex(nextIndex);
       return currentCallBackList[nextIndex].datasetId;
     }
@@ -39,8 +40,9 @@ export function CallBackSessionProvider({ children }: { children: ReactNode }) {
   };
 
   const moveToPrevious = (): string | null => {
-    if (currentCallBackIndex < currentCallBackList.length - 1) {
-      const prevIndex = currentCallBackIndex + 1;
+    // Move backward in the list (decrease index)
+    if (currentCallBackIndex > 0) {
+      const prevIndex = currentCallBackIndex - 1;
       setCurrentCallBackIndex(prevIndex);
       return currentCallBackList[prevIndex].datasetId;
     }
@@ -48,11 +50,13 @@ export function CallBackSessionProvider({ children }: { children: ReactNode }) {
   };
 
   const hasNext = (): boolean => {
-    return currentCallBackIndex > 0;
+    // Can move forward if not at the end
+    return currentCallBackIndex < currentCallBackList.length - 1;
   };
 
   const hasPrevious = (): boolean => {
-    return currentCallBackIndex < currentCallBackList.length - 1;
+    // Can move backward if not at the beginning
+    return currentCallBackIndex > 0;
   };
 
   const clearSession = () => {

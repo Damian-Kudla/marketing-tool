@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import crypto from 'crypto';
 import type { AddressDataset, EditableResident } from '../../shared/schema';
+import { checkRateLimit, incrementRateLimit } from '../middleware/rateLimit';
 
 // Helper function to get current time in Berlin timezone (MEZ/MESZ)
 function getBerlinTime(): Date {
@@ -197,10 +198,19 @@ class DatasetCache {
   }
 
   // Add or update dataset in cache and mark as dirty
-  set(dataset: AddressDataset) {
+  set(dataset: AddressDataset, markDirty: boolean = true) {
     this.cache.set(dataset.id, dataset);
-    this.dirtyDatasets.add(dataset.id);
-    console.log(`[DatasetCache] Dataset ${dataset.id} updated in cache and marked dirty`);
+    if (markDirty) {
+      this.dirtyDatasets.add(dataset.id);
+      console.log(`[DatasetCache] Dataset ${dataset.id} updated in cache and marked dirty`);
+    } else {
+      console.log(`[DatasetCache] Dataset ${dataset.id} added to cache (already in sheets)`);
+    }
+  }
+
+  // Add new dataset to cache without marking dirty (already written to sheets)
+  addNew(dataset: AddressDataset) {
+    this.set(dataset, false);
   }
 
   // Force immediate sync of all dirty datasets
@@ -262,10 +272,12 @@ export interface SheetsService {
 export interface AddressSheetsService {
   createAddressDataset(dataset: Omit<AddressDataset, 'id' | 'createdAt'>): Promise<AddressDataset>;
   getAddressDatasets(normalizedAddress: string, limit?: number, houseNumber?: string): Promise<AddressDataset[]>;
+  getAllDatasets(): Promise<AddressDataset[]>;
   getDatasetById(datasetId: string): Promise<AddressDataset | null>;
   updateResidentInDataset(datasetId: string, residentIndex: number, resident: EditableResident | null): Promise<void>;
   bulkUpdateResidentsInDataset(datasetId: string, editableResidents: EditableResident[]): Promise<void>;
   getTodaysDatasetByAddress(normalizedAddress: string, houseNumber?: string): Promise<AddressDataset | null>;
+  getRecentDatasetByAddress(normalizedAddress: string, houseNumber?: string, daysBack?: number): Promise<AddressDataset | null>;
   getUserDatasetsByDate(username: string, date: Date): Promise<AddressDataset[]>;
 }
 
@@ -484,8 +496,8 @@ class AddressDatasetService implements AddressSheetsService {
         }
       });
 
-      // Add to cache
-      datasetCache.set(fullDataset);
+      // Add to cache WITHOUT marking dirty (already written to sheets)
+      datasetCache.addNew(fullDataset);
 
       console.log(`Created address dataset ${id} for ${dataset.normalizedAddress}`);
       return fullDataset;
@@ -498,6 +510,11 @@ class AddressDatasetService implements AddressSheetsService {
   async getAddressDatasets(normalizedAddress: string, limit: number = 5, houseNumber?: string): Promise<AddressDataset[]> {
     // Use cache instead of reading from sheets, pass house number for flexible matching
     return datasetCache.getByAddress(normalizedAddress, limit, houseNumber);
+  }
+
+  async getAllDatasets(): Promise<AddressDataset[]> {
+    // Return all datasets from cache
+    return datasetCache.getAll();
   }
 
   async getDatasetById(datasetId: string): Promise<AddressDataset | null> {
@@ -597,6 +614,22 @@ class AddressDatasetService implements AddressSheetsService {
     return null;
   }
 
+  async getRecentDatasetByAddress(normalizedAddress: string, houseNumber?: string, daysBack: number = 30): Promise<AddressDataset | null> {
+    const now = getBerlinTime();
+    const cutoffDate = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000);
+
+    // Use flexible house number matching when searching for recent dataset
+    const datasets = await this.getAddressDatasets(normalizedAddress, 50, houseNumber);
+    
+    for (const dataset of datasets) {
+      if (dataset.createdAt >= cutoffDate && dataset.createdAt <= now) {
+        return dataset;
+      }
+    }
+
+    return null;
+  }
+
   async getUserDatasetsByDate(username: string, date: Date): Promise<AddressDataset[]> {
     const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
@@ -640,7 +673,9 @@ class AddressDatasetService implements AddressSheetsService {
         }
         return null;
       })
-      .filter(cb => cb !== null) as Array<{
+      .filter(cb => cb !== null)
+      // Sort by createdAt descending (newest first) - this is the default display order
+      .sort((a, b) => new Date(b!.createdAt).getTime() - new Date(a!.createdAt).getTime()) as Array<{
         datasetId: string;
         address: string;
         notReachedCount: number;
@@ -715,33 +750,44 @@ class AddressDatasetService implements AddressSheetsService {
       const rows = response.data.values || [];
       const rowIndex = rows.findIndex((row: any[]) => row[0] === dataset.id);
 
+      const rowData = [
+        dataset.id,
+        dataset.normalizedAddress,
+        dataset.street,
+        dataset.houseNumber,
+        dataset.city || '',
+        dataset.postalCode,
+        dataset.createdBy,
+        formatBerlinTimeISO(dataset.createdAt),
+        JSON.stringify(dataset.rawResidentData),
+        this.serializeResidents(dataset.editableResidents),
+      ];
+
       if (rowIndex === -1) {
-        throw new Error(`Dataset ${dataset.id} not found in sheets`);
+        // Dataset not found - create it instead of throwing error
+        console.log(`[writeDatasetToSheets] Dataset ${dataset.id} not found in sheets - creating new row`);
+        await sheetsClient.spreadsheets.values.append({
+          spreadsheetId: this.ADDRESSES_SHEET_ID,
+          range: `${this.ADDRESSES_WORKSHEET_NAME}!A:J`,
+          valueInputOption: 'RAW',
+          resource: {
+            values: [rowData]
+          }
+        });
+        console.log(`[writeDatasetToSheets] Successfully created dataset ${dataset.id} in sheets`);
+      } else {
+        // Update existing row (row index + 2 because: 0-indexed + header row + 1)
+        const sheetRow = rowIndex + 2;
+        await sheetsClient.spreadsheets.values.update({
+          spreadsheetId: this.ADDRESSES_SHEET_ID,
+          range: `${this.ADDRESSES_WORKSHEET_NAME}!A${sheetRow}:J${sheetRow}`,
+          valueInputOption: 'RAW',
+          resource: {
+            values: [rowData]
+          }
+        });
+        console.log(`[writeDatasetToSheets] Successfully updated dataset ${dataset.id} at row ${sheetRow}`);
       }
-
-      // Update the row (row index + 2 because: 0-indexed + header row + 1)
-      const sheetRow = rowIndex + 2;
-      await sheetsClient.spreadsheets.values.update({
-        spreadsheetId: this.ADDRESSES_SHEET_ID,
-        range: `${this.ADDRESSES_WORKSHEET_NAME}!A${sheetRow}:J${sheetRow}`,
-        valueInputOption: 'RAW',
-        resource: {
-          values: [[
-            dataset.id,
-            dataset.normalizedAddress,
-            dataset.street,
-            dataset.houseNumber,
-            dataset.city,
-            dataset.postalCode,
-            dataset.createdBy,
-            formatBerlinTimeISO(dataset.createdAt),
-            JSON.stringify(dataset.rawResidentData),
-            this.serializeResidents(dataset.editableResidents),
-          ]]
-        }
-      });
-
-      console.log(`[writeDatasetToSheets] Successfully wrote dataset ${dataset.id} to row ${sheetRow}`);
     } catch (error) {
       console.error(`[writeDatasetToSheets] Error writing dataset ${dataset.id}:`, error);
       throw error;
@@ -1237,36 +1283,130 @@ class AppointmentService {
 export const appointmentService = new AppointmentService();
 
 // Address normalization function using Google Geocoding API
+export interface NormalizedAddress {
+  formattedAddress: string;
+  street: string;
+  number: string;
+  city: string;
+  postal: string;
+}
+
+// Helper function to extract address components from Google Geocoding API result
+function extractAddressComponents(geocodingResult: any): NormalizedAddress {
+  const addressComponents = geocodingResult.address_components;
+  const formattedAddress = geocodingResult.formatted_address;
+  
+  let street = '';
+  let number = '';
+  let city = '';
+  let postal = '';
+  
+  // Extract components from Google's address_components array
+  for (const component of addressComponents) {
+    const types = component.types;
+    
+    if (types.includes('route')) {
+      street = component.long_name;
+    } else if (types.includes('street_number')) {
+      number = component.long_name;
+    } else if (types.includes('locality')) {
+      city = component.long_name;
+    } else if (types.includes('postal_code')) {
+      postal = component.long_name;
+    }
+  }
+  
+  return {
+    formattedAddress,
+    street,
+    number,
+    city,
+    postal,
+  };
+}
+
 export async function normalizeAddress(
   street: string,
   number: string,
   city?: string,
-  postal?: string
-): Promise<string> {
+  postal?: string,
+  username?: string // Added username parameter for rate limiting
+): Promise<NormalizedAddress | null> {
   try {
     const apiKey = process.env.GOOGLE_GEOCODING_API_KEY;
     if (!apiKey) {
-      // Fallback to simple concatenation if no API key
-      return `${street} ${number}, ${postal} ${city || ''}`.trim();
+      console.warn('Google Geocoding API key not configured - address validation disabled');
+      // Without API key, we can't validate the address properly
+      return null;
+    }
+
+    // Check rate limit if username is provided
+    if (username) {
+      const rateLimitCheck = checkRateLimit(username, 'geocoding');
+      if (rateLimitCheck.limited) {
+        console.warn(`[normalizeAddress] Rate limit exceeded for user: ${username}`);
+        throw new Error(rateLimitCheck.message);
+      }
+      // Increment counter before making API call
+      incrementRateLimit(username, 'geocoding');
     }
 
     // Construct address string for geocoding
     const addressString = `${street} ${number}, ${postal} ${city || ''}, Deutschland`.trim();
     const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addressString)}&key=${apiKey}&language=de`;
     
+    console.log('[normalizeAddress] Validating:', addressString);
     const response = await fetch(url);
     const data = await response.json();
 
     if (data.status === "OK" && data.results && data.results.length > 0) {
-      // Use the formatted address from Google
-      return data.results[0].formatted_address;
+      const result = data.results[0];
+      const addressComponents = result.address_components;
+      
+      // Validate that the result contains a street (route) component
+      const hasRoute = addressComponents.some((component: any) => 
+        component.types.includes('route')
+      );
+      
+      // Validate that the result contains a street number
+      const hasStreetNumber = addressComponents.some((component: any) => 
+        component.types.includes('street_number')
+      );
+      
+      // Check location_type for precision
+      const locationType = result.geometry?.location_type;
+      
+      console.log('[normalizeAddress] Validation result:', {
+        hasRoute,
+        hasStreetNumber,
+        locationType,
+        formatted: result.formatted_address
+      });
+      
+      // Address must have a street name (route)
+      if (!hasRoute) {
+        console.warn('[normalizeAddress] Invalid: No street found in geocoding result');
+        return null;
+      }
+      
+      // If we have high precision (ROOFTOP or RANGE_INTERPOLATED), accept it
+      if (locationType === 'ROOFTOP' || locationType === 'RANGE_INTERPOLATED') {
+        return extractAddressComponents(result);
+      }
+      
+      // For lower precision, require at least street number to be present
+      if (!hasStreetNumber) {
+        console.warn('[normalizeAddress] Invalid: Low precision and no street number found');
+        return null;
+      }
+      
+      return extractAddressComponents(result);
     }
     
-    // Fallback to simple concatenation
-    return `${street} ${number}, ${postal} ${city || ''}`.trim();
+    console.warn('[normalizeAddress] Invalid: Geocoding returned no results for:', addressString);
+    return null;
   } catch (error) {
-    console.error('Address normalization failed:', error);
-    // Fallback to simple concatenation
-    return `${street} ${number}, ${postal} ${city || ''}`.trim();
+    console.error('[normalizeAddress] Error during address validation:', error);
+    return null;
   }
 }

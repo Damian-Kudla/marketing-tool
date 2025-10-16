@@ -16,6 +16,7 @@ import {
   type OCRResponse
 } from "@shared/schema";
 import { requireAuth, type AuthenticatedRequest } from "./middleware/auth";
+import { rateLimitMiddleware } from "./middleware/rateLimit";
 import { GoogleSheetsLoggingService } from "./services/googleSheetsLogging";
 import { authRouter } from "./routes/auth";
 import addressDatasetsRouter from "./routes/addressDatasets";
@@ -136,6 +137,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/callbacks/custom/:date", requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const username = req.username;
+      if (!username) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      // Parse date from URL parameter (format: YYYY-MM-DD)
+      const dateStr = req.params.date;
+      const customDate = new Date(dateStr);
+      
+      // Validate date
+      if (isNaN(customDate.getTime())) {
+        return res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD" });
+      }
+      
+      const callBacks = await addressDatasetService.getCallBackAddresses(username, customDate);
+      res.json(callBacks);
+    } catch (error) {
+      console.error("Error getting custom date call backs:", error);
+      res.status(500).json({ error: "Failed to get call backs" });
+    }
+  });
+
   // Appointment endpoints
   app.post("/api/appointments", requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
@@ -216,85 +241,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
   });
   
-  app.post("/api/geocode", requireAuth, async (req: AuthenticatedRequest, res) => {
+  app.post("/api/geocode", requireAuth, rateLimitMiddleware('geocoding'), async (req: AuthenticatedRequest, res) => {
     try {
-      const { latitude, longitude } = geocodingRequestSchema.parse(req.body);
-      
-      const apiKey = process.env.GOOGLE_GEOCODING_API_KEY;
-      if (!apiKey) {
-        return res.status(500).json({ error: "Geocoding API key not configured" });
+      const body = geocodingRequestSchema.parse(req.body);
+      const { latitude, longitude } = body;
+
+      const geocodingKey = process.env.GOOGLE_GEOCODING_API_KEY;
+      if (!geocodingKey) {
+        return res.status(503).json({ error: "Geocoding API key not configured" });
       }
 
-      const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${apiKey}&language=de`;
+      const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${geocodingKey}&language=de`;
       const response = await fetch(url);
       const data = await response.json();
 
-      if (data.status !== "OK" || !data.results || data.results.length === 0) {
-        return res.status(400).json({ error: "Unable to geocode location" });
+      if (data.status !== "OK") {
+        return res.status(400).json({ error: "Geocoding failed" });
       }
 
       const result = data.results[0];
-      const components = result.address_components;
+      const addressComponents = result.address_components;
 
-      const getComponent = (types: string[]) => {
-        const component = components.find((c: any) => 
-          types.some(type => c.types.includes(type))
-        );
-        return component?.long_name || "";
+      const address: Partial<Address> = {
+        street: '',
+        number: '',
+        postal: '',
+        city: ''
       };
 
-      const address: Address = {
-        street: getComponent(["route"]),
-        number: getComponent(["street_number"]),
-        city: getComponent(["locality", "postal_town"]),
-        postal: getComponent(["postal_code"]),
-        country: getComponent(["country"])
-      };
-
-      // Validate that the address is in Germany
-      if (address.country) {
-        const countryLower = address.country.toLowerCase();
-        if (countryLower !== 'deutschland' && countryLower !== 'germany') {
-          return res.status(400).json({ 
-            error: "This service is only available for addresses in Germany",
-            errorCode: "NON_GERMAN_ADDRESS"
-          });
+      for (const component of addressComponents) {
+        if (component.types.includes('route')) {
+          address.street = component.long_name;
+        } else if (component.types.includes('street_number')) {
+          address.number = component.long_name;
+        } else if (component.types.includes('postal_code')) {
+          address.postal = component.long_name;
+        } else if (component.types.includes('locality')) {
+          address.city = component.long_name;
         }
       }
-
-      // Validate postal code for user (if postal codes are assigned)
-      if (address.postal && req.username) {
-        const { googleSheetsService } = await import('./services/googleSheets');
-        const allowedPostalCodes = await googleSheetsService.getUserPostalCodes(req.username);
-        
-        // Only check if user has postal code restrictions
-        if (allowedPostalCodes.length > 0) {
-          const isAllowed = allowedPostalCodes.includes(address.postal.trim());
-          
-          if (!isAllowed) {
-            const allowedCodesText = allowedPostalCodes.join(', ');
-            return res.status(403).json({
-              error: `Du bist nicht in deinem Gebiet. Dein Gebiet ist ${allowedCodesText}, du bist aber in ${address.postal}. Bitte gehe in dein Gebiet oder kontaktiere deinen Leiter.`,
-              errorCode: "POSTAL_CODE_RESTRICTED",
-              allowedPostalCodes,
-              currentPostalCode: address.postal
-            });
-          }
-        }
-      }
-
-      // Log the geocoding request
-      const addressString = `${address.street} ${address.number}, ${address.city} ${address.postal}`.trim();
-      await GoogleSheetsLoggingService.logUserActivity(req, addressString);
 
       res.json(address);
     } catch (error) {
       console.error("Geocoding error:", error);
       res.status(400).json({ error: "Invalid request" });
     }
-  });
-
-  app.post("/api/ocr", requireAuth, upload.single("image"), async (req: AuthenticatedRequest, res) => {
+  });  app.post("/api/ocr", requireAuth, rateLimitMiddleware('vision'), upload.single("image"), async (req: AuthenticatedRequest, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No image file provided" });

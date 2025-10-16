@@ -30,10 +30,11 @@ import {
   Dialog,
   DialogContent,
 } from '@/components/ui/dialog';
-import { User, LogOut, ChevronDown, History, LayoutGrid, List, ArrowLeftToLine, Calendar, Languages, MessageSquare, FastForward } from 'lucide-react';
+import { User, LogOut, ChevronDown, History, LayoutGrid, List, ArrowLeftToLine, Calendar, Languages, MessageSquare, FastForward, Filter } from 'lucide-react';
 import { UserHistory } from './UserHistory';
 import { CallBackList } from './CallBackList';
 import { AppointmentsList } from './AppointmentsList';
+import { LeonFilter } from './LeonFilter';
 import { datasetAPI } from '@/services/api';
 
 interface UserButtonProps {
@@ -50,6 +51,7 @@ export function UserButton({ onDatasetLoad }: UserButtonProps) {
   const [showHistory, setShowHistory] = useState(false);
   const [showCallBacks, setShowCallBacks] = useState(false);
   const [showAppointments, setShowAppointments] = useState(false);
+  const [showLeonFilter, setShowLeonFilter] = useState(false);
 
   const toggleLanguage = () => {
     const newLang = i18n.language === 'en' ? 'de' : 'en';
@@ -132,6 +134,14 @@ export function UserButton({ onDatasetLoad }: UserButtonProps) {
         >
           <ArrowLeftToLine className="w-4 h-4 mr-2" />
           Call Back Liste
+        </DropdownMenuItem>
+
+        <DropdownMenuItem 
+          className="cursor-pointer"
+          onClick={() => setShowLeonFilter(true)}
+        >
+          <Filter className="w-4 h-4 mr-2" />
+          Filter wie in Leon
         </DropdownMenuItem>
 
         <DropdownMenuItem 
@@ -278,6 +288,15 @@ export function UserButton({ onDatasetLoad }: UserButtonProps) {
         />
       </DialogContent>
     </Dialog>
+
+    {/* Leon Filter Dialog */}
+    <LeonFilter
+      isOpen={showLeonFilter}
+      onClose={() => setShowLeonFilter(false)}
+      onLoadDataset={async (datasetId) => {
+        await handleLoadDataset(datasetId);
+      }}
+    />
     </>
   );
 }

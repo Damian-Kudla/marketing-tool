@@ -4,13 +4,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { MapPin, Loader2, Check, Search } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { Checkbox } from '@/components/ui/checkbox';
+import { MapPin, Loader2, Check, Search, Plus, Minus } from 'lucide-react';
+import { useFilteredToast } from '@/hooks/use-filtered-toast';
 import { geocodeAPI, addressAPI } from '@/services/api';
 
 interface GPSAddressFormProps {
   onAddressDetected?: (address: Address) => void;
   onAddressSearch?: (customers: any[]) => void;
+  initialAddress?: Address | null;
 }
 
 export interface Address {
@@ -21,20 +23,64 @@ export interface Address {
   country: string;
 }
 
-export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: GPSAddressFormProps) {
+export default function GPSAddressForm({ onAddressDetected, onAddressSearch, initialAddress }: GPSAddressFormProps) {
   const { t } = useTranslation();
-  const { toast } = useToast();
+  const { toast } = useFilteredToast();
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
   const [detected, setDetected] = useState(false);
   const [houseNumberError, setHouseNumberError] = useState(false);
-  const [address, setAddress] = useState<Address>({
+  const [onlyEven, setOnlyEven] = useState(false);
+  const [onlyOdd, setOnlyOdd] = useState(false);
+  const [address, setAddress] = useState<Address>(initialAddress || {
     street: '',
     number: '',
     city: '',
     postal: '',
     country: ''
   });
+
+  // Update internal address state when initialAddress prop changes
+  // Also reset to empty when initialAddress is null (Reset button clicked)
+  useEffect(() => {
+    if (initialAddress) {
+      setAddress(initialAddress);
+    } else if (initialAddress === null) {
+      // Reset to empty state
+      setAddress({
+        street: '',
+        number: '',
+        city: '',
+        postal: '',
+        country: ''
+      });
+    }
+  }, [initialAddress]);
+
+  // Check if house number is a natural number (positive integer)
+  const isNaturalNumber = (value: string): boolean => {
+    const trimmed = value.trim();
+    const num = parseInt(trimmed, 10);
+    return /^\d+$/.test(trimmed) && num > 0 && num.toString() === trimmed;
+  };
+
+  const canShowPlusMinus = isNaturalNumber(address.number);
+
+  const incrementHouseNumber = () => {
+    if (canShowPlusMinus) {
+      const current = parseInt(address.number, 10);
+      setAddress({ ...address, number: (current + 1).toString() });
+    }
+  };
+
+  const decrementHouseNumber = () => {
+    if (canShowPlusMinus) {
+      const current = parseInt(address.number, 10);
+      if (current > 1) {
+        setAddress({ ...address, number: (current - 1).toString() });
+      }
+    }
+  };
 
   // Notify parent component whenever address changes
   // Using JSON.stringify to detect actual changes and prevent infinite loops
@@ -43,13 +89,14 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: G
     if (address.street || address.postal || address.number) {
       onAddressDetected?.(address);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     address.street, 
     address.number, 
     address.city, 
     address.postal, 
-    address.country, 
-    onAddressDetected
+    address.country
+    // DO NOT include onAddressDetected - causes infinite loop
   ]);
 
   const detectLocation = async () => {
@@ -82,8 +129,19 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: G
           } catch (error: any) {
             console.error('Geocoding error:', error);
             
-            // Check for postal code restriction error
-            if (error?.response?.data?.errorCode === 'POSTAL_CODE_RESTRICTED') {
+            // Check for rate limit error (429)
+            if (error?.response?.status === 429) {
+              const errorData = error.response?.data || {};
+              const errorMessage = errorData.message || 'Zu viele Standortabfragen. Bitte warte eine Minute.';
+              
+              toast({
+                variant: 'destructive',
+                title: 'Rate Limit erreicht',
+                description: errorMessage,
+                duration: 10000,
+              });
+            } else if (error?.response?.data?.errorCode === 'POSTAL_CODE_RESTRICTED') {
+              // Check for postal code restriction error
               toast({
                 variant: 'destructive',
                 title: 'Postleitzahl nicht erlaubt',
@@ -121,25 +179,67 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: G
     }
   };
 
-  const searchAddress = async () => {
-    // Check for dash in house number
-    if (address.number && address.number.includes('-')) {
-      return; // Don't search if there's a dash
+  // Helper function to expand range notation (e.g., "1-5" -> [1,2,3,4,5])
+  const expandHouseNumberRange = (rangeStr: string): string[] => {
+    const parts = rangeStr.split('-').map(p => p.trim());
+    
+    // Must have exactly 2 parts
+    if (parts.length !== 2) return [rangeStr];
+    
+    // Both parts must be valid integers
+    const start = parseInt(parts[0]);
+    const end = parseInt(parts[1]);
+    
+    if (isNaN(start) || isNaN(end)) return [rangeStr];
+    
+    // Start must be less than end
+    if (start >= end) return [rangeStr];
+    
+    // Start must be positive
+    if (start < 1) return [rangeStr];
+    
+    // Generate range
+    const numbers: number[] = [];
+    for (let i = start; i <= end; i++) {
+      // Apply even/odd filters
+      if (onlyEven && i % 2 !== 0) continue;
+      if (onlyOdd && i % 2 === 0) continue;
+      numbers.push(i);
     }
     
+    return numbers.map(n => n.toString());
+  };
+
+  const searchAddress = async () => {
     setSearching(true);
     
     try {
-      // Handle multiple house numbers separated by comma
-      const houseNumbers = address.number
+      // Expand ranges and handle multiple house numbers
+      const inputNumbers = address.number
         .split(',')
         .map(n => n.trim())
         .filter(n => n.length > 0);
       
+      let allHouseNumbers: string[] = [];
+      
+      for (const input of inputNumbers) {
+        if (input.includes('-')) {
+          // Expand range
+          const expanded = expandHouseNumberRange(input);
+          allHouseNumbers = [...allHouseNumbers, ...expanded];
+        } else {
+          // Regular number
+          allHouseNumbers.push(input);
+        }
+      }
+      
+      // Remove duplicates
+      allHouseNumbers = Array.from(new Set(allHouseNumbers));
+      
       let allCustomers: any[] = [];
       
       // Search for each house number
-      for (const houseNumber of houseNumbers) {
+      for (const houseNumber of allHouseNumbers) {
         const searchParams: Partial<Address> = {};
         if (address.street.trim()) searchParams.street = address.street;
         searchParams.number = houseNumber;
@@ -160,14 +260,18 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: G
         toast({
           title: t('address.searchSuccess'),
           description: t('results.empty'),
+          category: 'system',
         });
       } else {
         toast({
           title: t('address.searchSuccess'),
           description: `${uniqueCustomers.length} ${t('address.searchSuccessDesc')}`,
+          category: 'system',
         });
       }
       
+      // Set the address in parent component so it shows in header
+      onAddressDetected?.(address);
       onAddressSearch?.(uniqueCustomers);
     } catch (error) {
       console.error('Address search error:', error);
@@ -184,11 +288,14 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: G
   // Check if house number contains dash
   const hasDashInNumber = address.number && address.number.includes('-');
   const hasAddressData = address.postal || address.street;
-  const isSearchDisabled = searching || !!hasDashInNumber;
+  const isSearchDisabled = searching;
 
-  // Update house number error state
+  // Reset even/odd filters when dash is removed
   useEffect(() => {
-    setHouseNumberError(!!hasDashInNumber);
+    if (!hasDashInNumber) {
+      setOnlyEven(false);
+      setOnlyOdd(false);
+    }
   }, [hasDashInNumber]);
 
   return (
@@ -231,16 +338,76 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch }: G
               value={address.number}
               onChange={(e) => setAddress({ ...address, number: e.target.value })}
               data-testid="input-number"
-              className={`mt-1.5 min-h-11 ${houseNumberError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+              className="mt-1.5 min-h-11"
+              placeholder="z.B. 1,2,3 oder 1-5"
             />
-            {houseNumberError && (
-              <p className="text-sm text-red-600 mt-1.5">
-                Wenn das Klingelschild mehrere Hausnummern abdeckt, gebe bitte alle Hausnummern mit Komma getrennt ein. Anstatt 1-5, schreibe bitte beispielsweise 1,2,3,4,5 falls zutreffend.
-              </p>
+            {/* Plus/Minus buttons directly under house number */}
+            {canShowPlusMinus && (
+              <div className="flex gap-2 mt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={decrementHouseNumber}
+                  disabled={parseInt(address.number, 10) <= 1}
+                  className="h-11 w-full"
+                  title="Hausnummer verringern"
+                >
+                  <Minus className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={incrementHouseNumber}
+                  className="h-11 w-full"
+                  title="Hausnummer erhöhen"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+            {hasDashInNumber && (
+              <div className="mt-3 space-y-2 p-3 bg-muted rounded-md">
+                <p className="text-xs text-muted-foreground mb-2">
+                  Bereich wird automatisch erweitert (z.B. 1-5 → 1,2,3,4,5)
+                </p>
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="onlyEven"
+                      checked={onlyEven}
+                      onCheckedChange={(checked) => {
+                        setOnlyEven(!!checked);
+                        if (checked) setOnlyOdd(false); // Uncheck odd when even is checked
+                      }}
+                      data-testid="checkbox-even"
+                    />
+                    <Label htmlFor="onlyEven" className="text-sm cursor-pointer">
+                      Nur gerade Nummern
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="onlyOdd"
+                      checked={onlyOdd}
+                      onCheckedChange={(checked) => {
+                        setOnlyOdd(!!checked);
+                        if (checked) setOnlyEven(false); // Uncheck even when odd is checked
+                      }}
+                      data-testid="checkbox-odd"
+                    />
+                    <Label htmlFor="onlyOdd" className="text-sm cursor-pointer">
+                      Nur ungerade Nummern
+                    </Label>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>
         
+        {/* Postal code field - full width */}
         <div>
           <Label htmlFor="postal" className="text-sm font-medium">{t('address.postal')}</Label>
           <Input

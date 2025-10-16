@@ -9,6 +9,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { ResidentEditPopup } from './ResidentEditPopup';
 import type { EditableResident, ResidentStatus } from '@/../../shared/schema';
+import { STATUS_LABELS } from '@/constants/statuses';
 
 interface AddressOverviewProps {
   isOpen: boolean;
@@ -97,17 +98,7 @@ export function AddressOverview({ isOpen, onClose, address, residents, asDialog 
 
   const getStatusText = (status?: ResidentStatus) => {
     if (!status) return '';
-    
-    // Spezielle Übersetzungen für deutsche Anzeige
-    const translations: Record<ResidentStatus, string> = {
-      no_interest: 'Kein Interesse',
-      not_reached: 'Nicht erreicht',
-      interest_later: 'Interesse später',
-      appointment: 'Termin',
-      written: 'Geschrieben'
-    };
-    
-    return translations[status] || t(`resident.status.${status}`, status);
+    return STATUS_LABELS[status] || t(`resident.status.${status}`, status);
   };
 
   // Handle resident click for editing
@@ -201,6 +192,11 @@ export function AddressOverview({ isOpen, onClose, address, residents, asDialog 
                               {resident.status && (
                                 <div className="text-xs mt-1 leading-tight">
                                   {getStatusText(resident.status)}
+                                </div>
+                              )}
+                              {resident.notes && (
+                                <div className="text-xs text-muted-foreground mt-1 leading-tight truncate" title={resident.notes}>
+                                  {resident.notes.length > 15 ? `${resident.notes.substring(0, 15)}...` : resident.notes}
                                 </div>
                               )}
                               {resident.door && (

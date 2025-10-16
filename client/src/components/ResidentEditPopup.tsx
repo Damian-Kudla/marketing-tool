@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useToast } from '@/hooks/use-toast';
+import { useFilteredToast } from '@/hooks/use-filtered-toast';
 import type { EditableResident, ResidentCategory, ResidentStatus } from '@/../../shared/schema';
 
 interface ResidentEditPopupProps {
@@ -43,7 +43,7 @@ export function ResidentEditPopup({
   addressDataset,
 }: ResidentEditPopupProps) {
   const { t } = useTranslation();
-  const { toast } = useToast();
+  const { toast } = useFilteredToast();
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<EditableResident>({
@@ -52,10 +52,10 @@ export function ResidentEditPopup({
     isFixed: false,
   });
   
-  // Additional state for appointment details
+  // Additional state for appointment details and general notes
   const [appointmentDate, setAppointmentDate] = useState('');
   const [appointmentTime, setAppointmentTime] = useState('');
-  const [appointmentNotes, setAppointmentNotes] = useState('');
+  const [generalNotes, setGeneralNotes] = useState('');
 
   useEffect(() => {
     if (resident && isOpen) {
@@ -63,7 +63,7 @@ export function ResidentEditPopup({
       // Reset appointment fields when opening popup
       setAppointmentDate('');
       setAppointmentTime('');
-      setAppointmentNotes('');
+      setGeneralNotes(resident.notes || ''); // Load existing notes
     } else if (!resident && isOpen) {
       setFormData({
         name: '',
@@ -72,7 +72,7 @@ export function ResidentEditPopup({
       });
       setAppointmentDate('');
       setAppointmentTime('');
-      setAppointmentNotes('');
+      setGeneralNotes('');
     }
   }, [resident, isOpen]);
 
@@ -156,11 +156,17 @@ export function ResidentEditPopup({
         }
       }
       
-      await onSave(formData);
-      console.log('[ResidentEditPopup] onSave completed successfully');
+      // Save general notes to formData before saving
+      const residentToSave = {
+        ...formData,
+        notes: generalNotes.trim() || undefined, // Only save notes if non-empty
+      };
+      
+      await onSave(residentToSave);
+      console.log('[ResidentEditPopup] onSave completed successfully with notes:', residentToSave.notes);
       
       // If status is 'appointment', create appointment in backend
-      if (formData.status === 'appointment' && appointmentDate && appointmentTime && 
+      if (residentToSave.status === 'appointment' && appointmentDate && appointmentTime && 
           currentDatasetId && addressDataset) {
         try {
           // Build address string from addressDataset
@@ -176,11 +182,11 @@ export function ResidentEditPopup({
             },
             body: JSON.stringify({
               datasetId: currentDatasetId,
-              residentName: formData.name,
+              residentName: residentToSave.name,
               address: addressString,
               appointmentDate,
               appointmentTime,
-              notes: appointmentNotes,
+              notes: generalNotes, // Use general notes for appointment as well
             }),
           });
 
@@ -365,21 +371,22 @@ export function ResidentEditPopup({
                           required
                         />
                       </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="appointmentNotes">
-                          Notizen <span className="text-muted-foreground text-xs">(optional)</span>
-                        </Label>
-                        <Input
-                          id="appointmentNotes"
-                          value={appointmentNotes}
-                          onChange={(e) => setAppointmentNotes(e.target.value)}
-                          placeholder="z.B. Zusätzliche Informationen zum Termin"
-                          disabled={loading}
-                        />
-                      </div>
                     </>
                   )}
+                  
+                  {/* General notes field for all statuses */}
+                  <div className="space-y-2">
+                    <Label htmlFor="generalNotes">
+                      Notizen <span className="text-muted-foreground text-xs">(optional)</span>
+                    </Label>
+                    <Input
+                      id="generalNotes"
+                      value={generalNotes}
+                      onChange={(e) => setGeneralNotes(e.target.value)}
+                      placeholder="z.B. Zusätzliche Informationen"
+                      disabled={loading}
+                    />
+                  </div>
                   
                   {/* Floor and door fields for all statuses */}
                   <div className="space-y-2">
