@@ -94,9 +94,9 @@ export function ClickableAddressHeader({
             )}
           </div>
           {datasetStateText && (
-            <div className={`text-xs ${getDatasetStateColor()}`}>
-              <span className="whitespace-nowrap ml-5">{datasetStateText.prefix}</span>{' '}
-              <span className="inline-block ml-5">{datasetStateText.suffix}</span>
+            <div className={`text-xs ${getDatasetStateColor()} ml-5`}>
+              <div className="whitespace-nowrap">{datasetStateText.prefix}</div>
+              <div>{datasetStateText.suffix}</div>
             </div>
           )}
         </div>
