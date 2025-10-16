@@ -19,17 +19,22 @@ interface AddressDataset {
 interface AddressDatasetsProps {
   address: Address;
   onLoadDataset: (datasetId: string) => void;
+  shouldLoad?: boolean; // Signal to load datasets
 }
 
-export function AddressDatasets({ address, onLoadDataset }: AddressDatasetsProps) {
+export function AddressDatasets({ address, onLoadDataset, shouldLoad }: AddressDatasetsProps) {
   const { t } = useTranslation();
   const [datasets, setDatasets] = useState<AddressDataset[]>([]);
   const [loading, setLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
+  // Load datasets only when explicitly triggered via shouldLoad prop
+  // This prevents unnecessary geocoding API calls while typing
   useEffect(() => {
-    loadDatasets();
-  }, [address]);
+    if (shouldLoad) {
+      loadDatasets();
+    }
+  }, [shouldLoad]);
 
   const loadDatasets = async () => {
     setLoading(true);

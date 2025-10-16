@@ -541,6 +541,7 @@ export default function ScannerPage() {
               <AddressDatasets 
                 address={address}
                 onLoadDataset={handleDatasetLoadById}
+                shouldLoad={showDatasets}
               />
             )}
             
@@ -607,6 +608,7 @@ export default function ScannerPage() {
                 <AddressDatasets 
                   address={address}
                   onLoadDataset={handleDatasetLoadById}
+                  shouldLoad={showDatasets}
                 />
               )}
               
