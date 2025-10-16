@@ -42,13 +42,16 @@ export function AppointmentsList({ onLoadDataset }: AppointmentsListProps) {
     queryKey: ['/api/appointments/upcoming'],
     queryFn: async () => {
       const response = await fetch('/api/appointments/upcoming', {
-        credentials: 'include'
+        credentials: 'include',
+        cache: 'no-store' // Prevent browser caching
       });
       if (!response.ok) {
         throw new Error("Fehler beim Laden der Termine");
       }
       return response.json();
-    }
+    },
+    staleTime: 0, // Always fetch fresh data
+    gcTime: 0, // Don't keep in cache after component unmounts
   });
 
   const deleteMutation = useMutation({

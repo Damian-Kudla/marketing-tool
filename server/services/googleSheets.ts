@@ -1156,6 +1156,9 @@ class AppointmentService {
 
   // Get upcoming appointments for a user
   async getUpcomingAppointments(username: string): Promise<any[]> {
+    // Always sync fresh data to prevent showing wrong user's appointments
+    await this.syncFromSheets();
+    
     const allAppointments = await this.getUserAppointments(username);
     const today = new Date().toISOString().split('T')[0];
 

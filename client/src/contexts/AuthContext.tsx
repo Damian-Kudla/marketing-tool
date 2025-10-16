@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { authAPI } from '@/services/api';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -32,6 +33,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [userId, setUserId] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   const checkAuth = async () => {
     try {
@@ -65,6 +67,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const login = () => {
     setIsAuthenticated(true);
+    
+    // Clear all caches to ensure fresh data for new user
+    queryClient.clear();
+    
     checkAuth(); // Re-check to get userId and username
   };
 
@@ -77,6 +83,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setIsAuthenticated(false);
       setUserId(null);
       setUsername(null);
+      
+      // Clear all React Query caches to prevent showing wrong user's data
+      queryClient.clear();
     }
   };
 
