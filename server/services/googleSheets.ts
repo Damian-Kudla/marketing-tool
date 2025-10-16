@@ -1012,7 +1012,7 @@ class AppointmentService {
 
       let validCount = 0;
       for (const row of rows) {
-        if (row.length >= 8) {
+        if (row.length >= 9) { // Need 9 columns (0-8) to include createdAt
           const appointment = {
             id: row[0],
             datasetId: row[1],
