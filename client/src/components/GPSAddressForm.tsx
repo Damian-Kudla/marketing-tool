@@ -241,11 +241,11 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
       // Search for each house number
       for (const houseNumber of allHouseNumbers) {
         const searchParams: Partial<Address> = {};
-        if (address.street.trim()) searchParams.street = address.street;
+        if (address.street?.trim()) searchParams.street = address.street;
         searchParams.number = houseNumber;
-        if (address.postal.trim()) searchParams.postal = address.postal;
-        if (address.city.trim()) searchParams.city = address.city;
-        if (address.country.trim()) searchParams.country = address.country;
+        if (address.postal?.trim()) searchParams.postal = address.postal;
+        if (address.city?.trim()) searchParams.city = address.city;
+        if (address.country?.trim()) searchParams.country = address.country;
         
         const customers = await addressAPI.searchAddress(searchParams);
         allCustomers = [...allCustomers, ...customers];
