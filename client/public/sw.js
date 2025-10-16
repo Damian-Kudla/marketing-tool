@@ -21,14 +21,14 @@ const STATIC_ASSETS = [
 // API endpoints to cache
 const API_ENDPOINTS = [
   '/api/auth',
-  '/api/ocr',
+  // NOTE: /api/ocr is EXCLUDED - OCR responses can be large with image data
   '/api/addresses',
   '/api/results'
 ];
 
 // Cache size limits
 const MAX_API_CACHE_SIZE = 50;
-const MAX_IMAGE_CACHE_SIZE = 20;
+const MAX_IMAGE_CACHE_SIZE = 10; // Only for app icons (small)
 
 // Utility function for logging PWA actions
 function logPWAAction(action, details = {}) {
@@ -136,15 +136,23 @@ function isStaticAsset(request) {
 // Check if request is for API
 function isAPIRequest(request) {
   const url = new URL(request.url);
+  
+  // Exclude OCR API from caching (large image payloads)
+  if (url.pathname.startsWith('/api/ocr')) {
+    return false;
+  }
+  
   return url.pathname.startsWith('/api/') ||
          API_ENDPOINTS.some(endpoint => url.pathname.startsWith(endpoint));
 }
 
-// Check if request is for images
+// Check if request is for images (only app icons, NOT OCR uploads)
 function isImageRequest(request) {
   const url = new URL(request.url);
-  return url.pathname.match(/\.(png|jpg|jpeg|gif|webp)$/) ||
-         request.destination === 'image';
+  // Only cache app icons from /icons/ directory
+  // Do NOT cache OCR uploaded images or API image responses
+  return url.pathname.startsWith('/icons/') && 
+         url.pathname.match(/\.(svg|png|jpg|ico)$/);
 }
 
 // Handle static assets - Cache First strategy
