@@ -17,9 +17,10 @@ import {
 } from "@shared/schema";
 import { requireAuth, type AuthenticatedRequest } from "./middleware/auth";
 import { rateLimitMiddleware } from "./middleware/rateLimit";
-import { GoogleSheetsLoggingService } from "./services/googleSheetsLogging";
+import { logUserActivityWithRetry, logAuthAttemptWithRetry } from "./services/enhancedLogging";
 import { authRouter } from "./routes/auth";
 import addressDatasetsRouter from "./routes/addressDatasets";
+import trackingRouter from "./routes/tracking";
 import { addressDatasetService, normalizeAddress, categoryChangeLoggingService, appointmentService } from "./services/googleSheets";
 import { 
   performOrientationCorrection, 
@@ -81,6 +82,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Add address datasets routes (authentication required)
   app.use("/api/address-datasets", requireAuth, addressDatasetsRouter);
+  
+  // Add tracking routes (authentication required)
+  app.use("/api/tracking", requireAuth, trackingRouter);
   
   // Category change logging route
     app.post("/api/log-category-change", async (req, res) => {
@@ -281,6 +285,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Log geocoding activity
+      const addressString = `${address.street} ${address.number}, ${address.postal} ${address.city}`.trim();
+      try {
+        await logUserActivityWithRetry(
+          req,
+          addressString,
+          undefined,
+          undefined
+        );
+      } catch (logError) {
+        console.error('[POST /api/geocode] Failed to log activity:', logError);
+      }
+
       res.json(address);
     } catch (error) {
       console.error("Geocoding error:", error);
@@ -441,7 +458,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Log the OCR request with results
       const addressString = address ? `${address.street} ${address.number}, ${address.city} ${address.postal}`.trim() : undefined;
-      await GoogleSheetsLoggingService.logUserActivity(req, addressString, newProspects, existingCustomers);
+      await logUserActivityWithRetry(req, addressString, newProspects, existingCustomers);
 
       res.json(response);
     } catch (error) {
@@ -493,7 +510,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Log the OCR correction request with results
       const addressString = address ? `${address.street} ${address.number}, ${address.city} ${address.postal}`.trim() : undefined;
-      await GoogleSheetsLoggingService.logUserActivity(req, addressString, newProspects, existingCustomers);
+      await logUserActivityWithRetry(req, addressString, newProspects, existingCustomers);
 
       res.json(response);
     } catch (error) {
@@ -511,7 +528,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Log the address search
       const addressString = address ? `${address.street} ${address.number}, ${address.city} ${address.postal}`.trim() : undefined;
-      await GoogleSheetsLoggingService.logUserActivity(req, addressString);
+      await logUserActivityWithRetry(req, addressString);
       
       res.json(matches);
     } catch (error) {
@@ -525,7 +542,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const customers = await storage.getAllCustomers();
       
       // Log the customer list request
-      await GoogleSheetsLoggingService.logUserActivity(req);
+      await logUserActivityWithRetry(req);
       
       res.json(customers);
     } catch (error) {

@@ -3,6 +3,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { cronJobService } from "./services/cronJobService";
 
 // Force Railway rebuild - production path fix
 
@@ -71,5 +72,8 @@ app.use((req, res, next) => {
     log(`Server is running on port ${port}`);
     log(`Environment: ${app.get("env")}`);
     log(`Health check available at: http://0.0.0.0:${port}/api/auth/check`);
+    
+    // Start cron jobs for failed log retry
+    cronJobService.start();
   });
 })();

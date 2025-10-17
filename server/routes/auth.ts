@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { googleSheetsService } from '../services/googleSheets';
 import { AuthService } from '../middleware/auth';
-import { GoogleSheetsLoggingService } from '../services/googleSheetsLogging';
+import { logAuthAttemptWithRetry } from '../services/enhancedLogging';
 
 const router = Router();
 
@@ -76,7 +76,7 @@ router.post('/login', async (req: Request, res: Response) => {
   // Check rate limit
   const rateLimitResult = checkRateLimit(clientIP);
   if (!rateLimitResult.allowed) {
-    await GoogleSheetsLoggingService.logAuthAttempt(clientIP, false, undefined, undefined, 'rate_limit_exceeded');
+    await logAuthAttemptWithRetry(clientIP, false, undefined, undefined, 'rate_limit_exceeded');
     
     return res.status(429).json({
       error: 'Too many login attempts. Please try again later.',
@@ -88,7 +88,7 @@ router.post('/login', async (req: Request, res: Response) => {
 
   // Validate input
   if (!password || typeof password !== 'string' || password.trim().length === 0) {
-    await GoogleSheetsLoggingService.logAuthAttempt(clientIP, false, undefined, undefined, 'missing_password');
+    await logAuthAttemptWithRetry(clientIP, false, undefined, undefined, 'missing_password');
     return res.status(400).json({ error: 'Password is required' });
   }
 
@@ -97,12 +97,15 @@ router.post('/login', async (req: Request, res: Response) => {
     const username = await googleSheetsService.getUserByPassword(password.trim());
     
     if (!username) {
-      await GoogleSheetsLoggingService.logAuthAttempt(clientIP, false, undefined, undefined, 'invalid_password');
+      await logAuthAttemptWithRetry(clientIP, false, undefined, undefined, 'invalid_password');
       return res.status(401).json({ error: 'Invalid password' });
     }
 
-    // Generate session token with username
-    const sessionToken = AuthService.generateSessionToken(password.trim(), username);
+    // Check if user is admin
+    const isAdmin = await googleSheetsService.isUserAdmin(password.trim());
+
+    // Generate session token with username and admin status
+    const sessionToken = AuthService.generateSessionToken(password.trim(), username, isAdmin);
     const userId = AuthService.getUserIdFromPassword(password.trim());
 
     // Set secure HTTP-only cookie
@@ -115,18 +118,19 @@ router.post('/login', async (req: Request, res: Response) => {
     });
 
     // Log successful authentication
-    await GoogleSheetsLoggingService.logAuthAttempt(clientIP, true, username, userId, 'valid_password');
+    await logAuthAttemptWithRetry(clientIP, true, username, userId, 'valid_password');
 
     res.json({ 
       success: true, 
       message: 'Login successful',
       userId: userId,
-      username: username
+      username: username,
+      isAdmin: isAdmin
     });
 
   } catch (error) {
     console.error('Login error:', error);
-    await GoogleSheetsLoggingService.logAuthAttempt(clientIP, false, undefined, undefined, 'server_error');
+    await logAuthAttemptWithRetry(clientIP, false, undefined, undefined, 'server_error');
     res.status(500).json({ error: 'Authentication service unavailable' });
   }
 });
@@ -174,7 +178,8 @@ router.get('/check', (req: Request, res: Response) => {
   res.json({ 
     authenticated: true, 
     userId: session.userId,
-    username: session.username
+    username: session.username,
+    isAdmin: session.isAdmin || false
   });
 });
 

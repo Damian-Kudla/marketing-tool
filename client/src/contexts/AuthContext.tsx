@@ -3,11 +3,13 @@ import { useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { authAPI } from '@/services/api';
 import { useQueryClient } from '@tanstack/react-query';
+import { trackingManager } from '@/services/trackingManager';
 
 interface AuthContextType {
   isAuthenticated: boolean;
   userId: string | null;
   username: string | null;
+  isAdmin: boolean;
   login: () => void;
   logout: () => void;
   checkAuth: () => Promise<void>;
@@ -32,6 +34,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [username, setUsername] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const queryClient = useQueryClient();
 
@@ -45,21 +48,31 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setIsAuthenticated(true);
           setUserId(data.userId);
           setUsername(data.username);
+          setIsAdmin(data.isAdmin || false);
+          
+          // Start tracking for non-admin users
+          if (!data.isAdmin && data.userId && data.username) {
+            await trackingManager.initialize(data.userId, data.username);
+            console.log('[Auth] Tracking initialized for user:', data.username);
+          }
         } else {
           setIsAuthenticated(false);
           setUserId(null);
           setUsername(null);
+          setIsAdmin(false);
         }
       } else {
         setIsAuthenticated(false);
         setUserId(null);
         setUsername(null);
+        setIsAdmin(false);
       }
     } catch (error) {
       console.error('Auth check failed:', error);
       setIsAuthenticated(false);
       setUserId(null);
       setUsername(null);
+      setIsAdmin(false);
     } finally {
       setIsLoading(false);
     }
@@ -76,6 +89,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = async () => {
     try {
+      // Stop tracking before logout
+      await trackingManager.shutdown();
+      console.log('[Auth] Tracking stopped');
+      
       await authAPI.logout();
     } catch (error) {
       console.error('Logout error:', error);
@@ -83,6 +100,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setIsAuthenticated(false);
       setUserId(null);
       setUsername(null);
+      setIsAdmin(false);
       
       // Clear all React Query caches to prevent showing wrong user's data
       queryClient.clear();
@@ -97,6 +115,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     isAuthenticated,
     userId,
     username,
+    isAdmin,
     login,
     logout,
     checkAuth,

@@ -2,17 +2,18 @@ import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 
 // Store active session tokens in memory (in production, use Redis or database)
-const activeSessions = new Map<string, { userId: string, password: string, username: string, createdAt: Date }>();
+const activeSessions = new Map<string, { userId: string, password: string, username: string, isAdmin: boolean, createdAt: Date }>();
 
 export interface AuthenticatedRequest extends Request {
   userId?: string;
   userPassword?: string;
   username?: string;
+  isAdmin?: boolean;
 }
 
 export class AuthService {
   // Generate a secure token for the session
-  static generateSessionToken(password: string, username: string): string {
+  static generateSessionToken(password: string, username: string, isAdmin: boolean = false): string {
     const sessionId = crypto.randomUUID();
     const userId = crypto.createHash('sha256').update(password).digest('hex').substring(0, 8);
     
@@ -20,6 +21,7 @@ export class AuthService {
       userId,
       password,
       username,
+      isAdmin,
       createdAt: new Date()
     });
 
@@ -30,7 +32,7 @@ export class AuthService {
   }
 
   // Validate session token and return user info
-  static validateSessionToken(token: string): { userId: string, password: string, username: string } | null {
+  static validateSessionToken(token: string): { userId: string, password: string, username: string, isAdmin: boolean } | null {
     const session = activeSessions.get(token);
     if (!session) {
       return null;
@@ -43,7 +45,7 @@ export class AuthService {
       return null;
     }
 
-    return { userId: session.userId, password: session.password, username: session.username };
+    return { userId: session.userId, password: session.password, username: session.username, isAdmin: session.isAdmin };
   }
 
   // Remove session token
@@ -96,6 +98,7 @@ export function requireAuth(req: AuthenticatedRequest, res: Response, next: Next
   req.userId = session.userId;
   req.userPassword = session.password;
   req.username = session.username;
+  req.isAdmin = session.isAdmin;
   next();
 }
 
@@ -109,8 +112,42 @@ export function optionalAuth(req: AuthenticatedRequest, res: Response, next: Nex
       req.userId = session.userId;
       req.userPassword = session.password;
       req.username = session.username;
+      req.isAdmin = session.isAdmin;
     }
   }
 
+  next();
+}
+
+// Admin-only middleware
+export function requireAdmin(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
+  const authToken = req.cookies?.authToken;
+
+  if (!authToken) {
+    res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+
+  const session = AuthService.validateSessionToken(authToken);
+  if (!session) {
+    res.clearCookie('authToken', {
+      httpOnly: true,
+      secure: false,
+      sameSite: 'lax'
+    });
+    res.status(401).json({ error: 'Invalid or expired session' });
+    return;
+  }
+
+  if (!session.isAdmin) {
+    res.status(403).json({ error: 'Admin access required' });
+    return;
+  }
+
+  // Add user info to request
+  req.userId = session.userId;
+  req.userPassword = session.password;
+  req.username = session.username;
+  req.isAdmin = session.isAdmin;
   next();
 }

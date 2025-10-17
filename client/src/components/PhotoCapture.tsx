@@ -6,6 +6,7 @@ import { Camera, Upload, Loader2, X, RotateCw, RotateCcw, Wifi, WifiOff, Crop } 
 import { useFilteredToast } from '@/hooks/use-filtered-toast';
 import type { Address } from '@/components/GPSAddressForm';
 import { ocrAPI } from '@/services/api';
+import { trackingManager } from '@/services/trackingManager';
 import { 
   correctImageOrientationNative,
   rotateImageManually,
@@ -218,6 +219,9 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
       
       // Save successful result to offline storage for caching
       await saveResultToOfflineStorage(result, imageDataUrl);
+      
+      // Track scan action
+      trackingManager.logAction('scan', `Address: ${address.street} ${address.number}`);
       
       onPhotoProcessed?.(result, preview || undefined);
       

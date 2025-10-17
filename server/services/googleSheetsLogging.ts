@@ -51,7 +51,7 @@ export class GoogleSheetsLoggingService {
   private static readonly worksheetCache = new Map<string, boolean>();
 
   // Ensure worksheet exists for user, create if it doesn't
-  private static async ensureUserWorksheet(userId: string, username: string): Promise<string> {
+  static async ensureUserWorksheet(userId: string, username: string): Promise<string> {
     if (!sheetsEnabled || !sheetsClient) {
       throw new Error('Google Sheets API not available');
     }
@@ -257,6 +257,30 @@ export class GoogleSheetsLoggingService {
 
     } catch (error) {
       console.error('Failed to log authentication attempt to Google Sheets:', error);
+    }
+  }
+
+  // Batch append multiple rows to a worksheet
+  static async batchAppendToWorksheet(worksheetName: string, rows: any[][]): Promise<void> {
+    if (!sheetsEnabled || !sheetsClient) {
+      throw new Error('Google Sheets API not available');
+    }
+
+    try {
+      await sheetsClient.spreadsheets.values.append({
+        spreadsheetId: this.LOG_SHEET_ID,
+        range: `${worksheetName}!A:I`,
+        valueInputOption: 'RAW',
+        insertDataOption: 'INSERT_ROWS',
+        resource: {
+          values: rows,
+        },
+      });
+
+      console.log(`[GoogleSheetsLoggingService] Batch appended ${rows.length} rows to ${worksheetName}`);
+    } catch (error) {
+      console.error(`[GoogleSheetsLoggingService] Failed to batch append to ${worksheetName}:`, error);
+      throw error;
     }
   }
 }

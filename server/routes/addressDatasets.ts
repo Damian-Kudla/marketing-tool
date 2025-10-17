@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { addressDatasetService, normalizeAddress } from '../services/googleSheets';
+import { logUserActivityWithRetry } from '../services/enhancedLogging';
 
 // Helper function to get current time in Berlin timezone (MEZ/MESZ)
 function getBerlinTime(): Date {
@@ -238,6 +239,18 @@ router.post('/', async (req, res) => {
       fixedCustomers: [], // Will be populated from customer database
     });
 
+    // Log dataset creation activity
+    try {
+      await logUserActivityWithRetry(
+        req,
+        normalized.formattedAddress,
+        undefined, // No prospects at creation
+        undefined  // No existing customers at creation
+      );
+    } catch (logError) {
+      console.error('[POST /api/address-datasets] Failed to log activity:', logError);
+    }
+
     // New datasets are always editable by the creator
     res.json({
       ...dataset,
@@ -301,6 +314,18 @@ router.get('/', async (req, res) => {
       normalizedAddress: normalized.formattedAddress,
     };
 
+    // Log dataset retrieval activity
+    try {
+      await logUserActivityWithRetry(
+        req,
+        normalized.formattedAddress,
+        undefined,
+        undefined
+      );
+    } catch (logError) {
+      console.error('[GET /api/address-datasets] Failed to log activity:', logError);
+    }
+
     res.json(response);
   } catch (error) {
     console.error('Error fetching address datasets:', error);
@@ -343,6 +368,19 @@ router.put('/residents', async (req, res) => {
       data.residentIndex,
       data.residentData
     );
+
+    // Log resident update activity
+    try {
+      const action = data.residentData === null ? 'deleted' : 'updated';
+      await logUserActivityWithRetry(
+        req,
+        dataset.normalizedAddress,
+        undefined,
+        undefined
+      );
+    } catch (logError) {
+      console.error('[PUT /api/address-datasets/residents] Failed to log activity:', logError);
+    }
 
     res.json({ success: true });
   } catch (error) {
@@ -387,6 +425,18 @@ router.put('/bulk-residents', async (req, res) => {
     );
 
     console.log(`[Bulk Update] Successfully updated ${data.editableResidents.length} residents in dataset ${data.datasetId}`);
+
+    // Log bulk resident update activity
+    try {
+      await logUserActivityWithRetry(
+        req,
+        dataset.normalizedAddress,
+        undefined,
+        undefined
+      );
+    } catch (logError) {
+      console.error('[PUT /api/address-datasets/bulk-residents] Failed to log activity:', logError);
+    }
 
     res.json({ success: true });
   } catch (error) {
@@ -437,6 +487,18 @@ router.get('/history/:username/:date', async (req, res) => {
       };
     });
 
+    // Log history retrieval activity
+    try {
+      await logUserActivityWithRetry(
+        req,
+        undefined, // No specific address for history view
+        undefined,
+        undefined
+      );
+    } catch (logError) {
+      console.error('[GET /api/address-datasets/history] Failed to log activity:', logError);
+    }
+
     res.json(historyItems);
   } catch (error) {
     console.error('Error fetching user history:', error);
@@ -466,6 +528,18 @@ router.get('/:id', async (req, res) => {
     const isEditable = isWithin30Days(creationDate);
     const usernameMatches = dataset.createdBy === username;
     const canEdit = usernameMatches && isEditable;
+
+    // Log dataset retrieval activity
+    try {
+      await logUserActivityWithRetry(
+        req,
+        dataset.normalizedAddress,
+        undefined,
+        undefined
+      );
+    } catch (logError) {
+      console.error('[GET /api/address-datasets/:id] Failed to log activity:', logError);
+    }
 
     res.json({
       ...dataset,

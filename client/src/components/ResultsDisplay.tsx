@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { trackingManager } from '@/services/trackingManager';
 import {
   Accordion,
   AccordionContent,
@@ -556,6 +557,13 @@ export default function ResultsDisplay({
         allResidents[index] = updatedResident;
 
         await datasetAPI.bulkUpdateResidents(currentDatasetId, allResidents);
+
+        // Track status change action
+        trackingManager.logAction(
+          'status_change',
+          `Resident: ${resident.name}`,
+          newStatus as 'interessiert' | 'nicht_interessiert' | 'nicht_angetroffen' | 'termin_vereinbart'
+        );
 
         toast({
           title: t('resident.status.updated', 'Status updated'),

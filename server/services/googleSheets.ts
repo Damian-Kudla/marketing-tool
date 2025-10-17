@@ -72,26 +72,46 @@ class DatasetCache {
     const searchBase = extractPostalAndStreet(searchNormalizedAddress);
     const datasetBase = extractPostalAndStreet(datasetNormalizedAddress);
 
+    // Debug logging: Show what we're comparing
+    console.log('[DatasetCache.addressMatches] Comparing addresses:', {
+      search: {
+        fullAddress: searchNormalizedAddress,
+        base: searchBase,
+        houseNumbers: searchHouseNumbers
+      },
+      dataset: {
+        fullAddress: datasetNormalizedAddress,
+        base: datasetBase,
+        houseNumbers: datasetHouseNumbers
+      }
+    });
+
     // First check: street + postal must match (city is ignored as it's optional)
     if (searchBase !== datasetBase) {
+      console.log('[DatasetCache.addressMatches] ❌ No match: Street or postal code differs');
       return false;
     }
+
+    console.log('[DatasetCache.addressMatches] ✅ Street + postal match, checking house numbers...');
 
     // Second check: BIDIRECTIONAL matching with overlap detection
     // Check if there's ANY overlap between the two sets of house numbers
     // Examples: "1" matches "1,2" | "1,2" matches "1" | "1" does NOT match "3,4"
     for (const searchNum of searchHouseNumbers) {
       if (datasetHouseNumbers.includes(searchNum)) {
+        console.log(`[DatasetCache.addressMatches] ✅ MATCH FOUND: House number "${searchNum}" found in dataset`);
         return true;
       }
     }
     
     for (const datasetNum of datasetHouseNumbers) {
       if (searchHouseNumbers.includes(datasetNum)) {
+        console.log(`[DatasetCache.addressMatches] ✅ MATCH FOUND: House number "${datasetNum}" found in search`);
         return true;
       }
     }
 
+    console.log('[DatasetCache.addressMatches] ❌ No match: No house number overlap');
     return false;
   }
 
@@ -170,6 +190,14 @@ class DatasetCache {
   getByAddress(normalizedAddress: string, limit?: number, houseNumber?: string): AddressDataset[] {
     const searchHouseNumbers = houseNumber ? this.extractHouseNumbers(houseNumber) : [];
 
+    console.log('[DatasetCache.getByAddress] Searching for datasets:', {
+      normalizedAddress,
+      houseNumber,
+      searchHouseNumbers,
+      totalDatasetsInCache: this.cache.size,
+      limit
+    });
+
     const matchingDatasets = Array.from(this.cache.values())
       .filter(ds => {
         const datasetHouseNumbers = this.extractHouseNumbers(ds.houseNumber);
@@ -185,11 +213,31 @@ class DatasetCache {
         }
         
         // Fallback to exact match if no house numbers provided
-        return ds.normalizedAddress === normalizedAddress;
+        const exactMatch = ds.normalizedAddress === normalizedAddress;
+        if (exactMatch) {
+          console.log('[DatasetCache.getByAddress] ✅ Exact match found (no house numbers to compare)');
+        }
+        return exactMatch;
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     
-    return limit ? matchingDatasets.slice(0, limit) : matchingDatasets;
+    console.log(`[DatasetCache.getByAddress] Found ${matchingDatasets.length} matching dataset(s)`);
+    
+    const result = limit ? matchingDatasets.slice(0, limit) : matchingDatasets;
+    
+    if (result.length > 0) {
+      console.log('[DatasetCache.getByAddress] Returning datasets:', 
+        result.map(ds => ({
+          id: ds.id,
+          address: ds.normalizedAddress,
+          houseNumber: ds.houseNumber,
+          createdAt: ds.createdAt,
+          createdBy: ds.createdBy
+        }))
+      );
+    }
+    
+    return result;
   }
 
   // Get all datasets
@@ -267,6 +315,7 @@ export interface SheetsService {
   getValidPasswords(): Promise<string[]>;
   getPasswordUserMap(): Promise<Map<string, string>>;
   getUserByPassword(password: string): Promise<string | null>;
+  isUserAdmin(password: string): Promise<boolean>;
 }
 
 export interface AddressSheetsService {
@@ -305,7 +354,7 @@ class GoogleSheetsService implements SheetsService {
     try {
       const response = await sheetsClient.spreadsheets.values.get({
         spreadsheetId: this.SHEET_ID,
-        range: `${this.WORKSHEET_NAME}!A2:C`, // Extended to column C for postal codes
+        range: `${this.WORKSHEET_NAME}!A2:D`, // Extended to column D for admin role
       });
 
       const rows = response.data.values || [];
@@ -326,6 +375,40 @@ class GoogleSheetsService implements SheetsService {
     } catch (error) {
       console.error('Error fetching password-username data from Google Sheets:', error);
       throw new Error('Failed to load authentication data');
+    }
+  }
+
+  async isUserAdmin(password: string): Promise<boolean> {
+    if (!sheetsEnabled || !sheetsClient) {
+      console.warn('Google Sheets API not available');
+      return false;
+    }
+
+    try {
+      const response = await sheetsClient.spreadsheets.values.get({
+        spreadsheetId: this.SHEET_ID,
+        range: `${this.WORKSHEET_NAME}!A2:D`,
+      });
+
+      const rows = response.data.values || [];
+      
+      // Find the user's row by password
+      for (const row of rows) {
+        const rowPassword = row[0]?.trim();
+        const adminRole = row[3]?.trim().toLowerCase(); // Column D
+        
+        if (rowPassword === password.trim()) {
+          const isAdmin = adminRole === 'admin';
+          console.log(`[Auth] User with password ${password.substring(0, 3)}... is ${isAdmin ? 'ADMIN' : 'REGULAR USER'}`);
+          return isAdmin;
+        }
+      }
+
+      console.log(`[Auth] Password not found in sheet`);
+      return false;
+    } catch (error) {
+      console.error('Error checking admin status:', error);
+      return false;
     }
   }
 
