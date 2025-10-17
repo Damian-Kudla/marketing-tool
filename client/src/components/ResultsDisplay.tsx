@@ -965,8 +965,12 @@ export default function ResultsDisplay({
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-3 pt-3">
-                    {/* Show customers from result.allCustomersAtAddress (if available) */}
-                    {result?.allCustomersAtAddress?.map((customer, index) => {
+                    {/* Show customers from result.allCustomersAtAddress OR fixedCustomers (not both to avoid duplicates)
+                        - result.allCustomersAtAddress: From OCR/photo scan or address search (type: Customer[])
+                        - fixedCustomers: From loaded dataset without photo (type: EditableResident[])
+                        Priority: Use allCustomersAtAddress if available, otherwise use fixedCustomers
+                    */}
+                    {(result?.allCustomersAtAddress || fixedCustomers)?.map((customer, index) => {
                 const isVisible = matchesSearch(customer.name);
                 
                 // Check if multiple house numbers were queried (contains comma or hyphen)
@@ -975,6 +979,11 @@ export default function ResultsDisplay({
                   address.number.includes(',') || 
                   address.number.includes('-')
                 );
+                
+                // Type-safe property access (Customer has houseNumber, EditableResident doesn't)
+                const houseNumber = 'houseNumber' in customer ? customer.houseNumber : undefined;
+                const street = 'street' in customer ? customer.street : undefined;
+                const postalCode = 'postalCode' in customer ? customer.postalCode : undefined;
                 
                 return (
                   <div
@@ -992,15 +1001,15 @@ export default function ResultsDisplay({
                           {customer.name}
                         </p>
                         {/* Show house number when multiple numbers were queried (comma or hyphen separated) */}
-                        {multipleHouseNumbers && customer.houseNumber && (
+                        {multipleHouseNumbers && houseNumber && (
                           <Badge variant="secondary" className="text-xs font-normal shrink-0">
-                            Nr. {customer.houseNumber}
+                            Nr. {houseNumber}
                           </Badge>
                         )}
                       </div>
-                      {(customer.street || customer.postalCode) && (
+                      {(street || postalCode) && (
                         <p className="text-xs text-muted-foreground overflow-x-auto whitespace-nowrap">
-                          {[customer.street, !multipleHouseNumbers && customer.houseNumber, customer.postalCode]
+                          {[street, !multipleHouseNumbers && houseNumber, postalCode]
                             .filter(Boolean)
                             .join(' ')}
                         </p>
@@ -1009,35 +1018,6 @@ export default function ResultsDisplay({
                   </div>
                 );
               })}
-                    
-                    {/* Also show fixedCustomers (from address-only search or loaded dataset without photo) */}
-                    {fixedCustomers?.map((resident, index) => {
-                      const isVisible = matchesSearch(resident.name);
-                      
-                      // Check if multiple house numbers were queried
-                      const multipleHouseNumbers = address?.number && (
-                        address.number.includes(',') || 
-                        address.number.includes('-')
-                      );
-                      
-                      return (
-                        <div
-                          key={`fixed-${index}`}
-                          className="flex items-center gap-3 p-3 rounded-lg border bg-card hover-elevate"
-                          data-testid={`row-fixed-customer-${index}`}
-                          style={{ display: isVisible ? 'flex' : 'none' }}
-                        >
-                          <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-                            <User className="h-4 w-4 text-muted-foreground" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium overflow-x-auto whitespace-nowrap" data-testid={`text-fixed-customer-name-${index}`}>
-                              {resident.name}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })}
                   </div>
                 </AccordionContent>
               </AccordionItem>

@@ -1,28 +1,29 @@
 ﻿{
-  "version": "2.4.5",
-  "buildTime": "2025-10-17T13:00:00.000Z",
-  "buildNumber": "customer-list-visibility-fix",
-  "features": [
-    "✅ 'Alle Bestandskunden an dieser Adresse' wird IMMER angezeigt wenn Kunden existieren",
-    "🔧 Fix: Liste wird jetzt auch bei Adresssuche ohne Bild angezeigt",
-    "� Fix: Liste wird auch bei Bild-Upload ohne Match angezeigt",
-    "� allCustomersAtAddress wird jetzt immer gesetzt (scanner.tsx handleAddressSearch)"
+  \"version\": \"2.4.6\",
+  \"buildTime\": \"2025-10-17T14:00:00.000Z\",
+  \"buildNumber\": \"multi-fix-duplicates-validation-matching\",
+  \"features\": [
+    \"Fix: Keine doppelten Eintraege mehr in 'Alle Bestandskunden an dieser Adresse'\",
+    \"Fix: Adressvalidierung - Stadtgebiete ohne Strasse werden abgelehnt (hasRoute Pruefung)\",
+    \"Fix: Mehrere Hausnummern (30,31,32 oder 30-33) matchen jetzt korrekt beim OCR-Scan\",
+    \"Backend: getCustomersByAddress expandiert Hausnummer-Bereiche\",
+    \"Frontend: Nur EINE Quelle fuer Kundenliste (allCustomersAtAddress OR fixedCustomers)\"
   ],
-  "technicalDetails": [
-    "🔒 Admin Authentication: isAdmin check from JWT token",
-    "📊 Phase 1-3 Tracking: GPS (30s), Session (Idle Detection), Device, PDF Reports",
-    "🗺️ Leaflet 4.2.1: React 18 compatible mapping library",
-    "📈 Recharts 2.15.2: Status changes bar charts with color coding",
-    "📅 date-fns 3.6.0: Date formatting and picker",
-    "🚫 SW Exclusion: /admin + /api/admin bypassed for fresh data",
-    "⚡ Lazy Loading: AdminDashboard loaded on-demand (performance)"
+  \"technicalDetails\": [
+    \"Admin Authentication: isAdmin check from JWT token\",
+    \"Phase 1-3 Tracking: GPS (30s), Session (Idle Detection), Device, PDF Reports\",
+    \"Leaflet 4.2.1: React 18 compatible mapping library\",
+    \"Recharts 2.15.2: Status changes bar charts with color coding\",
+    \"date-fns 3.6.0: Date formatting and picker\",
+    \"SW Exclusion: /admin + /api/admin bypassed for fresh data\",
+    \"Lazy Loading: AdminDashboard loaded on-demand (performance)\"
   ],
-  "previousFeatures": [
-    "🔄 Backwards Compatibility: Alte Datensätze (2h Zukunft) bearbeitbar (v2.4.4)",
-    "🏠 Hausnummer-Anzeige bei mehreren Nummern (v2.4.4)",
-    "🔇 Debug-Logs reduziert (90% weniger) (v2.4.4)",
-    "✅ Phase 4: Admin Dashboard mit Maps & Charts (v2.4.0)",
-    "✅ Phase 1-3: Complete Tracking System (v2.2.0-2.3.0)",
-    " Storage Cleanup: 90% weniger Speicherverbrauch (v2.3.4)"
+  \"previousFeatures\": [
+    \"Kundenliste immer sichtbar wenn vorhanden (v2.4.5)\",
+    \"Backwards Compatibility: Alte Datensaetze (2h Zukunft) bearbeitbar (v2.4.4)\",
+    \"Hausnummer-Anzeige bei mehreren Nummern (v2.4.4)\",
+    \"Debug-Logs reduziert (90% weniger) (v2.4.4)\",
+    \"Phase 4: Admin Dashboard mit Maps & Charts (v2.4.0)\",
+    \"Storage Cleanup: 90% weniger Speicherverbrauch (v2.3.4)\"
   ]
 }

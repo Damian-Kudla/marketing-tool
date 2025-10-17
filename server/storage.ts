@@ -213,18 +213,37 @@ export class GoogleSheetsStorage implements IStorage {
     }
     
     // Filter by house number (STRICT matching - no fuzzy logic)
+    // Handle multiple house numbers (comma or hyphen separated): "30,31,32" or "30-33"
     if (address.number) {
       const normalizeNumber = (num: string) => num.toLowerCase().trim().replace(/[.\-\s]/g, '');
-      const searchNumber = normalizeNumber(address.number);
+      
+      // Split by comma to handle multiple numbers
+      const searchNumbers = address.number.split(',').map(n => {
+        const trimmed = n.trim();
+        // Check if this is a range (contains hyphen)
+        if (trimmed.includes('-')) {
+          const [start, end] = trimmed.split('-').map(x => parseInt(x.trim()));
+          if (!isNaN(start) && !isNaN(end)) {
+            // Generate all numbers in range
+            const range: string[] = [];
+            for (let i = start; i <= end; i++) {
+              range.push(i.toString());
+            }
+            return range;
+          }
+        }
+        return [trimmed];
+      }).flat();
+      
+      // Normalize all search numbers
+      const normalizedSearchNumbers = searchNumbers.map(normalizeNumber);
       
       matches = matches.filter(customer => {
         if (!customer.houseNumber) return false;
         const customerNumber = normalizeNumber(customer.houseNumber);
         
-        // STRICT: Only exact matches allowed
-        // "1" matches ONLY "1", not "1a", "1b", etc.
-        // "1a" matches ONLY "1a", not "1" or "1b"
-        return customerNumber === searchNumber;
+        // STRICT: Match if customer house number equals ANY of the search numbers
+        return normalizedSearchNumbers.includes(customerNumber);
       });
     }
     

@@ -1467,15 +1467,16 @@ export async function normalizeAddress(
       const postalStr = postal?.toString() || '';
       
       // Accept if formatted address contains street name and postal code
+      // AND has a route component (to ensure it's actually a street, not a city area)
       // Note: Some addresses don't include house number in formatted_address (e.g., "Neusser Weyhe")
-      if (formattedLower.includes(streetLower) && formattedLower.includes(postalStr)) {
-        console.log('[normalizeAddress] Accepted: Formatted address contains street and postal code');
+      if (hasRoute && formattedLower.includes(streetLower) && formattedLower.includes(postalStr)) {
+        console.log('[normalizeAddress] Accepted: Formatted address contains street and postal code with route');
         return extractAddressComponents(result, number);
       }
       
-      // Fallback: If route component exists, accept it
-      if (hasRoute) {
-        console.log('[normalizeAddress] Accepted: Has route component');
+      // Fallback: If route component exists and postal matches, accept it
+      if (hasRoute && formattedLower.includes(postalStr)) {
+        console.log('[normalizeAddress] Accepted: Has route component and postal code matches');
         return extractAddressComponents(result, number);
       }
       
