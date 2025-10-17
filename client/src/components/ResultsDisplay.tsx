@@ -949,7 +949,7 @@ export default function ResultsDisplay({
                    - fixedCustomers exist (from loaded dataset without photo)
             */}
             {!externalDatasetId && (
-              (result && result.allCustomersAtAddress && result.allCustomersAtAddress.length > 0) ||
+              (result?.allCustomersAtAddress && result.allCustomersAtAddress.length > 0) ||
               (fixedCustomers && fixedCustomers.length > 0)
             ) && (
               <AccordionItem value="allCustomers">
@@ -958,7 +958,7 @@ export default function ResultsDisplay({
                     <User className="h-4 w-4 text-primary" />
                     <p className="text-sm font-medium">
                       {t('results.allCustomersAtAddress')} (
-                        {(result?.allCustomersAtAddress?.length || 0) + (fixedCustomers?.length || 0)}
+                        {(result?.allCustomersAtAddress || fixedCustomers)?.length || 0}
                       )
                     </p>
                   </div>

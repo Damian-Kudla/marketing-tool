@@ -1,13 +1,12 @@
 ﻿{
-  \"version\": \"2.4.6\",
-  \"buildTime\": \"2025-10-17T14:00:00.000Z\",
-  \"buildNumber\": \"multi-fix-duplicates-validation-matching\",
+  \"version\": \"2.4.7\",
+  \"buildTime\": \"2025-10-17T15:00:00.000Z\",
+  \"buildNumber\": \"fix-infinite-loop-and-list-visibility\",
   \"features\": [
-    \"Fix: Keine doppelten Eintraege mehr in 'Alle Bestandskunden an dieser Adresse'\",
-    \"Fix: Adressvalidierung - Stadtgebiete ohne Strasse werden abgelehnt (hasRoute Pruefung)\",
-    \"Fix: Mehrere Hausnummern (30,31,32 oder 30-33) matchen jetzt korrekt beim OCR-Scan\",
-    \"Backend: getCustomersByAddress expandiert Hausnummer-Bereiche\",
-    \"Frontend: Nur EINE Quelle fuer Kundenliste (allCustomersAtAddress OR fixedCustomers)\"
+    \"Fix: Keine Endlosschleife mehr bei Adresseingabe (useRef statt address dependency)\",
+    \"Fix: Kundenliste wird korrekt angezeigt (Bedingung vereinfacht)\",
+    \"Fix: Count zeigt richtige Anzahl (nur gerenderte Items)\",
+    \"Optimierung: Deep comparison fuer initialAddress Aenderungen\"
   ],
   \"technicalDetails\": [
     \"Admin Authentication: isAdmin check from JWT token\",
@@ -19,10 +18,10 @@
     \"Lazy Loading: AdminDashboard loaded on-demand (performance)\"
   ],
   \"previousFeatures\": [
+    \"Fix: Duplikate, Validation, Multi-Hausnummern (v2.4.6)\",
     \"Kundenliste immer sichtbar wenn vorhanden (v2.4.5)\",
-    \"Backwards Compatibility: Alte Datensaetze (2h Zukunft) bearbeitbar (v2.4.4)\",
+    \"Backwards Compatibility: Alte Datensaetze bearbeitbar (v2.4.4)\",
     \"Hausnummer-Anzeige bei mehreren Nummern (v2.4.4)\",
-    \"Debug-Logs reduziert (90% weniger) (v2.4.4)\",
     \"Phase 4: Admin Dashboard mit Maps & Charts (v2.4.0)\",
     \"Storage Cleanup: 90% weniger Speicherverbrauch (v2.3.4)\"
   ]

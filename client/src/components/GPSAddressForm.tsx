@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -40,9 +40,32 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
     country: ''
   });
 
+  // Store previous initialAddress to detect changes
+  const prevInitialAddressRef = useRef<Address | null | undefined>(undefined);
+
   // Update internal address state when initialAddress prop changes
   // Also reset to empty when initialAddress is null (Reset button clicked)
   useEffect(() => {
+    // Check if initialAddress actually changed (deep comparison)
+    const hasChanged = 
+      prevInitialAddressRef.current === undefined || // First render
+      (prevInitialAddressRef.current !== initialAddress && (
+        !prevInitialAddressRef.current ||
+        !initialAddress ||
+        prevInitialAddressRef.current.street !== initialAddress.street ||
+        prevInitialAddressRef.current.number !== initialAddress.number ||
+        prevInitialAddressRef.current.postal !== initialAddress.postal ||
+        prevInitialAddressRef.current.city !== initialAddress.city ||
+        prevInitialAddressRef.current.country !== initialAddress.country
+      ));
+    
+    if (!hasChanged) {
+      return; // No change, don't update
+    }
+    
+    // Update the ref
+    prevInitialAddressRef.current = initialAddress;
+    
     if (initialAddress) {
       setAddress(initialAddress);
     } else if (initialAddress === null) {
@@ -55,7 +78,7 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
         country: ''
       });
     }
-  }, [initialAddress]);
+  }, [initialAddress]); // Only depend on initialAddress, NOT on address!
 
   // Check if house number is a natural number (positive integer)
   const isNaturalNumber = (value: string): boolean => {
