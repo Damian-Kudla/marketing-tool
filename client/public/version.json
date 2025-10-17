@@ -1,13 +1,14 @@
 ﻿{
-  "version": "2.4.1",
-  "buildTime": "2025-10-17T05:55:00.000Z",
-  "buildNumber": "pwa-update-fix",
+  "version": "2.4.2",
+  "buildTime": "2025-10-17T06:05:00.000Z",
+  "buildNumber": "pwa-update-complete-fix",
   "features": [
-    "🔧 PWA UPDATE-CHECK FIX: Periodische Prüfung auf neue Versionen (alle 30s)",
-    "📊 Erweiterte Update-Logs: Detaillierte Console-Ausgaben für Debugging",
-    "🔄 Version-Check: Server-Version wird alle 5 Minuten geprüft",
-    "💾 Version-Tracking: App-Version in Meta-Tag und localStorage gespeichert",
-    "✅ Sofortige Checks: Version wird beim Start und periodisch geprüft"
+    "🔧 PWA UPDATE-CHECK COMPLETE FIX: Service Worker Ready Check vor Initialisierung",
+    "📊 Umfangreiche Console-Logs: Emoji-basierte Logs für einfaches Debugging",
+    "🔄 Periodische Checks: SW-Updates alle 30s, Version-Check alle 5min",
+    "⏰ Timing Fix: Update Manager startet erst NACH SW-Registrierung",
+    "✅ Admin-Redirect: Admin-User werden automatisch zum Dashboard weitergeleitet",
+    "🚀 Explizite Initialisierung: pwaUpdateManager.checkForUpdates() in main.tsx"
   ],
   "technicalDetails": [
     "🔒 Admin Authentication: isAdmin check from JWT token",

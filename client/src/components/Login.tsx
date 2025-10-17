@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useLocation } from 'wouter';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,6 +12,7 @@ interface LoginProps {
 }
 
 export function Login({ onLogin }: LoginProps) {
+  const [, setLocation] = useLocation();
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -43,7 +45,29 @@ export function Login({ onLogin }: LoginProps) {
       }
 
       // Login successful
+      console.log('[Login] Login successful, user data:', data);
+      
+      // Call onLogin to update AuthContext
       onLogin();
+      
+      // Wait a moment for AuthContext to update, then check if admin
+      setTimeout(async () => {
+        // Re-check auth to get isAdmin status
+        const authCheck = await authAPI.checkAuth();
+        if (authCheck.ok) {
+          const authData = await authCheck.json();
+          console.log('[Login] Auth check after login:', authData);
+          
+          // Redirect admin users to dashboard
+          if (authData.isAdmin) {
+            console.log('[Login] Admin user detected, redirecting to /admin/dashboard');
+            setLocation('/admin/dashboard');
+          } else {
+            console.log('[Login] Regular user, staying on scanner page');
+            // Regular users stay on scanner page (default route)
+          }
+        }
+      }, 100);
     } catch (error) {
       console.error('Login error:', error);
       setError('Verbindungsfehler. Bitte versuchen Sie es erneut.');

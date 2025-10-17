@@ -45,20 +45,37 @@ export class PWAUpdateManager {
   }
 
   private async initialize(): Promise<void> {
+    console.log('🔄 [PWA Update Manager] Starting initialization...', {
+      hasServiceWorker: 'serviceWorker' in navigator,
+      currentVersion: this.currentVersion
+    });
+
     if (!('serviceWorker' in navigator)) {
+      console.warn('❌ [PWA Update Manager] Service Worker not supported');
       pwaLogger.log('UPDATE_MANAGER_NOT_SUPPORTED');
       return;
     }
 
     try {
+      console.log('⏳ [PWA Update Manager] Waiting for service worker to be ready...');
       this.registration = await navigator.serviceWorker.ready;
+      console.log('✅ [PWA Update Manager] Service Worker ready, setting up update detection');
+      
       this.setupUpdateDetection();
       this.startPeriodicUpdateCheck();
       this.setupVersionMonitoring();
+      
+      console.log('✅ [PWA Update Manager] Fully initialized', { 
+        currentVersion: this.currentVersion,
+        updateInterval: this.UPDATE_CHECK_INTERVAL,
+        versionCheckInterval: this.VERSION_CHECK_INTERVAL
+      });
+      
       pwaLogger.log('UPDATE_MANAGER_INITIALIZED', { 
         currentVersion: this.currentVersion 
       });
     } catch (error) {
+      console.error('❌ [PWA Update Manager] Initialization failed:', error);
       pwaLogger.log('UPDATE_MANAGER_INIT_ERROR', { 
         error: error instanceof Error ? error.message : 'Unknown error' 
       });
@@ -111,6 +128,8 @@ export class PWAUpdateManager {
    * Checks for new service worker every 30 seconds
    */
   private startPeriodicUpdateCheck(): void {
+    console.log('⏰ [PWA Update] Starting periodic update checks (every 30s)');
+    
     // Check immediately
     this.checkForUpdates();
     
@@ -119,10 +138,16 @@ export class PWAUpdateManager {
 
     // Then check periodically
     this.updateCheckInterval = window.setInterval(() => {
+      console.log('⏰ [PWA Update] Periodic check running...');
       pwaLogger.log('PERIODIC_UPDATE_CHECK_RUNNING');
       this.checkForUpdates();
     }, this.UPDATE_CHECK_INTERVAL);
 
+    console.log('✅ [PWA Update] Periodic checks configured:', {
+      intervalMs: this.UPDATE_CHECK_INTERVAL,
+      intervalSeconds: this.UPDATE_CHECK_INTERVAL / 1000
+    });
+    
     pwaLogger.log('PERIODIC_UPDATE_CHECK_STARTED', { 
       interval: this.UPDATE_CHECK_INTERVAL,
       intervalSeconds: this.UPDATE_CHECK_INTERVAL / 1000
@@ -150,12 +175,18 @@ export class PWAUpdateManager {
    * Check for service worker updates
    */
   public async checkForUpdates(): Promise<void> {
-    if (!this.registration) return;
+    if (!this.registration) {
+      console.warn('⚠️ [PWA Update] Cannot check for updates - no registration');
+      return;
+    }
 
     try {
+      console.log('🔍 [PWA Update] Checking for service worker updates...');
       pwaLogger.log('CHECKING_FOR_UPDATES');
       await this.registration.update();
+      console.log('✅ [PWA Update] Update check completed');
     } catch (error) {
+      console.error('❌ [PWA Update] Update check failed:', error);
       pwaLogger.log('UPDATE_CHECK_ERROR', { 
         error: error instanceof Error ? error.message : 'Unknown error' 
       });
