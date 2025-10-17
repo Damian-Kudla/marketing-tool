@@ -1,4 +1,4 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -11,14 +11,29 @@ import { ViewModeProvider } from '@/contexts/ViewModeContext';
 import { UIPreferencesProvider } from '@/contexts/UIPreferencesContext';
 import { CallBackSessionProvider } from '@/contexts/CallBackSessionContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { ProtectedAdminRoute } from '@/components/ProtectedAdminRoute';
 import { PWAUpdatePrompt } from '@/components/PWAUpdatePrompt';
 import ScannerPage from "@/pages/scanner";
 import NotFound from "@/pages/not-found";
+
+// Lazy load admin dashboard for better performance
+const AdminDashboard = lazy(() => import("@/pages/admin-dashboard"));
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={ScannerPage} />
+      <Route path="/admin/dashboard">
+        <ProtectedAdminRoute>
+          <Suspense fallback={
+            <div className="flex items-center justify-center min-h-screen">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+            </div>
+          }>
+            <AdminDashboard />
+          </Suspense>
+        </ProtectedAdminRoute>
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );

@@ -1,11 +1,11 @@
 // Akquise-Tool PWA Service Worker
 // Optimized for performance with comprehensive caching strategies
-const VERSION = '2.3.4';
+const VERSION = '2.4.1';
 
-const CACHE_NAME = 'akquise-tool-v2.3.4';
-const STATIC_CACHE = 'static-cache-v2.3.4';
-const API_CACHE = 'api-cache-v2.3.4';
-const IMAGE_CACHE = 'image-cache-v2.3.4';
+const CACHE_NAME = 'akquise-tool-v2.4.1';
+const STATIC_CACHE = 'static-cache-v2.4.1';
+const API_CACHE = 'api-cache-v2.4.1';
+const IMAGE_CACHE = 'image-cache-v2.4.1';
 
 // Static assets to cache on install
 const STATIC_ASSETS = [
@@ -162,6 +162,13 @@ self.addEventListener('fetch', event => {
     return;
   }
   
+  // CRITICAL: Never cache admin routes - always fetch fresh data
+  if (url.pathname.startsWith('/admin') || url.pathname.startsWith('/api/admin')) {
+    logPWAAction('ADMIN_BYPASS', { url: request.url });
+    event.respondWith(fetch(request));
+    return;
+  }
+  
   // Handle different types of requests
   if (isStaticAsset(request)) {
     event.respondWith(handleStaticAsset(request));
@@ -191,6 +198,11 @@ function isAPIRequest(request) {
   
   // Exclude OCR API from caching (large image payloads)
   if (url.pathname.startsWith('/api/ocr')) {
+    return false;
+  }
+  
+  // Exclude admin API from caching (handled in fetch event)
+  if (url.pathname.startsWith('/api/admin')) {
     return false;
   }
   

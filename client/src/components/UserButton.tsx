@@ -4,6 +4,7 @@ import { useViewMode } from '@/contexts/ViewModeContext';
 import { useUIPreferences } from '@/contexts/UIPreferencesContext';
 import { useCallBackSession } from '@/contexts/CallBackSessionContext';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'wouter';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -30,7 +31,7 @@ import {
   Dialog,
   DialogContent,
 } from '@/components/ui/dialog';
-import { User, LogOut, ChevronDown, History, LayoutGrid, List, ArrowLeftToLine, Calendar, Languages, MessageSquare, FastForward, Filter } from 'lucide-react';
+import { User, LogOut, ChevronDown, History, LayoutGrid, List, ArrowLeftToLine, Calendar, Languages, MessageSquare, FastForward, Filter, ShieldCheck } from 'lucide-react';
 import { UserHistory } from './UserHistory';
 import { CallBackList } from './CallBackList';
 import { AppointmentsList } from './AppointmentsList';
@@ -42,11 +43,12 @@ interface UserButtonProps {
 }
 
 export function UserButton({ onDatasetLoad }: UserButtonProps) {
-  const { username, userId, logout } = useAuth();
+  const { username, userId, isAdmin, logout } = useAuth();
   const { viewMode, setViewMode } = useViewMode();
   const { callBackMode, setCallBackMode, showSystemMessages, setShowSystemMessages } = useUIPreferences();
   const { clearSession } = useCallBackSession();
   const { i18n } = useTranslation();
+  const [, setLocation] = useLocation();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showCallBacks, setShowCallBacks] = useState(false);
@@ -120,6 +122,19 @@ export function UserButton({ onDatasetLoad }: UserButtonProps) {
         
         <DropdownMenuSeparator />
         
+        {isAdmin && (
+          <>
+            <DropdownMenuItem 
+              className="cursor-pointer bg-blue-50 text-blue-700 font-medium"
+              onClick={() => setLocation('/admin/dashboard')}
+            >
+              <ShieldCheck className="w-4 h-4 mr-2" />
+              Admin Dashboard
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
+
         <DropdownMenuItem 
           className="cursor-pointer"
           onClick={() => setShowHistory(true)}

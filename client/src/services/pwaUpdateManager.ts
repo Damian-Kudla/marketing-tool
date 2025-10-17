@@ -113,14 +113,19 @@ export class PWAUpdateManager {
   private startPeriodicUpdateCheck(): void {
     // Check immediately
     this.checkForUpdates();
+    
+    // Also check server version immediately
+    this.checkServerVersion();
 
     // Then check periodically
     this.updateCheckInterval = window.setInterval(() => {
+      pwaLogger.log('PERIODIC_UPDATE_CHECK_RUNNING');
       this.checkForUpdates();
     }, this.UPDATE_CHECK_INTERVAL);
 
     pwaLogger.log('PERIODIC_UPDATE_CHECK_STARTED', { 
-      interval: this.UPDATE_CHECK_INTERVAL 
+      interval: this.UPDATE_CHECK_INTERVAL,
+      intervalSeconds: this.UPDATE_CHECK_INTERVAL / 1000
     });
   }
 
@@ -131,11 +136,13 @@ export class PWAUpdateManager {
   private setupVersionMonitoring(): void {
     // Check version periodically
     setInterval(() => {
+      pwaLogger.log('VERSION_MONITORING_CHECK_RUNNING');
       this.checkServerVersion();
     }, this.VERSION_CHECK_INTERVAL);
 
     pwaLogger.log('VERSION_MONITORING_STARTED', { 
-      interval: this.VERSION_CHECK_INTERVAL 
+      interval: this.VERSION_CHECK_INTERVAL,
+      intervalMinutes: this.VERSION_CHECK_INTERVAL / 60000
     });
   }
 
@@ -161,7 +168,13 @@ export class PWAUpdateManager {
   private async checkServerVersion(): Promise<void> {
     try {
       // Add cache-busting query parameter
-      const response = await fetch(`/version.json?t=${Date.now()}`, {
+      const url = `/version.json?t=${Date.now()}`;
+      pwaLogger.log('CHECKING_SERVER_VERSION', { 
+        url, 
+        currentVersion: this.currentVersion 
+      });
+
+      const response = await fetch(url, {
         cache: 'no-store',
         headers: {
           'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -170,18 +183,30 @@ export class PWAUpdateManager {
       });
 
       if (!response.ok) {
-        pwaLogger.log('VERSION_CHECK_FAILED', { status: response.status });
+        pwaLogger.log('VERSION_CHECK_FAILED', { 
+          status: response.status,
+          statusText: response.statusText
+        });
         return;
       }
 
       const data = await response.json();
       const serverVersion = data.version;
 
+      pwaLogger.log('VERSION_CHECK_RESPONSE', { 
+        current: this.currentVersion, 
+        server: serverVersion,
+        match: serverVersion === this.currentVersion
+      });
+
       if (serverVersion !== this.currentVersion) {
-        pwaLogger.log('VERSION_MISMATCH', { 
+        pwaLogger.log('VERSION_MISMATCH_DETECTED', { 
           current: this.currentVersion, 
           server: serverVersion 
         });
+        
+        // Update localStorage with new version for next reload
+        localStorage.setItem('app-version', serverVersion);
         
         // Force update check
         await this.checkForUpdates();
@@ -202,16 +227,21 @@ export class PWAUpdateManager {
     // Try to get version from meta tag
     const metaVersion = document.querySelector('meta[name="app-version"]')?.getAttribute('content');
     if (metaVersion) {
+      // Store in localStorage for future reference
+      localStorage.setItem('app-version', metaVersion);
+      pwaLogger.log('VERSION_READ_FROM_META', { version: metaVersion });
       return metaVersion;
     }
 
     // Try to get from localStorage
     const storedVersion = localStorage.getItem('app-version');
     if (storedVersion) {
+      pwaLogger.log('VERSION_READ_FROM_STORAGE', { version: storedVersion });
       return storedVersion;
     }
 
     // Default version
+    pwaLogger.log('VERSION_DEFAULT_FALLBACK', { version: '1.0.0' });
     return '1.0.0';
   }
 

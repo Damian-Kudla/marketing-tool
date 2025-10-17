@@ -1,30 +1,30 @@
 ﻿{
-  "version": "2.3.4",
-  "buildTime": "2025-10-16T14:45:00.000Z",
-  "buildNumber": "storage-cleanup",
+  "version": "2.4.1",
+  "buildTime": "2025-10-17T05:55:00.000Z",
+  "buildNumber": "pwa-update-fix",
   "features": [
-    " STORAGE-BEREINIGUNG: 90% weniger Speicherverbrauch (3-8 MB statt 50-120 MB)",
-    " IndexedDB komplett deaktiviert - keine Base64-Bilder mehr gespeichert",
-    " Automatische Bereinigung aller alten Caches beim App-Update",
-    " Nur aktuelles Bild im Memory - keine dauerhafte Speicherung"
+    "🔧 PWA UPDATE-CHECK FIX: Periodische Prüfung auf neue Versionen (alle 30s)",
+    "📊 Erweiterte Update-Logs: Detaillierte Console-Ausgaben für Debugging",
+    "🔄 Version-Check: Server-Version wird alle 5 Minuten geprüft",
+    "💾 Version-Tracking: App-Version in Meta-Tag und localStorage gespeichert",
+    "✅ Sofortige Checks: Version wird beim Start und periodisch geprüft"
   ],
-  "bugFixes": [
-    " IndexedDB 'EnergyScanner' wird bei Aktivierung gelöscht (40-100 MB frei)",
-    " Alte Service Worker Caches werden vollständig entfernt",
-    " LocalStorage-Logs (pwa-logs, pwa-metrics) werden automatisch gelöscht",
-    " Operator-Precedence-Bug in Cache-Filter behoben",
-    " OCR-Offline-Storage deaktiviert (spart Speicher + Akku)"
-  ],
-  "performance": [
-    " 90% weniger Speicherverbrauch",
-    " Bessere Akku-Laufzeit (weniger Storage I/O)",
-    " Schnellere Cache-Operationen",
-    " Keine Speicherplatz-Warnungen mehr"
+  "technicalDetails": [
+    "🔒 Admin Authentication: isAdmin check from JWT token",
+    "📊 Phase 1-3 Tracking: GPS (30s), Session (Idle Detection), Device, PDF Reports",
+    "🗺️ Leaflet 4.2.1: React 18 compatible mapping library",
+    "📈 Recharts 2.15.2: Status changes bar charts with color coding",
+    "📅 date-fns 3.6.0: Date formatting and picker",
+    "🚫 SW Exclusion: /admin + /api/admin bypassed for fresh data",
+    "⚡ Lazy Loading: AdminDashboard loaded on-demand (performance)"
   ],
   "previousFeatures": [
+    "✅ Phase 4: Admin Dashboard mit Leaflet Maps & Recharts (v2.4.0)",
+    "✅ Phase 1-3: Complete Tracking System (GPS, Session, Device, PDF, API) (v2.2.0-2.3.0)",
+    "✅ Enhanced Logging: JSON Data column in Google Sheets (v2.4.0)",
+    "✅ Storage Cleanup: 90% weniger Speicherverbrauch (v2.3.4)",
     " OCR-Bilder nicht mehr gecached (v2.3.3)",
     " Akku-Optimierung durch Smart Caching (v2.3.3)",
-    " Strikte Adressvalidierung (v2.3.3)",
-    " Smart Validation: Google validiert nur Straße+PLZ (v2.3.3)"
+    " Strikte Adressvalidierung (v2.3.3)"
   ]
 }
