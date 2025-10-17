@@ -17,13 +17,30 @@ const historicalCache = new Map<string, DailyUserData[]>();
 
 /**
  * Initialisiert Google Sheets API
+ * Verwendet GOOGLE_SHEETS_KEY (gleiche Env-Variable wie Live-Logging)
  */
 function getGoogleSheets(): sheets_v4.Sheets {
-  const credentials = JSON.parse(process.env.GOOGLE_SHEETS_CREDENTIALS || '{}');
+  const sheetsKey = process.env.GOOGLE_SHEETS_KEY || '{}';
+  
+  if (!sheetsKey.startsWith('{')) {
+    console.error('[HistoricalDataScraper] ❌ GOOGLE_SHEETS_KEY not set or invalid format');
+    throw new Error('Google Sheets credentials not configured. Please set GOOGLE_SHEETS_KEY environment variable with valid JSON.');
+  }
+
+  let credentials: any;
+  try {
+    credentials = JSON.parse(sheetsKey);
+  } catch (error) {
+    console.error('[HistoricalDataScraper] ❌ Failed to parse GOOGLE_SHEETS_KEY:', error);
+    throw new Error('Invalid Google Sheets credentials format. Must be valid JSON.');
+  }
   
   if (!credentials.client_email || !credentials.private_key) {
-    throw new Error('Google Sheets credentials not configured');
+    console.error('[HistoricalDataScraper] ❌ Missing client_email or private_key in credentials');
+    throw new Error('Google Sheets credentials incomplete. Missing client_email or private_key.');
   }
+
+  console.log('[HistoricalDataScraper] ✅ Credentials loaded, email:', credentials.client_email);
 
   const auth = new google.auth.JWT({
     email: credentials.client_email,
@@ -168,15 +185,18 @@ export async function scrapeDayData(date: string, userId?: string): Promise<Dail
     const sheets = getGoogleSheets();
     
     // Alle Logs für den Tag abrufen
+    console.log(`[HistoricalDataScraper] Fetching logs from Google Sheets (${SPREADSHEET_ID})`);
+    
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
       range: `${SHEET_NAME}!A:E`, // Timestamp, UserID, Username, Action, Details
     });
 
     const rows = response.data.values || [];
+    console.log(`[HistoricalDataScraper] ✅ Fetched ${rows.length} rows from Google Sheets`);
     
     if (rows.length === 0) {
-      console.log('[HistoricalDataScraper] No logs found in Google Sheets');
+      console.log('[HistoricalDataScraper] ⚠️ No logs found in Google Sheets');
       return [];
     }
 
@@ -226,9 +246,26 @@ export async function scrapeDayData(date: string, userId?: string): Promise<Dail
     console.log(`[HistoricalDataScraper] Reconstructed data for ${dailyDataArray.length} users`);
 
     return dailyDataArray;
-  } catch (error) {
-    console.error('[HistoricalDataScraper] Error scraping historical data:', error);
-    throw new Error('Failed to scrape historical data from Google Sheets');
+  } catch (error: any) {
+    console.error('[HistoricalDataScraper] ❌ Error scraping historical data:', error);
+    
+    // Detaillierte Fehlerausgabe für verschiedene Fehlertypen
+    if (error.code === 'ENOTFOUND') {
+      console.error('[HistoricalDataScraper] ❌ Network error: Cannot reach Google Sheets API');
+      throw new Error('Network error: Cannot connect to Google Sheets. Check internet connection.');
+    } else if (error.code === 403 || error.message?.includes('permission')) {
+      console.error('[HistoricalDataScraper] ❌ Permission error: No access to spreadsheet');
+      throw new Error('Permission denied: Service account needs access to the spreadsheet.');
+    } else if (error.code === 404) {
+      console.error('[HistoricalDataScraper] ❌ Spreadsheet not found');
+      throw new Error(`Spreadsheet not found: ${SPREADSHEET_ID}`);
+    } else if (error.message?.includes('credentials')) {
+      // Credentials-Fehler bereits in getGoogleSheets() behandelt
+      throw error;
+    } else {
+      console.error('[HistoricalDataScraper] ❌ Unexpected error:', error.message || error);
+      throw new Error(`Failed to scrape historical data: ${error.message || 'Unknown error'}`);
+    }
   }
 }
 

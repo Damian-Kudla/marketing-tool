@@ -5,15 +5,15 @@ import { checkRateLimit, incrementRateLimit } from '../middleware/rateLimit';
 
 // Helper function to get current time in Berlin timezone (MEZ/MESZ)
 function getBerlinTime(): Date {
-  // Create date in Berlin timezone
-  const berlinTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Berlin' }));
-  return berlinTime;
+  // IMPORTANT: Always use UTC Date objects internally
+  // This ensures consistent time calculations across different server timezones
+  return new Date();
 }
 
 // Helper function to format date for Berlin timezone as ISO string
 function formatBerlinTimeISO(date: Date): string {
-  // Just return the ISO string representation of the date
-  // The date object already contains the correct UTC time
+  // Return ISO string in UTC (standardized storage format)
+  // This avoids timezone confusion when reading back from Google Sheets
   return date.toISOString();
 }
 

@@ -3,21 +3,21 @@ import { z } from 'zod';
 import { addressDatasetService, normalizeAddress } from '../services/googleSheets';
 import { logUserActivityWithRetry } from '../services/enhancedLogging';
 
-// Helper function to get current time in Berlin timezone (MEZ/MESZ)
+// Helper function to get current time (always use UTC internally)
 function getBerlinTime(): Date {
-  const berlinTime = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Berlin' }));
-  return berlinTime;
+  // IMPORTANT: Always use UTC Date objects for consistent calculations
+  // This prevents timezone-related bugs when comparing dates
+  return new Date();
 }
 
 // Helper function to check if a date is within 30 days from now
 function isWithin30Days(date: Date): boolean {
-  const now = new Date(); // Use UTC time for comparison
+  const now = new Date(); // Current UTC time
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const thirtyDaysInFuture = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   
-  // Allow editing for datasets created within 30 days in the past OR future
-  // This handles both normal datasets and those with incorrect timezone timestamps
-  return date >= thirtyDaysAgo && date <= thirtyDaysInFuture;
+  // Only check past (datasets older than 30 days are not editable)
+  // No need to check future since we shouldn't have future timestamps
+  return date >= thirtyDaysAgo && date <= now;
 }
 import { 
   addressDatasetRequestSchema, 
@@ -191,9 +191,10 @@ router.post('/', async (req, res) => {
           ? `${existingDataset.street} ${existingDataset.houseNumber}` 
           : 'hier';
         
-        // Calculate days since creation
-        const daysSince = Math.floor((Date.now() - creationDate.getTime()) / (1000 * 60 * 60 * 24));
-        const daysRemaining = 30 - daysSince;
+        // Calculate days since creation (ensure non-negative)
+        const timeDiff = Date.now() - creationDate.getTime();
+        const daysSince = Math.max(0, Math.floor(timeDiff / (1000 * 60 * 60 * 24)));
+        const daysRemaining = Math.max(1, 30 - daysSince); // Minimum 1 day remaining
         
         if (existingDataset.createdBy !== username) {
           return res.status(409).json({ 

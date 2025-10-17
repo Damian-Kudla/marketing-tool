@@ -1,14 +1,14 @@
 ﻿{
-  "version": "2.4.2",
-  "buildTime": "2025-10-17T06:05:00.000Z",
-  "buildNumber": "pwa-update-complete-fix",
+  "version": "2.4.3",
+  "buildTime": "2025-10-17T10:30:00.000Z",
+  "buildNumber": "timezone-fix-and-historical-data",
   "features": [
-    "🔧 PWA UPDATE-CHECK COMPLETE FIX: Service Worker Ready Check vor Initialisierung",
-    "📊 Umfangreiche Console-Logs: Emoji-basierte Logs für einfaches Debugging",
-    "🔄 Periodische Checks: SW-Updates alle 30s, Version-Check alle 5min",
-    "⏰ Timing Fix: Update Manager startet erst NACH SW-Registrierung",
-    "✅ Admin-Redirect: Admin-User werden automatisch zum Dashboard weitergeleitet",
-    "🚀 Explizite Initialisierung: pwaUpdateManager.checkForUpdates() in main.tsx"
+    "� TIMEZONE FIX: Behebt 'Datensatz vor -1 Tag angelegt' Fehler",
+    "✅ getBerlinTime() korrigiert: Verwendet jetzt pure UTC statt fehlerhafte String-Konvertierung",
+    "� Historical Data Fix: GOOGLE_SHEETS_KEY statt GOOGLE_SHEETS_CREDENTIALS",
+    "🔍 Enhanced Error Handling: Detaillierte Fehler-Messages für historische Daten",
+    "⏱️ Sichere Zeitberechnungen: Math.max(0, daysSince) verhindert negative Werte",
+    "🌍 Timezone-unabhängig: Funktioniert konsistent in allen Server-Zeitzonen"
   ],
   "technicalDetails": [
     "🔒 Admin Authentication: isAdmin check from JWT token",

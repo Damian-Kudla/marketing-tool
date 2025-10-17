@@ -98,8 +98,13 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
  * Gibt historische Daten für ein bestimmtes Datum zurück
  */
 router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  // Deklariere date und userId außerhalb des try-Blocks für catch-Block Zugriff
+  let date: string | undefined;
+  let userId: string | undefined;
+  
   try {
-    const { date, userId } = req.query;
+    date = req.query.date as string | undefined;
+    userId = req.query.userId as string | undefined;
 
     if (!date || typeof date !== 'string') {
       return res.status(400).json({ error: 'Date parameter required (format: YYYY-MM-DD)' });
@@ -120,10 +125,17 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
       return res.status(400).json({ error: 'Cannot fetch data for future dates' });
     }
 
-    console.log(`[Admin API] Fetching historical data for ${date}${userId ? ` (user: ${userId})` : ''}`);
+    console.log(`[Admin API] 🔍 Fetching historical data for ${date}${userId ? ` (user: ${userId})` : ''}`);
 
     // Scrape Daten aus Google Sheets
-    const userData = await scrapeDayData(date, userId as string | undefined);
+    let userData: DailyUserData[];
+    try {
+      userData = await scrapeDayData(date, userId as string | undefined);
+      console.log(`[Admin API] ✅ Successfully scraped ${userData.length} user records`);
+    } catch (scrapeError: any) {
+      console.error(`[Admin API] ❌ Error scraping data:`, scrapeError.message);
+      throw scrapeError; // Re-throw für äußeren catch
+    }
 
     // Sortiere nach Activity Score
     userData.sort((a, b) => b.activityScore - a.activityScore);
@@ -176,9 +188,23 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
       clearHistoricalCache(date, userId as string | undefined);
     }, 5000); // 5 Sekunden Verzögerung für eventuelle Follow-up Requests
 
-  } catch (error) {
-    console.error('[Admin API] Error fetching historical data:', error);
-    res.status(500).json({ error: 'Failed to fetch historical data' });
+  } catch (error: any) {
+    console.error('[Admin API] ❌ Error fetching historical data:', error);
+    
+    // Detaillierte Fehlerausgabe für Debugging
+    const errorMessage = error.message || 'Failed to fetch historical data';
+    const errorDetails = {
+      error: errorMessage,
+      date,
+      timestamp: new Date().toISOString(),
+    };
+    
+    // Log vollständigen Fehler-Stack für Server-Debugging
+    if (error.stack) {
+      console.error('[Admin API] Error stack:', error.stack);
+    }
+    
+    res.status(500).json(errorDetails);
   }
 });
 
