@@ -21,6 +21,7 @@ import { logUserActivityWithRetry, logAuthAttemptWithRetry } from "./services/en
 import { authRouter } from "./routes/auth";
 import addressDatasetsRouter from "./routes/addressDatasets";
 import trackingRouter from "./routes/tracking";
+import adminRouter from "./routes/admin";
 import { addressDatasetService, normalizeAddress, categoryChangeLoggingService, appointmentService } from "./services/googleSheets";
 import { 
   performOrientationCorrection, 
@@ -85,6 +86,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Add tracking routes (authentication required)
   app.use("/api/tracking", requireAuth, trackingRouter);
+  
+  // Add admin routes (authentication + admin privileges required)
+  app.use("/api/admin", adminRouter);
   
   // Category change logging route
     app.post("/api/log-category-change", async (req, res) => {
@@ -292,7 +296,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           req,
           addressString,
           undefined,
-          undefined
+          undefined,
+          { // Data field
+            action: 'geocode',
+            latitude,
+            longitude,
+            street: address.street,
+            number: address.number,
+            postal: address.postal,
+            city: address.city
+          }
         );
       } catch (logError) {
         console.error('[POST /api/geocode] Failed to log activity:', logError);

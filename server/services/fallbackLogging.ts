@@ -11,6 +11,7 @@ interface LogEntry {
   newProspects?: string[];
   existingCustomers?: { name: string; id: string }[];
   userAgent: string;
+  data?: any;
 }
 
 interface AuthLogEntry {

@@ -44,6 +44,7 @@ export interface LogEntry {
   existingCustomers?: any[];
   method: string;
   userAgent?: string;
+  data?: any;
 }
 
 export class GoogleSheetsLoggingService {
@@ -94,7 +95,7 @@ export class GoogleSheetsLoggingService {
         // Add header row
         await sheetsClient.spreadsheets.values.update({
           spreadsheetId: this.LOG_SHEET_ID,
-          range: `${worksheetName}!A1:I1`,
+          range: `${worksheetName}!A1:J1`,
           valueInputOption: 'RAW',
           resource: {
             values: [
@@ -107,7 +108,8 @@ export class GoogleSheetsLoggingService {
                 'Address',
                 'New Prospects',
                 'Existing Customers',
-                'User Agent'
+                'User Agent',
+                'Data'
               ]
             ],
           },
@@ -131,7 +133,8 @@ export class GoogleSheetsLoggingService {
     req: AuthenticatedRequest, 
     address?: string, 
     newProspects?: string[], 
-    existingCustomers?: any[]
+    existingCustomers?: any[],
+    data?: any
   ): Promise<void> {
     if (!req.userId || !req.username) {
       return; // No user info, skip logging
@@ -145,6 +148,17 @@ export class GoogleSheetsLoggingService {
     try {
       const worksheetName = await this.ensureUserWorksheet(req.userId, req.username);
 
+      // Serialize data to JSON string if provided
+      let dataString = '';
+      if (data) {
+        try {
+          dataString = JSON.stringify(data);
+        } catch (error) {
+          console.error('Failed to serialize data:', error);
+          dataString = String(data);
+        }
+      }
+
       const logRow = [
         new Date().toISOString(), // Timestamp
         req.userId, // User ID
@@ -156,12 +170,13 @@ export class GoogleSheetsLoggingService {
         existingCustomers && existingCustomers.length > 0 
           ? existingCustomers.map(c => `${c.name} (${c.id})`).join(', ') 
           : '', // Existing Customers
-        req.get('User-Agent') || '' // User Agent
+        req.get('User-Agent') || '', // User Agent
+        dataString // Data (JSON)
       ];
 
       await sheetsClient.spreadsheets.values.append({
         spreadsheetId: this.LOG_SHEET_ID,
-        range: `${worksheetName}!A:I`,
+        range: `${worksheetName}!A:J`,
         valueInputOption: 'RAW',
         insertDataOption: 'INSERT_ROWS',
         resource: {
@@ -269,7 +284,7 @@ export class GoogleSheetsLoggingService {
     try {
       await sheetsClient.spreadsheets.values.append({
         spreadsheetId: this.LOG_SHEET_ID,
-        range: `${worksheetName}!A:I`,
+        range: `${worksheetName}!A:J`,
         valueInputOption: 'RAW',
         insertDataOption: 'INSERT_ROWS',
         resource: {

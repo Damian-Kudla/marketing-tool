@@ -5,7 +5,7 @@ Debug-Logging wurde in die `DatasetCache`-Klasse implementiert, um die Duplikats
 
 ---
 
-## 🎯 Implementierte Änderungen
+## 🎯 Implementierte Änderungen*Vorschlag: Retry mit Exponential Backoff**
 
 ### **1. Logging in `addressMatches()` Methode**
 **Datei**: `server/services/googleSheets.ts` (Zeilen ~37-95)

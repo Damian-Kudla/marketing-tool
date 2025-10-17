@@ -245,7 +245,16 @@ router.post('/', async (req, res) => {
         req,
         normalized.formattedAddress,
         undefined, // No prospects at creation
-        undefined  // No existing customers at creation
+        undefined, // No existing customers at creation
+        { // Data field
+          action: 'dataset_create',
+          datasetId: dataset.id,
+          street: normalized.street,
+          houseNumber: normalized.number,
+          city: normalized.city,
+          postalCode: normalized.postal,
+          residentsCount: dataset.editableResidents.length
+        }
       );
     } catch (logError) {
       console.error('[POST /api/address-datasets] Failed to log activity:', logError);
@@ -371,12 +380,19 @@ router.put('/residents', async (req, res) => {
 
     // Log resident update activity
     try {
-      const action = data.residentData === null ? 'deleted' : 'updated';
+      const action = data.residentData === null ? 'resident_delete' : 'resident_update';
       await logUserActivityWithRetry(
         req,
         dataset.normalizedAddress,
         undefined,
-        undefined
+        undefined,
+        { // Data field
+          action,
+          datasetId: data.datasetId,
+          residentIndex: data.residentIndex,
+          residentName: data.residentData?.name,
+          residentStatus: data.residentData?.status
+        }
       );
     } catch (logError) {
       console.error('[PUT /api/address-datasets/residents] Failed to log activity:', logError);
@@ -432,7 +448,16 @@ router.put('/bulk-residents', async (req, res) => {
         req,
         dataset.normalizedAddress,
         undefined,
-        undefined
+        undefined,
+        { // Data field
+          action: 'bulk_residents_update',
+          datasetId: data.datasetId,
+          residentsCount: data.editableResidents.length,
+          residents: data.editableResidents.map(r => ({
+            name: r.name,
+            status: r.status
+          }))
+        }
       );
     } catch (logError) {
       console.error('[PUT /api/address-datasets/bulk-residents] Failed to log activity:', logError);

@@ -25,12 +25,19 @@ router.post('/gps', async (req: AuthenticatedRequest, res: Response) => {
     // Store in RAM
     dailyDataStore.addGPS(req.userId, req.username, gps);
 
-    // Log to Google Sheets (via batch logger)
+    // Log to Google Sheets with GPS data
     await logUserActivityWithRetry(
       req,
-      undefined, // no address
+      `GPS: ${gps.latitude.toFixed(6)}, ${gps.longitude.toFixed(6)}`, // address field
       undefined,
-      undefined
+      undefined,
+      { // data field
+        action: 'gps_update',
+        latitude: gps.latitude,
+        longitude: gps.longitude,
+        accuracy: gps.accuracy,
+        timestamp
+      }
     );
 
     res.json({ success: true });
@@ -62,12 +69,27 @@ router.post('/session', async (req: AuthenticatedRequest, res: Response) => {
     // Recalculate KPIs
     dailyDataStore.calculateKPIs(req.userId);
 
-    // Log to Google Sheets (via batch logger)
+    // Determine action type from session data
+    let actionType = 'session_update';
+    if (session.actions && session.actions.length > 0) {
+      const lastAction = session.actions[session.actions.length - 1];
+      actionType = lastAction.action || 'session_update';
+    }
+
+    // Log to Google Sheets with session data
     await logUserActivityWithRetry(
       req,
       undefined,
       undefined,
-      undefined
+      undefined,
+      { // data field
+        action: actionType,
+        isActive: session.isActive,
+        idleTime: session.idleTime,
+        sessionDuration: session.sessionDuration,
+        actionsCount: session.actions?.length || 0,
+        timestamp
+      }
     );
 
     res.json({ success: true });
@@ -99,12 +121,22 @@ router.post('/device', async (req: AuthenticatedRequest, res: Response) => {
     // Recalculate KPIs
     dailyDataStore.calculateKPIs(req.userId);
 
-    // Log to Google Sheets (via batch logger)
+    // Log to Google Sheets with device data
     await logUserActivityWithRetry(
       req,
       undefined,
       undefined,
-      undefined
+      undefined,
+      { // data field
+        action: 'device_update',
+        batteryLevel: device.batteryLevel,
+        isCharging: device.isCharging,
+        connectionType: device.connectionType,
+        effectiveType: device.effectiveType,
+        screenOrientation: device.screenOrientation,
+        memoryUsage: device.memoryUsage,
+        timestamp
+      }
     );
 
     res.json({ success: true });

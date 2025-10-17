@@ -140,6 +140,18 @@ class BatchLogger {
     // So we send all logs for this user to their worksheet
     const logRows = entries.map(entry => {
       const log = entry.data;
+      
+      // Serialize data to JSON string if provided
+      let dataString = '';
+      if (log.data) {
+        try {
+          dataString = JSON.stringify(log.data);
+        } catch (error) {
+          console.error('[BatchLogger] Failed to serialize data:', error);
+          dataString = String(log.data);
+        }
+      }
+      
       return [
         log.timestamp,
         log.userId,
@@ -149,7 +161,8 @@ class BatchLogger {
         log.address || '',
         log.newProspects?.join(', ') || '',
         log.existingCustomers?.map(c => `${c.name} (${c.id})`).join(', ') || '',
-        log.userAgent
+        log.userAgent,
+        dataString
       ];
     });
 

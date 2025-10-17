@@ -108,7 +108,8 @@ export async function logUserActivityWithRetry(
   req: AuthenticatedRequest,
   address?: string,
   newProspects?: string[],
-  existingCustomers?: any[]
+  existingCustomers?: any[],
+  data?: any
 ): Promise<void> {
   const logEntry: LogEntry = {
     timestamp: new Date().toISOString(),
@@ -119,7 +120,8 @@ export async function logUserActivityWithRetry(
     address,
     newProspects,
     existingCustomers,
-    userAgent: req.get('User-Agent') || ''
+    userAgent: req.get('User-Agent') || '',
+    data
   };
 
   // Add to batch queue
@@ -193,7 +195,8 @@ export async function retryFailedLogs(): Promise<void> {
               mockReq,
               log.address,
               log.newProspects,
-              log.existingCustomers
+              log.existingCustomers,
+              log.data
             )
           );
         }
