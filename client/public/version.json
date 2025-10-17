@@ -1,14 +1,12 @@
 ﻿{
-  "version": "2.4.4",
-  "buildTime": "2025-10-17T12:00:00.000Z",
-  "buildNumber": "backwards-compatibility-and-cleanup",
+  "version": "2.4.5",
+  "buildTime": "2025-10-17T13:00:00.000Z",
+  "buildNumber": "customer-list-visibility-fix",
   "features": [
-    "🔄 BACKWARDS COMPATIBILITY: Alte fehlerhafte Datensätze (2h Zukunft) sind jetzt bearbeitbar",
-    "✅ isWithin30Days() erweitert: Akzeptiert Timestamps 30 Tage in Vergangenheit UND Zukunft",
-    "🏠 Hausnummer-Anzeige: Bei mehreren Hausnummern (Komma/Bindestrich) wird Nr. angezeigt",
-    "🔇 Debug-Logs entfernt: Keine Spam-Logs mehr von addressMatches (90% weniger Console-Logs)",
-    "📊 Reduziertes Logging: Nur noch bei Edit-Problemen (canEdit=false)",
-    "🔧 Auto-Cleanup: Nach 30 Tagen verfallen auch fehlerhafte Timestamps"
+    "✅ 'Alle Bestandskunden an dieser Adresse' wird IMMER angezeigt wenn Kunden existieren",
+    "🔧 Fix: Liste wird jetzt auch bei Adresssuche ohne Bild angezeigt",
+    "� Fix: Liste wird auch bei Bild-Upload ohne Match angezeigt",
+    "� allCustomersAtAddress wird jetzt immer gesetzt (scanner.tsx handleAddressSearch)"
   ],
   "technicalDetails": [
     "🔒 Admin Authentication: isAdmin check from JWT token",
@@ -20,12 +18,11 @@
     "⚡ Lazy Loading: AdminDashboard loaded on-demand (performance)"
   ],
   "previousFeatures": [
-    "✅ Phase 4: Admin Dashboard mit Leaflet Maps & Recharts (v2.4.0)",
-    "✅ Phase 1-3: Complete Tracking System (GPS, Session, Device, PDF, API) (v2.2.0-2.3.0)",
-    "✅ Enhanced Logging: JSON Data column in Google Sheets (v2.4.0)",
-    "✅ Storage Cleanup: 90% weniger Speicherverbrauch (v2.3.4)",
-    " OCR-Bilder nicht mehr gecached (v2.3.3)",
-    " Akku-Optimierung durch Smart Caching (v2.3.3)",
-    " Strikte Adressvalidierung (v2.3.3)"
+    "🔄 Backwards Compatibility: Alte Datensätze (2h Zukunft) bearbeitbar (v2.4.4)",
+    "🏠 Hausnummer-Anzeige bei mehreren Nummern (v2.4.4)",
+    "🔇 Debug-Logs reduziert (90% weniger) (v2.4.4)",
+    "✅ Phase 4: Admin Dashboard mit Maps & Charts (v2.4.0)",
+    "✅ Phase 1-3: Complete Tracking System (v2.2.0-2.3.0)",
+    " Storage Cleanup: 90% weniger Speicherverbrauch (v2.3.4)"
   ]
 }

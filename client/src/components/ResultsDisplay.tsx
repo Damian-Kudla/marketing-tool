@@ -942,20 +942,31 @@ export default function ResultsDisplay({
           >
             {/* Show all customers at address from Google Sheets first */}
             {/* Only show this list when NOT loading a dataset (externalDatasetId is null) */}
-            {/* When a dataset is loaded, show only editable lists below */}
-            {!externalDatasetId && result && result.allCustomersAtAddress && result.allCustomersAtAddress.length > 0 && (
+            {/* Show "All Customers at Address" section when:
+                1. No loaded dataset (not editing existing dataset)
+                2. AND either:
+                   - result.allCustomersAtAddress exists (from OCR/address search), OR
+                   - fixedCustomers exist (from loaded dataset without photo)
+            */}
+            {!externalDatasetId && (
+              (result && result.allCustomersAtAddress && result.allCustomersAtAddress.length > 0) ||
+              (fixedCustomers && fixedCustomers.length > 0)
+            ) && (
               <AccordionItem value="allCustomers">
                 <AccordionTrigger className="hover:no-underline">
                   <div className="flex items-center gap-2">
                     <User className="h-4 w-4 text-primary" />
                     <p className="text-sm font-medium">
-                      {t('results.allCustomersAtAddress')} ({result.allCustomersAtAddress.length})
+                      {t('results.allCustomersAtAddress')} (
+                        {(result?.allCustomersAtAddress?.length || 0) + (fixedCustomers?.length || 0)}
+                      )
                     </p>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent>
                   <div className="space-y-3 pt-3">
-                    {result.allCustomersAtAddress.map((customer, index) => {
+                    {/* Show customers from result.allCustomersAtAddress (if available) */}
+                    {result?.allCustomersAtAddress?.map((customer, index) => {
                 const isVisible = matchesSearch(customer.name);
                 
                 // Check if multiple house numbers were queried (contains comma or hyphen)
@@ -998,6 +1009,35 @@ export default function ResultsDisplay({
                   </div>
                 );
               })}
+                    
+                    {/* Also show fixedCustomers (from address-only search or loaded dataset without photo) */}
+                    {fixedCustomers?.map((resident, index) => {
+                      const isVisible = matchesSearch(resident.name);
+                      
+                      // Check if multiple house numbers were queried
+                      const multipleHouseNumbers = address?.number && (
+                        address.number.includes(',') || 
+                        address.number.includes('-')
+                      );
+                      
+                      return (
+                        <div
+                          key={`fixed-${index}`}
+                          className="flex items-center gap-3 p-3 rounded-lg border bg-card hover-elevate"
+                          data-testid={`row-fixed-customer-${index}`}
+                          style={{ display: isVisible ? 'flex' : 'none' }}
+                        >
+                          <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                            <User className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium overflow-x-auto whitespace-nowrap" data-testid={`text-fixed-customer-name-${index}`}>
+                              {resident.name}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </AccordionContent>
               </AccordionItem>

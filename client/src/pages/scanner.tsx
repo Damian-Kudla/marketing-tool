@@ -313,12 +313,13 @@ export default function ScannerPage() {
   const handleAddressSearch = useCallback((customers: any[]) => {
     console.log('Address search result:', customers);
     
-    // Show results as existing customers (since all customers at an address are existing)
-    // For address-only search, don't show allCustomersAtAddress section (would be redundant)
+    // Show results as existing customers
+    // Also set allCustomersAtAddress to show the "All Customers at Address" section
     setOcrResult({
       residentNames: [],
       existingCustomers: customers,
       newProspects: [],
+      allCustomersAtAddress: customers, // Include all customers to show in dedicated section
     });
     setShowDatasets(true); // Show datasets after address search
   }, []);
