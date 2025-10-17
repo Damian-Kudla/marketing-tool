@@ -958,8 +958,12 @@ export default function ResultsDisplay({
                     {result.allCustomersAtAddress.map((customer, index) => {
                 const isVisible = matchesSearch(customer.name);
                 
-                // Check if multiple house numbers were queried (contains comma)
-                const multipleHouseNumbers = address?.number && address.number.includes(',');
+                // Check if multiple house numbers were queried (contains comma or hyphen)
+                // Examples: "30,31,32" or "30-33" or "30, 31, 32"
+                const multipleHouseNumbers = address?.number && (
+                  address.number.includes(',') || 
+                  address.number.includes('-')
+                );
                 
                 return (
                   <div
@@ -976,7 +980,7 @@ export default function ResultsDisplay({
                         <p className="font-medium overflow-x-auto whitespace-nowrap" data-testid={`text-address-customer-name-${index}`}>
                           {customer.name}
                         </p>
-                        {/* Show house number ONLY when multiple numbers were queried */}
+                        {/* Show house number when multiple numbers were queried (comma or hyphen separated) */}
                         {multipleHouseNumbers && customer.houseNumber && (
                           <Badge variant="secondary" className="text-xs font-normal shrink-0">
                             Nr. {customer.houseNumber}

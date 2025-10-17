@@ -1,14 +1,14 @@
 ﻿{
-  "version": "2.4.3",
-  "buildTime": "2025-10-17T10:30:00.000Z",
-  "buildNumber": "timezone-fix-and-historical-data",
+  "version": "2.4.4",
+  "buildTime": "2025-10-17T12:00:00.000Z",
+  "buildNumber": "backwards-compatibility-and-cleanup",
   "features": [
-    "� TIMEZONE FIX: Behebt 'Datensatz vor -1 Tag angelegt' Fehler",
-    "✅ getBerlinTime() korrigiert: Verwendet jetzt pure UTC statt fehlerhafte String-Konvertierung",
-    "� Historical Data Fix: GOOGLE_SHEETS_KEY statt GOOGLE_SHEETS_CREDENTIALS",
-    "🔍 Enhanced Error Handling: Detaillierte Fehler-Messages für historische Daten",
-    "⏱️ Sichere Zeitberechnungen: Math.max(0, daysSince) verhindert negative Werte",
-    "🌍 Timezone-unabhängig: Funktioniert konsistent in allen Server-Zeitzonen"
+    "🔄 BACKWARDS COMPATIBILITY: Alte fehlerhafte Datensätze (2h Zukunft) sind jetzt bearbeitbar",
+    "✅ isWithin30Days() erweitert: Akzeptiert Timestamps 30 Tage in Vergangenheit UND Zukunft",
+    "🏠 Hausnummer-Anzeige: Bei mehreren Hausnummern (Komma/Bindestrich) wird Nr. angezeigt",
+    "🔇 Debug-Logs entfernt: Keine Spam-Logs mehr von addressMatches (90% weniger Console-Logs)",
+    "📊 Reduziertes Logging: Nur noch bei Edit-Problemen (canEdit=false)",
+    "🔧 Auto-Cleanup: Nach 30 Tagen verfallen auch fehlerhafte Timestamps"
   ],
   "technicalDetails": [
     "🔒 Admin Authentication: isAdmin check from JWT token",

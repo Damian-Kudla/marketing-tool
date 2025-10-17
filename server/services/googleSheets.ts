@@ -72,46 +72,26 @@ class DatasetCache {
     const searchBase = extractPostalAndStreet(searchNormalizedAddress);
     const datasetBase = extractPostalAndStreet(datasetNormalizedAddress);
 
-    // Debug logging: Show what we're comparing
-    console.log('[DatasetCache.addressMatches] Comparing addresses:', {
-      search: {
-        fullAddress: searchNormalizedAddress,
-        base: searchBase,
-        houseNumbers: searchHouseNumbers
-      },
-      dataset: {
-        fullAddress: datasetNormalizedAddress,
-        base: datasetBase,
-        houseNumbers: datasetHouseNumbers
-      }
-    });
-
     // First check: street + postal must match (city is ignored as it's optional)
     if (searchBase !== datasetBase) {
-      console.log('[DatasetCache.addressMatches] ❌ No match: Street or postal code differs');
       return false;
     }
-
-    console.log('[DatasetCache.addressMatches] ✅ Street + postal match, checking house numbers...');
 
     // Second check: BIDIRECTIONAL matching with overlap detection
     // Check if there's ANY overlap between the two sets of house numbers
     // Examples: "1" matches "1,2" | "1,2" matches "1" | "1" does NOT match "3,4"
     for (const searchNum of searchHouseNumbers) {
       if (datasetHouseNumbers.includes(searchNum)) {
-        console.log(`[DatasetCache.addressMatches] ✅ MATCH FOUND: House number "${searchNum}" found in dataset`);
         return true;
       }
     }
     
     for (const datasetNum of datasetHouseNumbers) {
       if (searchHouseNumbers.includes(datasetNum)) {
-        console.log(`[DatasetCache.addressMatches] ✅ MATCH FOUND: House number "${datasetNum}" found in search`);
         return true;
       }
     }
 
-    console.log('[DatasetCache.addressMatches] ❌ No match: No house number overlap');
     return false;
   }
 
@@ -181,22 +161,12 @@ class DatasetCache {
 
   // Get dataset from cache
   get(datasetId: string): AddressDataset | null {
-    const dataset = this.cache.get(datasetId) || null;
-    console.log(`[DatasetCache.get] Retrieving dataset ${datasetId}:`, dataset ? 'FOUND' : 'NOT FOUND');
-    return dataset;
+    return this.cache.get(datasetId) || null;
   }
 
   // Get datasets by normalized address with flexible house number matching
   getByAddress(normalizedAddress: string, limit?: number, houseNumber?: string): AddressDataset[] {
     const searchHouseNumbers = houseNumber ? this.extractHouseNumbers(houseNumber) : [];
-
-    console.log('[DatasetCache.getByAddress] Searching for datasets:', {
-      normalizedAddress,
-      houseNumber,
-      searchHouseNumbers,
-      totalDatasetsInCache: this.cache.size,
-      limit
-    });
 
     const matchingDatasets = Array.from(this.cache.values())
       .filter(ds => {
@@ -213,11 +183,7 @@ class DatasetCache {
         }
         
         // Fallback to exact match if no house numbers provided
-        const exactMatch = ds.normalizedAddress === normalizedAddress;
-        if (exactMatch) {
-          console.log('[DatasetCache.getByAddress] ✅ Exact match found (no house numbers to compare)');
-        }
-        return exactMatch;
+        return ds.normalizedAddress === normalizedAddress;
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     

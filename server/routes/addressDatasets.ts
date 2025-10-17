@@ -14,10 +14,13 @@ function getBerlinTime(): Date {
 function isWithin30Days(date: Date): boolean {
   const now = new Date(); // Current UTC time
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const thirtyDaysInFuture = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   
-  // Only check past (datasets older than 30 days are not editable)
-  // No need to check future since we shouldn't have future timestamps
-  return date >= thirtyDaysAgo && date <= now;
+  // BACKWARDS COMPATIBILITY: Accept dates within 30 days in PAST or FUTURE
+  // This handles datasets created with the old buggy getBerlinTime() function
+  // which created timestamps ~2 hours in the future (MESZ timezone bug)
+  // After 30 days, even those buggy timestamps will expire naturally
+  return date >= thirtyDaysAgo && date <= thirtyDaysInFuture;
 }
 import { 
   addressDatasetRequestSchema, 
@@ -551,9 +554,26 @@ router.get('/:id', async (req, res) => {
 
     // Check if dataset is editable (only creator within 30 days)
     const creationDate = dataset.createdAt instanceof Date ? dataset.createdAt : new Date(dataset.createdAt);
+    const now = new Date();
     const isEditable = isWithin30Days(creationDate);
     const usernameMatches = dataset.createdBy === username;
     const canEdit = usernameMatches && isEditable;
+    
+    // Debug: Log edit check details (only if canEdit is false for debugging)
+    if (!canEdit) {
+      console.log('[GET /:id] ❌ Edit NOT allowed:', {
+        datasetId: id,
+        createdAt: creationDate.toISOString(),
+        createdBy: dataset.createdBy,
+        requestingUser: username,
+        now: now.toISOString(),
+        timeDiff: now.getTime() - creationDate.getTime(),
+        daysSince: Math.floor((now.getTime() - creationDate.getTime()) / (1000 * 60 * 60 * 24)),
+        isEditable,
+        usernameMatches,
+        reason: !usernameMatches ? 'Not creator' : !isEditable ? 'Outside 30-day window' : 'Unknown',
+      });
+    }
 
     // Log dataset retrieval activity
     try {
