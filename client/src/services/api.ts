@@ -40,7 +40,9 @@ class ApiService {
       
       // Handle 401 Unauthorized responses
       if (response.status === 401 && requireAuth) {
-        throw new Error('Authentication required - please check your login status');
+        // ✅ Detect stale cookies scenario (managed by SessionStatusManager)
+        // Just throw German error message
+        throw new Error('Authentifizierung fehlgeschlagen - Sitzung abgelaufen');
       }
       
       return response;

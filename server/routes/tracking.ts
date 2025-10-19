@@ -57,7 +57,11 @@ router.post('/session', async (req: AuthenticatedRequest, res: Response) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const { session, timestamp } = req.body as { session: Partial<SessionData>; timestamp: number };
+    const { session, timestamp, memoryUsageMB } = req.body as { 
+      session: Partial<SessionData>; 
+      timestamp: number;
+      memoryUsageMB?: number; // Optional RAM usage in MB
+    };
 
     if (!session) {
       return res.status(400).json({ error: 'Invalid session data' });
@@ -76,7 +80,7 @@ router.post('/session', async (req: AuthenticatedRequest, res: Response) => {
       actionType = lastAction.action || 'session_update';
     }
 
-    // Log to Google Sheets with session data
+    // Log to Google Sheets with session data + RAM usage
     await logUserActivityWithRetry(
       req,
       undefined,
@@ -88,6 +92,7 @@ router.post('/session', async (req: AuthenticatedRequest, res: Response) => {
         idleTime: session.idleTime,
         sessionDuration: session.sessionDuration,
         actionsCount: session.actions?.length || 0,
+        memoryUsageMB: memoryUsageMB ?? null, // Add RAM usage (null if not available)
         timestamp
       }
     );

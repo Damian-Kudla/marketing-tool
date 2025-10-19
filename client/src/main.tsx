@@ -3,7 +3,12 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 import { pwaService } from "./services/pwa";
-import { pwaUpdateManager } from "./services/pwaUpdateManager";
+import { sessionStatusManager } from "./services/sessionStatusManager";
+
+// Initialize Session Status Manager FIRST (before any API calls)
+// This intercepts fetch globally to detect 401 errors
+console.log('🔒 [Session] Initializing global session monitor...');
+sessionStatusManager; // Force initialization
 
 // Initialize PWA service
 pwaService.preloadCriticalResources();
@@ -15,18 +20,7 @@ window.addEventListener('pwa-action', (event: Event) => {
   console.log('PWA Action logged:', customEvent.detail);
 });
 
-// Initialize PWA Update Manager AFTER Service Worker is ready
-// This ensures SW is registered before we start checking for updates
-console.log('🚀 [PWA Main] Starting PWA Update Manager initialization...');
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.ready.then(() => {
-    console.log('✅ [PWA Main] Service Worker ready, triggering update check');
-    pwaUpdateManager.checkForUpdates();
-  }).catch((error) => {
-    console.error('❌ [PWA Main] Service Worker ready failed:', error);
-  });
-} else {
-  console.warn('⚠️ [PWA Main] Service Worker not supported');
-}
+// Note: PWA Update Manager is initialized lazily when PWAUpdatePrompt component mounts
+// This prevents double initialization and ensures proper Service Worker readiness
 
 createRoot(document.getElementById("root")!).render(<App />);

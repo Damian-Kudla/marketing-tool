@@ -4,6 +4,7 @@ import { useToast } from '@/hooks/use-toast';
 import { authAPI } from '@/services/api';
 import { useQueryClient } from '@tanstack/react-query';
 import { trackingManager } from '@/services/trackingManager';
+import { sessionStatusManager } from '@/services/sessionStatusManager';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -50,6 +51,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setUsername(data.username);
           setIsAdmin(data.isAdmin || false);
           
+          // ✅ Set flag in localStorage for session expiration detection
+          localStorage.setItem('was_authenticated', 'true');
+          
           // Start tracking for non-admin users
           if (!data.isAdmin && data.userId && data.username) {
             await trackingManager.initialize(data.userId, data.username);
@@ -60,12 +64,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
           setUserId(null);
           setUsername(null);
           setIsAdmin(false);
+          // Don't remove flag here - we want to detect if session expired
         }
       } else {
         setIsAuthenticated(false);
         setUserId(null);
         setUsername(null);
         setIsAdmin(false);
+        // Don't remove flag here - we want to detect if session expired
       }
     } catch (error) {
       console.error('Auth check failed:', error);
@@ -101,6 +107,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setUserId(null);
       setUsername(null);
       setIsAdmin(false);
+      
+      // ✅ Clear the authentication flag on explicit logout
+      localStorage.removeItem('was_authenticated');
+      
+      // ✅ Reset session status manager (hides banner if showing)
+      sessionStatusManager.reset();
       
       // Clear all React Query caches to prevent showing wrong user's data
       queryClient.clear();

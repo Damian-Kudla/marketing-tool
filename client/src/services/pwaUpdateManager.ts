@@ -32,9 +32,15 @@ export class PWAUpdateManager {
   // Version-Check Intervall (Standard: 5 Minuten)
   private readonly VERSION_CHECK_INTERVAL = 300000;
 
+  private isInitialized = false;
+  private initializationPromise: Promise<void> | null = null;
+  private isFirstInstall = false;
+
   private constructor() {
     this.currentVersion = this.getCurrentVersion();
-    this.initialize();
+    // Check if this is the first time the app is loaded (no controller yet)
+    this.isFirstInstall = !navigator.serviceWorker.controller;
+    // Don't initialize in constructor - initialize lazily
   }
 
   public static getInstance(): PWAUpdateManager {
@@ -45,6 +51,26 @@ export class PWAUpdateManager {
   }
 
   private async initialize(): Promise<void> {
+    // If already initialized, return immediately
+    if (this.isInitialized) {
+      console.log('✅ [PWA Update Manager] Already initialized, skipping...');
+      return;
+    }
+
+    // If initialization is in progress, wait for it
+    if (this.initializationPromise) {
+      console.log('⏳ [PWA Update Manager] Initialization in progress, waiting...');
+      return this.initializationPromise;
+    }
+
+    // Mark as initializing and create promise
+    this.initializationPromise = this.doInitialize();
+    await this.initializationPromise;
+    this.isInitialized = true;
+    this.initializationPromise = null;
+  }
+
+  private async doInitialize(): Promise<void> {
     console.log('🔄 [PWA Update Manager] Starting initialization...', {
       hasServiceWorker: 'serviceWorker' in navigator,
       currentVersion: this.currentVersion
@@ -172,9 +198,19 @@ export class PWAUpdateManager {
   }
 
   /**
+   * Manually trigger initialization (called from main.tsx)
+   */
+  public async ensureInitialized(): Promise<void> {
+    await this.initialize();
+  }
+
+  /**
    * Check for service worker updates
    */
   public async checkForUpdates(): Promise<void> {
+    // Ensure we're initialized first
+    await this.ensureInitialized();
+
     if (!this.registration) {
       console.warn('⚠️ [PWA Update] Cannot check for updates - no registration');
       return;
@@ -298,6 +334,17 @@ export class PWAUpdateManager {
    * Handle controller change (update activated)
    */
   private handleControllerChange(): void {
+    // If this is the first install, don't reload - just log it
+    if (this.isFirstInstall) {
+      console.log('🎉 [PWA Update] First install complete, no reload needed');
+      pwaLogger.log('FIRST_INSTALL_CONTROLLER_CHANGED');
+      this.isFirstInstall = false; // Reset flag
+      return;
+    }
+
+    // This is a real update - reload the page
+    console.log('🔄 [PWA Update] Update activated, reloading page...');
+    
     // Update was activated, reload page
     if (!window.location.pathname.includes('/login')) {
       // Save current state if needed

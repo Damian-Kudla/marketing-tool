@@ -52,6 +52,9 @@ export function ResidentEditPopup({
     isFixed: false,
   });
   
+  // Track the initial category when popup opens (for change logging)
+  const [initialCategory, setInitialCategory] = useState<ResidentCategory | null>(null);
+  
   // Additional state for appointment details and general notes
   const [appointmentDate, setAppointmentDate] = useState('');
   const [appointmentTime, setAppointmentTime] = useState('');
@@ -60,6 +63,7 @@ export function ResidentEditPopup({
   useEffect(() => {
     if (resident && isOpen) {
       setFormData({ ...resident });
+      setInitialCategory(resident.category); // Store initial category
       // Reset appointment fields when opening popup
       setAppointmentDate('');
       setAppointmentTime('');
@@ -70,6 +74,7 @@ export function ResidentEditPopup({
         category: 'potential_new_customer' as ResidentCategory,
         isFixed: false,
       });
+      setInitialCategory(null);
       setAppointmentDate('');
       setAppointmentTime('');
       setGeneralNotes('');
@@ -109,7 +114,8 @@ export function ResidentEditPopup({
     }
 
     // Validate appointment fields if status is 'appointment'
-    if (formData.status === 'appointment') {
+    // BUT: Only if category is 'potential_new_customer' (status will be cleared for existing_customer anyway)
+    if (formData.status === 'appointment' && formData.category === 'potential_new_customer') {
       if (!appointmentDate || !appointmentTime) {
         toast({
           variant: 'destructive',
@@ -124,16 +130,17 @@ export function ResidentEditPopup({
     try {
       console.log('[ResidentEditPopup] Calling onSave with:', formData);
       
-      // Check if category was changed for an OCR-generated resident
-      if (resident?.originalCategory && resident.originalName && 
-          resident.originalCategory !== formData.category && 
-          currentDatasetId) {
-        
-        console.log('[ResidentEditPopup] Category change detected, logging...');
+      // Check if category was changed (use initialCategory from popup open, not originalCategory from OCR)
+      if (initialCategory && initialCategory !== formData.category && currentDatasetId) {
+        console.log('[ResidentEditPopup] Category change detected:', {
+          from: initialCategory,
+          to: formData.category,
+          resident: formData.name
+        });
         
         try {
           // Log category change to backend
-          await fetch('/api/log-category-change', {
+          const logResponse = await fetch('/api/log-category-change', {
             method: 'POST',
             credentials: 'include',
             headers: {
@@ -141,15 +148,21 @@ export function ResidentEditPopup({
             },
             body: JSON.stringify({
               datasetId: currentDatasetId,
-              residentOriginalName: resident.originalName,
+              residentOriginalName: resident?.originalName || formData.name,
               residentCurrentName: formData.name,
-              oldCategory: resident.originalCategory,
+              oldCategory: initialCategory,
               newCategory: formData.category,
               addressDatasetSnapshot: JSON.stringify(addressDataset || {})
             })
           });
           
-          console.log('[ResidentEditPopup] Category change logged successfully');
+          if (!logResponse.ok) {
+            console.error('[ResidentEditPopup] Failed to log category change:', logResponse.status, logResponse.statusText);
+            const errorText = await logResponse.text();
+            console.error('[ResidentEditPopup] Error response:', errorText);
+          } else {
+            console.log('[ResidentEditPopup] Category change logged successfully');
+          }
         } catch (logError) {
           console.error('[ResidentEditPopup] Failed to log category change:', logError);
           // Don't fail the save if logging fails

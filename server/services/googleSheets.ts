@@ -24,16 +24,57 @@ class DatasetCache {
   private syncInterval: NodeJS.Timeout | null = null;
   private sheetsService: AddressDatasetService | null = null;
 
-  // Helper function to extract and normalize house numbers from a string
-  private extractHouseNumbers(houseNumberStr: string): string[] {
-    // Split by comma and trim whitespace, filter out empty strings
-    return houseNumberStr
-      .split(',')
-      .map(num => num.trim())
-      .filter(num => num.length > 0);
+  // Helper function to expand house number range to individual numbers
+  // Examples: "1-3" → ["1", "2", "3"], "1,2,3" → ["1", "2", "3"], "2" → ["2"]
+  private expandHouseNumberRange(houseNumber: string): string[] {
+    if (!houseNumber) return [];
+    
+    // Split by comma AND slash (handles "1,2,3" or "23/24" or "1,3-5")
+    const parts = houseNumber.split(/[,\/]/).map(p => p.trim()).filter(p => p.length > 0);
+    
+    const expanded: string[] = [];
+    
+    for (const part of parts) {
+      // Check if this part is a range (contains hyphen)
+      if (part.includes('-')) {
+        const rangeParts = part.split('-');
+        if (rangeParts.length === 2) {
+          const start = parseInt(rangeParts[0].trim());
+          const end = parseInt(rangeParts[1].trim());
+          
+          if (!isNaN(start) && !isNaN(end) && start <= end) {
+            // Limit to max 50 numbers to prevent abuse
+            const rangeSize = end - start + 1;
+            if (rangeSize > 50) {
+              console.warn(`[HouseNumber] Range too large: ${part} (${rangeSize} numbers), limiting to 50`);
+              // Add only start and end as fallback
+              expanded.push(start.toString());
+              expanded.push(end.toString());
+            } else {
+              // Generate all numbers in range
+              for (let i = start; i <= end; i++) {
+                expanded.push(i.toString());
+              }
+            }
+          } else {
+            // Invalid range, treat as literal
+            expanded.push(part);
+          }
+        } else {
+          // Multiple hyphens, treat as literal
+          expanded.push(part);
+        }
+      } else {
+        // Single number or letter suffix (e.g., "10a")
+        expanded.push(part);
+      }
+    }
+    
+    // Remove duplicates and return
+    return Array.from(new Set(expanded));
   }
 
-  // Helper function to check if address matches considering house numbers
+  // Helper function to check if address matches considering house numbers with EXPANSION
   private addressMatches(
     searchNormalizedAddress: string, 
     searchHouseNumbers: string[],
@@ -47,19 +88,49 @@ class DatasetCache {
       const postalMatch = normalizedAddr.match(/\b\d{5}\b/);
       const postal = postalMatch ? postalMatch[0] : '';
       
-      // Extract street name (take part before postal code)
-      let streetPart = normalizedAddr;
-      if (postal) {
-        const postalIndex = normalizedAddr.indexOf(postal);
-        if (postalIndex > 0) {
-          streetPart = normalizedAddr.substring(0, postalIndex);
+      // NEW: Find street name by looking for common patterns
+      // Street names usually contain: "straße", "str", "weg", "platz", etc.
+      // And they come BEFORE city/district names
+      
+      let streetName = '';
+      
+      // Split by comma to get parts
+      const parts = normalizedAddr.split(',').map(p => p.trim());
+      
+      // Look for the part that contains a street indicator
+      for (const part of parts) {
+        const lowerPart = part.toLowerCase();
+        // Check if this part contains a street name
+        if (
+          lowerPart.includes('straße') ||
+          lowerPart.includes('strasse') ||
+          lowerPart.includes('str') ||
+          lowerPart.includes('weg') ||
+          lowerPart.includes('platz') ||
+          lowerPart.includes('allee') ||
+          lowerPart.includes('gasse') ||
+          lowerPart.includes('ring') ||
+          lowerPart.includes('damm')
+        ) {
+          streetName = part;
+          break;
         }
       }
       
-      // Normalize street name: remove numbers, punctuation, and common words
-      let street = streetPart
+      // If no street indicator found, take the first part (before first comma or before postal)
+      if (!streetName) {
+        if (postal) {
+          const postalIndex = normalizedAddr.indexOf(postal);
+          streetName = postalIndex > 0 ? normalizedAddr.substring(0, postalIndex) : parts[0] || '';
+        } else {
+          streetName = parts[0] || '';
+        }
+      }
+      
+      // Normalize street name: remove numbers, punctuation
+      let street = streetName
         .replace(/\d+[a-zA-Z]?(?:,?\s*\d+[a-zA-Z]?)*/g, '') // Remove house numbers
-        .replace(/[,\.]/g, '') // Remove punctuation
+        .replace(/[,\.\/]/g, ' ') // Replace punctuation with spaces
         .replace(/straße/gi, 'str') // Normalize street names
         .replace(/strasse/gi, 'str')
         .replace(/\s+/g, ' ') // Normalize spaces
@@ -80,6 +151,7 @@ class DatasetCache {
     // Second check: BIDIRECTIONAL matching with overlap detection
     // Check if there's ANY overlap between the two sets of house numbers
     // Examples: "1" matches "1,2" | "1,2" matches "1" | "1" does NOT match "3,4"
+    
     for (const searchNum of searchHouseNumbers) {
       if (datasetHouseNumbers.includes(searchNum)) {
         return true;
@@ -91,10 +163,11 @@ class DatasetCache {
         return true;
       }
     }
-
+    
+    // No overlap found
     return false;
   }
-
+  
   // Load all datasets from Google Sheets into RAM
   async initialize(sheetsService: AddressDatasetService) {
     this.sheetsService = sheetsService;
@@ -166,11 +239,13 @@ class DatasetCache {
 
   // Get datasets by normalized address with flexible house number matching
   getByAddress(normalizedAddress: string, limit?: number, houseNumber?: string): AddressDataset[] {
-    const searchHouseNumbers = houseNumber ? this.extractHouseNumbers(houseNumber) : [];
+    const searchHouseNumbers = houseNumber ? this.expandHouseNumberRange(houseNumber) : [];
+
+    console.log('[DatasetCache.getByAddress] 🔎 Search:', normalizedAddress, houseNumber ? `(#${houseNumber})` : '');
 
     const matchingDatasets = Array.from(this.cache.values())
       .filter(ds => {
-        const datasetHouseNumbers = this.extractHouseNumbers(ds.houseNumber);
+        const datasetHouseNumbers = this.expandHouseNumberRange(ds.houseNumber);
         
         // Use flexible matching if house numbers are provided
         if (searchHouseNumbers.length > 0 && datasetHouseNumbers.length > 0) {
@@ -187,21 +262,9 @@ class DatasetCache {
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     
-    console.log(`[DatasetCache.getByAddress] Found ${matchingDatasets.length} matching dataset(s)`);
-    
     const result = limit ? matchingDatasets.slice(0, limit) : matchingDatasets;
     
-    if (result.length > 0) {
-      console.log('[DatasetCache.getByAddress] Returning datasets:', 
-        result.map(ds => ({
-          id: ds.id,
-          address: ds.normalizedAddress,
-          houseNumber: ds.houseNumber,
-          createdAt: ds.createdAt,
-          createdBy: ds.createdBy
-        }))
-      );
-    }
+    console.log(`[DatasetCache.getByAddress] ✅ Found ${result.length} dataset(s)`);
     
     return result;
   }
@@ -536,6 +599,8 @@ class AddressDatasetService implements AddressSheetsService {
 
     try {
       // Write to Google Sheets immediately (new dataset)
+      console.log(`[createAddressDataset] Writing dataset ${id} to sheets...`);
+      
       await sheetsClient.spreadsheets.values.append({
         spreadsheetId: this.ADDRESSES_SHEET_ID,
         range: `${this.ADDRESSES_WORKSHEET_NAME}!A:J`,
@@ -545,14 +610,23 @@ class AddressDatasetService implements AddressSheetsService {
         }
       });
 
+      console.log(`[createAddressDataset] ✅ Successfully written dataset ${id} to sheets`);
+
       // Add to cache WITHOUT marking dirty (already written to sheets)
       datasetCache.addNew(fullDataset);
 
       console.log(`Created address dataset ${id} for ${dataset.normalizedAddress}`);
       return fullDataset;
     } catch (error) {
-      console.error('Error creating address dataset:', error);
-      throw new Error('Failed to create address dataset');
+      console.error('[createAddressDataset] ❌ ERROR writing to sheets:', error);
+      
+      // FALLBACK: Add to cache and mark as dirty to retry later
+      console.log('[createAddressDataset] Adding to cache as dirty for retry...');
+      datasetCache.set(fullDataset, true); // Mark as dirty!
+      
+      // Still return the dataset (it's in cache)
+      console.log(`Created address dataset ${id} for ${dataset.normalizedAddress} (in cache, will retry write)`);
+      return fullDataset;
     }
   }
 
@@ -712,9 +786,23 @@ class AddressDatasetService implements AddressSheetsService {
         
         // Only include datasets with at least one call back status
         if (notReachedCount > 0 || interestLaterCount > 0) {
+          // ✅ FIX: Build address from individual fields instead of normalized address
+          // Format: "Straße Hausnummer, PLZ Stadt" (like in Verlauf/History)
+          const addressParts = [
+            dataset.street,
+            dataset.houseNumber,
+          ].filter(Boolean).join(' ');
+          
+          const locationParts = [
+            dataset.postalCode,
+            dataset.city,
+          ].filter(Boolean).join(' ');
+          
+          const displayAddress = [addressParts, locationParts].filter(Boolean).join(', ');
+          
           return {
             datasetId: dataset.id,
-            address: dataset.normalizedAddress,
+            address: displayAddress,
             notReachedCount,
             interestLaterCount,
             createdAt: dataset.createdAt
@@ -1404,10 +1492,52 @@ export async function normalizeAddress(
       throw new Error('Postleitzahl muss angegeben werden');
     }
 
+    // STEP 1: Try Nominatim (OpenStreetMap) first - FREE and better for real street addresses!
+    console.log('[normalizeAddress] Step 1: Trying Nominatim (OSM)...');
+    const { geocodeWithNominatim } = await import('./nominatim');
+    
+    try {
+      // Extract only the FIRST house number for Nominatim (it can't handle "23/24" or "23,24")
+      // Examples: "23/24" → "23", "23,24" → "23", "1-3" → "1"
+      let firstNumber = number;
+      if (number.includes('/')) {
+        firstNumber = number.split('/')[0].trim();
+        console.log(`[normalizeAddress] Multiple numbers detected (slash), using first: "${number}" → "${firstNumber}"`);
+      } else if (number.includes(',')) {
+        firstNumber = number.split(',')[0].trim();
+        console.log(`[normalizeAddress] Multiple numbers detected (comma), using first: "${number}" → "${firstNumber}"`);
+      } else if (number.includes('-')) {
+        firstNumber = number.split('-')[0].trim();
+        console.log(`[normalizeAddress] Range detected (hyphen), using first: "${number}" → "${firstNumber}"`);
+      }
+      
+      const nominatimResult = await geocodeWithNominatim(street, firstNumber, postal, city);
+      
+      if (nominatimResult && nominatimResult.street && nominatimResult.number) {
+        console.log('[normalizeAddress] ✅ SUCCESS with Nominatim!');
+        console.log('[normalizeAddress] Normalized:', nominatimResult.formattedAddress);
+        
+        return {
+          formattedAddress: nominatimResult.formattedAddress,
+          street: nominatimResult.street,
+          number: number, // Keep user's house number input
+          city: nominatimResult.city,
+          postal: nominatimResult.postal,
+        };
+      } else {
+        console.warn('[normalizeAddress] Nominatim returned incomplete data, falling back to Google...');
+      }
+    } catch (nominatimError: any) {
+      console.warn('[normalizeAddress] Nominatim error:', nominatimError.message);
+      console.warn('[normalizeAddress] Falling back to Google Geocoding...');
+    }
+
+    // STEP 2: Fallback to Google Geocoding API
+    console.log('[normalizeAddress] Step 2: Trying Google Geocoding API...');
     const apiKey = process.env.GOOGLE_GEOCODING_API_KEY;
     if (!apiKey) {
-      console.warn('Google Geocoding API key not configured - address validation disabled');
-      // Without API key, we can't validate the address properly
+      console.warn('[normalizeAddress] Google Geocoding API key not configured');
+      console.warn('[normalizeAddress] Nominatim failed and no Google fallback available');
       return null;
     }
 
@@ -1423,11 +1553,10 @@ export async function normalizeAddress(
     }
 
     // Construct address string for geocoding
-    // We validate street name and postal code with Google, but keep the user's house number
     const addressString = `${street} ${number}, ${postal} ${city || ''}, Deutschland`.trim();
     const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addressString)}&key=${apiKey}&language=de`;
     
-    console.log('[normalizeAddress] Validating:', addressString);
+    console.log('[normalizeAddress] Validating with Google:', addressString);
     const response = await fetch(url);
     const data = await response.json();
 
@@ -1435,10 +1564,30 @@ export async function normalizeAddress(
       const result = data.results[0];
       const addressComponents = result.address_components;
       
+      // FIX 1: Reject partial matches (Google couldn't find the exact address)
+      // This prevents accepting POIs, transit stations, or approximate locations
+      if (result.partial_match === true) {
+        console.warn('[normalizeAddress] Rejected: Partial match - Google could not find exact address');
+        console.warn('[normalizeAddress] Input:', addressString);
+        console.warn('[normalizeAddress] Google returned:', result.formatted_address);
+        console.warn('[normalizeAddress] This might be a POI, transit station, or the address does not exist');
+        return null;
+      }
+      
       // Validate that the result contains a street (route) component
       const hasRoute = addressComponents.some((component: any) => 
         component.types.includes('route')
       );
+      
+      // FIX 2: Route component is REQUIRED for all addresses
+      // This ensures we only accept real streets, not POIs or transit stations
+      if (!hasRoute) {
+        console.warn('[normalizeAddress] Rejected: No street (route) component found');
+        console.warn('[normalizeAddress] This indicates a POI, transit station, or area name - not a street address');
+        console.warn('[normalizeAddress] Formatted:', result.formatted_address);
+        console.warn('[normalizeAddress] Types:', result.types?.join(', '));
+        return null;
+      }
       
       // Validate that the result contains a street number
       const hasStreetNumber = addressComponents.some((component: any) => 
@@ -1452,6 +1601,7 @@ export async function normalizeAddress(
         hasRoute,
         hasStreetNumber,
         locationType,
+        partialMatch: result.partial_match || false,
         formatted: result.formatted_address
       });
       
@@ -1467,28 +1617,24 @@ export async function normalizeAddress(
       const postalStr = postal?.toString() || '';
       
       // Accept if formatted address contains street name and postal code
-      // AND has a route component (to ensure it's actually a street, not a city area)
-      // Note: Some addresses don't include house number in formatted_address (e.g., "Neusser Weyhe")
-      if (hasRoute && formattedLower.includes(streetLower) && formattedLower.includes(postalStr)) {
-        console.log('[normalizeAddress] Accepted: Formatted address contains street and postal code with route');
+      // (route component already validated above)
+      if (formattedLower.includes(streetLower) && formattedLower.includes(postalStr)) {
+        console.log('[normalizeAddress] Accepted: Formatted address contains street and postal code');
         return extractAddressComponents(result, number);
       }
       
-      // Fallback: If route component exists and postal matches, accept it
-      if (hasRoute && formattedLower.includes(postalStr)) {
-        console.log('[normalizeAddress] Accepted: Has route component and postal code matches');
-        return extractAddressComponents(result, number);
-      }
-      
-      // Last resort: Check if postal code matches and location is reasonably close
-      // This handles edge cases where street names are formatted differently
+      // Fallback: If postal code matches, accept it
+      // (route component already validated, so we know it's a real street)
       if (formattedLower.includes(postalStr)) {
-        console.log('[normalizeAddress] Accepted: Postal code matches (last resort)');
+        console.log('[normalizeAddress] Accepted: Route component exists and postal code matches');
         return extractAddressComponents(result, number);
       }
       
       // Reject if we can't verify the address
-      console.warn('[normalizeAddress] Invalid: Cannot verify address from geocoding result');
+      console.warn('[normalizeAddress] Rejected: Cannot verify address from geocoding result');
+      console.warn('[normalizeAddress] Street name mismatch or postal code not found in formatted address');
+      console.warn('[normalizeAddress] Input street:', street);
+      console.warn('[normalizeAddress] Google formatted:', result.formatted_address);
       return null;
     }
     

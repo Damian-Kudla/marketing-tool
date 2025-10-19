@@ -91,10 +91,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/admin", adminRouter);
   
   // Category change logging route
-    app.post("/api/log-category-change", async (req, res) => {
+    app.post("/api/log-category-change", requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
+      console.log('[API] /api/log-category-change called by user:', req.username);
+      
       const validatedData = logCategoryChangeRequestSchema.parse(req.body);
-      const username = req.cookies.auth_token || "unknown";
+      const username = req.username || "unknown";
+
+      console.log('[API] Logging category change:', {
+        datasetId: validatedData.datasetId,
+        resident: validatedData.residentCurrentName,
+        oldCategory: validatedData.oldCategory,
+        newCategory: validatedData.newCategory,
+        changedBy: username
+      });
 
       await categoryChangeLoggingService.logCategoryChange(
         validatedData.datasetId,
@@ -106,9 +116,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         validatedData.addressDatasetSnapshot
       );
 
+      console.log('[API] Category change logged successfully');
       res.json({ success: true });
     } catch (error) {
-      console.error("Error logging category change:", error);
+      console.error("[API] Error logging category change:", error);
       res.status(500).json({ error: "Failed to log category change" });
     }
   });
@@ -250,73 +261,140 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
   
   app.post("/api/geocode", requireAuth, rateLimitMiddleware('geocoding'), async (req: AuthenticatedRequest, res) => {
+  try {
+    const body = geocodingRequestSchema.parse(req.body);
+    const { latitude, longitude } = body;
+    const geocodingKey = process.env.GOOGLE_GEOCODING_API_KEY;
+    if (!geocodingKey) {
+      return res.status(503).json({ error: "Geocoding API key not configured" });
+    }
+
+    // Verwende die Standard-URL ohne zusätzliche Filter, um nur einen Request zu machen und Kosten zu minimieren.
+    // Stattdessen wähle das beste Ergebnis aus den zurückgegebenen Results basierend auf einer Heuristik.
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${geocodingKey}&language=de`;
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.status !== "OK") {
+      return res.status(400).json({ error: "Geocoding failed" });
+    }
+
+    if (!data.results || data.results.length === 0) {
+      return res.status(400).json({ error: "No geocoding results found" });
+    }
+
+    // Hilfsfunktion zur Bewertung eines Results: Priorisiere Results mit street_number, street_address/premise-Typen und hoher Genauigkeit (ROOFTOP > RANGE_INTERPOLATED > andere).
+    const scoreResult = (result: any): number => {
+      let score = 0;
+
+      // Hohe Priorität für Presence von street_number in address_components
+      if (result.address_components.some((comp: any) => comp.types.includes('street_number'))) {
+        score += 50;
+      }
+
+      // Priorität für route (Straße)
+      if (result.address_components.some((comp: any) => comp.types.includes('route'))) {
+        score += 30;
+      }
+
+      // Priorität für postal_code und locality
+      if (result.address_components.some((comp: any) => comp.types.includes('postal_code'))) {
+        score += 10;
+      }
+      if (result.address_components.some((comp: any) => comp.types.includes('locality'))) {
+        score += 10;
+      }
+
+      // Priorität für types: street_address oder premise (genaue Adresse)
+      if (result.types.includes('street_address') || result.types.includes('premise') || result.types.includes('subpremise')) {
+        score += 40;
+      } else if (result.types.includes('route')) {
+        score += 20;
+      }
+
+      // Priorität für geometry.location_type: ROOFTOP ist am besten, dann RANGE_INTERPOLATED, dann andere
+      switch (result.geometry.location_type) {
+        case 'ROOFTOP':
+          score += 30;
+          break;
+        case 'RANGE_INTERPOLATED':
+          score += 20;
+          break;
+        case 'GEOMETRIC_CENTER':
+          score += 10;
+          break;
+        case 'APPROXIMATE':
+          score += 5;
+          break;
+      }
+
+      return score;
+    };
+
+    // Finde das Result mit dem höchsten Score
+    const bestResult = data.results.reduce((best: any, current: any) => {
+      return scoreResult(current) > scoreResult(best) ? current : best;
+    }, data.results[0]);
+
+    // Extrahiere Adresskomponenten aus dem besten Result
+    const addressComponents = bestResult.address_components;
+    const address: Partial<Address> = {
+      street: '',
+      number: '',
+      postal: '',
+      city: ''
+    };
+
+    for (const component of addressComponents) {
+      if (component.types.includes('route')) {
+        address.street = component.long_name;
+      } else if (component.types.includes('street_number')) {
+        address.number = component.long_name;
+      } else if (component.types.includes('postal_code')) {
+        address.postal = component.long_name;
+      } else if (component.types.includes('locality')) {
+        address.city = component.long_name;
+      }
+    }
+
+    // Überprüfung auf Land (Deutschland): Bei Nicht-DE Error zurückgeben (kein country im Response)
+    const countryComponent = addressComponents.find((comp: any) => comp.types.includes('country'));
+    if (countryComponent && countryComponent.long_name !== 'Deutschland' && countryComponent.long_name !== 'Germany') {
+      return res.status(400).json({ error: "Location not in Germany" });
+    }
+
+    // Log geocoding activity with GPS coordinates in data field
+    const addressString = `${address.street} ${address.number}, ${address.postal} ${address.city}`.trim();
     try {
-      const body = geocodingRequestSchema.parse(req.body);
-      const { latitude, longitude } = body;
-
-      const geocodingKey = process.env.GOOGLE_GEOCODING_API_KEY;
-      if (!geocodingKey) {
-        return res.status(503).json({ error: "Geocoding API key not configured" });
-      }
-
-      const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${geocodingKey}&language=de`;
-      const response = await fetch(url);
-      const data = await response.json();
-
-      if (data.status !== "OK") {
-        return res.status(400).json({ error: "Geocoding failed" });
-      }
-
-      const result = data.results[0];
-      const addressComponents = result.address_components;
-
-      const address: Partial<Address> = {
-        street: '',
-        number: '',
-        postal: '',
-        city: ''
-      };
-
-      for (const component of addressComponents) {
-        if (component.types.includes('route')) {
-          address.street = component.long_name;
-        } else if (component.types.includes('street_number')) {
-          address.number = component.long_name;
-        } else if (component.types.includes('postal_code')) {
-          address.postal = component.long_name;
-        } else if (component.types.includes('locality')) {
-          address.city = component.long_name;
-        }
-      }
-
-      // Log geocoding activity
-      const addressString = `${address.street} ${address.number}, ${address.postal} ${address.city}`.trim();
-      try {
-        await logUserActivityWithRetry(
-          req,
-          addressString,
-          undefined,
-          undefined,
-          { // Data field
-            action: 'geocode',
+      await logUserActivityWithRetry(
+        req,
+        addressString,
+        undefined,
+        undefined,
+        { 
+          action: 'geocode',
+          gps: {
             latitude,
-            longitude,
+            longitude
+          },
+          address: {
             street: address.street,
             number: address.number,
             postal: address.postal,
             city: address.city
           }
-        );
-      } catch (logError) {
-        console.error('[POST /api/geocode] Failed to log activity:', logError);
-      }
-
-      res.json(address);
-    } catch (error) {
-      console.error("Geocoding error:", error);
-      res.status(400).json({ error: "Invalid request" });
+        }
+      );
+    } catch (logError) {
+      console.error('[POST /api/geocode] Failed to log activity:', logError);
     }
-  });  app.post("/api/ocr", requireAuth, rateLimitMiddleware('vision'), upload.single("image"), async (req: AuthenticatedRequest, res) => {
+
+    res.json(address);
+  } catch (error) {
+    console.error("Geocoding error:", error);
+    res.status(400).json({ error: "Invalid request" });
+  }
+});  app.post("/api/ocr", requireAuth, rateLimitMiddleware('vision'), upload.single("image"), async (req: AuthenticatedRequest, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No image file provided" });
@@ -539,9 +617,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Use the storage method with fuzzy matching
       const matches = await storage.getCustomersByAddress(address);
       
-      // Log the address search
+      // Log the address search WITH existing customers in the dedicated column
       const addressString = address ? `${address.street} ${address.number}, ${address.city} ${address.postal}`.trim() : undefined;
-      await logUserActivityWithRetry(req, addressString);
+      await logUserActivityWithRetry(
+        req, 
+        addressString, 
+        undefined, // No newProspects for address search
+        matches    // Pass existing customers to log in dedicated column
+      );
       
       res.json(matches);
     } catch (error) {

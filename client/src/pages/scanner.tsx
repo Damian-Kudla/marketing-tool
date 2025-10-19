@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import GPSAddressForm, { type Address } from '@/components/GPSAddressForm';
 import PhotoCapture from '@/components/PhotoCapture';
@@ -44,10 +44,39 @@ export default function ScannerPage() {
   const [showAddressOverview, setShowAddressOverview] = useState(false);
   const [showCallBackModeBanner, setShowCallBackModeBanner] = useState(false);
   const [resetKey, setResetKey] = useState(0); // Key to force PhotoCapture remount on reset
+  
+  // State for dataset creation lock (prevent race conditions)
+  const [isCreatingDataset, setIsCreatingDataset] = useState(false);
+  
+  // Debounce timer for rapid successive calls
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Memory Optimization: Listen for dataset creation and cleanup photo state
+  useEffect(() => {
+    const handleDatasetCreatedCleanup = () => {
+      console.log('[Scanner] Dataset created - performing memory cleanup');
+      setPhotoImageSrc(null); // Force garbage collection of large Base64 image
+      setOcrResult(null); // Also clear OCR result to free memory
+    };
+
+    window.addEventListener('dataset-created-cleanup', handleDatasetCreatedCleanup);
+
+    return () => {
+      window.removeEventListener('dataset-created-cleanup', handleDatasetCreatedCleanup);
+    };
+  }, []);
 
   // Auto-reset when address changes to a different normalized address
   useEffect(() => {
     const newNormalizedAddress = createNormalizedAddressString(address);
+    
+    // FIX: Hide datasets section when address is cleared
+    if (!newNormalizedAddress) {
+      console.log('[Address Cleared] Hiding datasets section');
+      setShowDatasets(false);
+      setNormalizedAddress(null);
+      return;
+    }
     
     // Check if we have a dataset loaded and the address has changed
     if (currentDatasetId && normalizedAddress && newNormalizedAddress) {
@@ -55,16 +84,16 @@ export default function ScannerPage() {
         console.log('[Address Change Detected] Old:', normalizedAddress, '→ New:', newNormalizedAddress);
         console.log('[Address Change] Resetting dataset and clearing state');
         
-        // Clear all dataset-related state
+        // Clear all dataset-related state (Memory Optimization)
         setCurrentDatasetId(null);
         setDatasetCreatedAt(null);
         setEditableResidents([]);
         setOcrResult(null);
-        setPhotoImageSrc(null);
+        setPhotoImageSrc(null); // ← Important for memory
         setCanEdit(true);
         
-        // Update the datasets list for the new address
-        setShowDatasets(true);
+        // FIX: Hide datasets section when address changes
+        setShowDatasets(false);
         
         toast({
           title: t('dataset.addressChanged', 'Address changed'),
@@ -98,7 +127,6 @@ export default function ScannerPage() {
         number: dataset.houseNumber,
         city: dataset.city || '',
         postal: dataset.postalCode || '',
-        country: 'Deutschland',
       };
       
       console.log('[handleDatasetLoad] Setting address:', address);
@@ -214,10 +242,31 @@ export default function ScannerPage() {
   };
 
   const handleRequestDatasetCreation = async (): Promise<string | null> => {
+    // DEBOUNCE: Clear existing timer on rapid calls (300ms window)
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // Wait 300ms before proceeding (debounce window)
+    return new Promise((resolve) => {
+      debounceTimerRef.current = setTimeout(async () => {
+        debounceTimerRef.current = null;
+
+    // LOCK: Prevent concurrent calls (Race Condition Protection)
+    if (isCreatingDataset) {
+      console.log('[handleRequestDatasetCreation] 🔒 Already creating dataset, ignoring duplicate call');
+      resolve(null);
+      return;
+    }
+
     // If dataset already exists, return it
     if (currentDatasetId) {
-      return currentDatasetId;
+      resolve(currentDatasetId);
+      return;
     }
+
+    // Set lock before starting async operations
+    setIsCreatingDataset(true);
 
     // Automatically create dataset without confirmation dialog
     try {
@@ -228,7 +277,22 @@ export default function ScannerPage() {
           title: t('dataset.createError', 'Fehler beim Erstellen'),
           description: t('dataset.createErrorDesc', 'Datensatz konnte nicht erstellt werden'),
         });
-        return null;
+        setIsCreatingDataset(false); // Release lock
+        resolve(null);
+        return;
+      }
+
+      // Validate required address fields before making API call
+      if (!address.street || !address.number || !address.postal) {
+        console.error('[handleRequestDatasetCreation] Incomplete address:', address);
+        toast({
+          variant: 'destructive',
+          title: t('error.incompleteAddress', 'Unvollständige Adresse'),
+          description: t('error.incompleteAddressDesc', 'Straße, Hausnummer und Postleitzahl müssen angegeben werden'),
+        });
+        setIsCreatingDataset(false); // Release lock
+        resolve(null);
+        return;
       }
 
       console.log('[handleRequestDatasetCreation] Creating dataset for address:', address);
@@ -256,7 +320,8 @@ export default function ScannerPage() {
         description: t('dataset.createdDesc', 'Datensatz wurde erfolgreich erstellt'),
       });
 
-      return dataset.id;
+      setIsCreatingDataset(false); // Release lock on success
+      resolve(dataset.id);
     } catch (error: any) {
       console.error('[handleRequestDatasetCreation] Error creating dataset:', error);
       
@@ -281,8 +346,13 @@ export default function ScannerPage() {
           description: error.message || t('dataset.createErrorDesc', 'Datensatz konnte nicht erstellt werden'),
         });
       }
-      return null;
+      
+      // CRITICAL: Always release lock in catch block (prevents deadlock)
+      setIsCreatingDataset(false);
+      resolve(null);
     }
+      }, 300); // 300ms debounce
+    });
   };
 
   // confirmDatasetCreation and cancelDatasetCreation removed - dataset creation is now automatic

@@ -356,10 +356,17 @@ export default function ImageWithOverlays({
       // Create a set of current resident names (lowercase) for quick lookup
       const currentResidentNamesSet = new Set(residentNames.map(n => n.toLowerCase()));
       
-      // Filter out edited overlays whose originalName no longer exists in residentNames
-      const editedOverlays = prevOverlays.filter(o => 
-        o.isEdited && currentResidentNamesSet.has(o.originalName.toLowerCase())
-      );
+      // Create a mapping of originalName -> currentName from editableResidents
+      const originalToCurrentName = new Map<string, string>();
+      editableResidents.forEach(r => {
+        if (r.originalName) {
+          originalToCurrentName.set(r.originalName.toLowerCase(), r.name);
+        }
+      });
+      
+      // Keep ALL edited overlays - don't filter them out!
+      // They will be updated by the second useEffect based on editableResidents
+      const editedOverlays = prevOverlays.filter(o => o.isEdited);
       
       const processedNewOverlays = handleOverlaps(newOverlays);
       
@@ -425,7 +432,7 @@ export default function ImageWithOverlays({
       
       return merged;
     });
-  }, [fullVisionResponse, residentNames, existingCustomers, newProspects]);
+  }, [fullVisionResponse, residentNames, existingCustomers, newProspects, editableResidents]);
 
   // Calculate optimal font size for text to fit in box without truncation
   const calculateFontSize = (text: string, boxWidth: number, boxHeight: number): number => {
@@ -456,6 +463,62 @@ export default function ImageWithOverlays({
     
     return Math.max(fontSize, minFontSize);
   };
+
+  // Update overlay properties when editableResidents changes (name, category, etc.)
+  useEffect(() => {
+    if (overlays.length === 0 || editableResidents.length === 0) return;
+
+    setOverlays(prevOverlays => {
+      return prevOverlays.map(overlay => {
+        // Try multiple matching strategies to find the corresponding resident
+        // Strategy 1: Match by current displayed text (most reliable for repeated edits)
+        let matchingResident = editableResidents.find(r => 
+          r.name.toLowerCase() === (overlay.editedText || overlay.text).toLowerCase()
+        );
+
+        // Strategy 2: Match by originalName if Strategy 1 failed
+        if (!matchingResident) {
+          matchingResident = editableResidents.find(r => 
+            r.originalName?.toLowerCase() === overlay.originalName.toLowerCase()
+          );
+        }
+
+        // Strategy 3: Match by original text if both failed
+        if (!matchingResident) {
+          matchingResident = editableResidents.find(r => 
+            r.name.toLowerCase() === overlay.text.toLowerCase()
+          );
+        }
+
+        if (!matchingResident) {
+          // Resident was deleted - keep overlay as is but maybe mark it
+          console.log('[ImageWithOverlays] No matching resident found for overlay:', overlay.text);
+          return overlay;
+        }
+
+        // Update text if name changed
+        const updatedText = matchingResident.name;
+        const isExisting = matchingResident.category === 'existing_customer';
+        const isDuplicate = overlay.isDuplicate; // Keep duplicate status
+
+        // Only update if something actually changed (prevent unnecessary re-renders)
+        if (overlay.text === updatedText && 
+            overlay.isExisting === isExisting && 
+            overlay.isDuplicate === isDuplicate) {
+          return overlay; // No changes needed
+        }
+
+        return {
+          ...overlay,
+          text: updatedText,
+          editedText: updatedText !== overlay.originalName ? updatedText : undefined,
+          isExisting,
+          isDuplicate,
+          isEdited: updatedText !== overlay.originalName
+        };
+      });
+    });
+  }, [editableResidents]);
 
   // Handle overlapping boxes by downscaling and offsetting
   const handleOverlaps = (boxes: OverlayBox[]): OverlayBox[] => {

@@ -281,6 +281,19 @@ class SessionTrackingService {
   }
 
   /**
+   * Get current memory usage in MB
+   */
+  private getMemoryUsage(): number | null {
+    // @ts-ignore - performance.memory is only available in Chrome/Edge
+    if (performance.memory && performance.memory.usedJSHeapSize) {
+      // @ts-ignore
+      const usedMemoryMB = Math.round(performance.memory.usedJSHeapSize / (1024 * 1024));
+      return usedMemoryMB;
+    }
+    return null;
+  }
+
+  /**
    * Sync session data to backend
    */
   private async syncSession(): Promise<void> {
@@ -291,6 +304,12 @@ class SessionTrackingService {
     // Calculate session duration
     const now = Date.now();
     this.sessionData.sessionDuration = now - this.sessionData.startTime;
+
+    // Capture memory usage (negligible performance impact)
+    const memoryUsageMB = this.getMemoryUsage();
+    if (memoryUsageMB !== null) {
+      console.log(`[Session] Memory usage: ${memoryUsageMB} MB`);
+    }
 
     try {
       const response = await fetch('/api/tracking/session', {
@@ -305,7 +324,8 @@ class SessionTrackingService {
             // Convert Set/Map to arrays for JSON serialization
             actions: this.sessionData.actions
           },
-          timestamp: now
+          timestamp: now,
+          memoryUsageMB // Add RAM usage to payload
         })
       });
 

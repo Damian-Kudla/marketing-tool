@@ -1,10 +1,12 @@
 import { useTranslation } from 'react-i18next';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { trackingManager } from '@/services/trackingManager';
+import { debounceAsync } from '@/lib/debounce';
+import { STATUS_LABELS } from '@/constants/statuses';
 import {
   Accordion,
   AccordionContent,
@@ -21,7 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { User, AlertCircle, UserCheck, UserPlus, Edit, Trash2, X } from 'lucide-react';
+import { User, AlertCircle, UserCheck, UserPlus, Edit, Trash2, X, Loader2 } from 'lucide-react';
 import ImageWithOverlays from './ImageWithOverlays';
 import { ResidentEditPopup } from './ResidentEditPopup';
 import { ClickableAddressHeader } from './ClickableAddressHeader';
@@ -37,6 +39,28 @@ import type {
   AddressDataset,
   ResidentStatus
 } from '@/../../shared/schema';
+
+/**
+ * ✅ UTILITY: Sanitize resident data before sending to backend
+ * Ensures status is undefined for existing_customer category
+ */
+const sanitizeResident = (resident: EditableResident): EditableResident => {
+  if (resident.category === 'existing_customer' && resident.status) {
+    console.warn(`[sanitizeResident] ⚠️ Clearing status "${resident.status}" for existing_customer:`, resident.name);
+    return {
+      ...resident,
+      status: undefined
+    };
+  }
+  return resident;
+};
+
+/**
+ * ✅ UTILITY: Sanitize array of residents
+ */
+const sanitizeResidents = (residents: EditableResident[]): EditableResident[] => {
+  return residents.map(sanitizeResident);
+};
 
 export interface Customer {
   id?: string;
@@ -139,6 +163,15 @@ export default function ResultsDisplay({
   const [statusMenuPosition, setStatusMenuPosition] = useState({ x: 0, y: 0 });
   const [statusMenuResident, setStatusMenuResident] = useState<{ resident: EditableResident; index: number } | null>(null);
 
+  // State for dataset creation lock (prevent race conditions)
+  const [isCreatingDataset, setIsCreatingDataset] = useState(false);
+
+  // Debounce timer for rapid successive calls
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Track previous residents to prevent unnecessary parent notifications
+  const prevResidentsRef = useRef<EditableResident[]>([]);
+
   // Initialize editable residents from OCR result or initialResidents
   useEffect(() => {
     console.log('[ResultsDisplay useEffect] Triggered with:', {
@@ -161,7 +194,7 @@ export default function ResultsDisplay({
         if (JSON.stringify(prev) === JSON.stringify(initialResidents)) {
           return prev; // No change, return same reference
         }
-        onResidentsUpdated?.(initialResidents);
+        // FIX: Don't call onResidentsUpdated here - will be called in separate useEffect
         return initialResidents;
       });
       
@@ -186,7 +219,7 @@ export default function ResultsDisplay({
       // Only clear if not already empty (prevent infinite loops)
       setEditableResidentsInternal(prev => {
         if (prev.length === 0) return prev;
-        onResidentsUpdated?.([]);
+        // FIX: Don't call onResidentsUpdated here - will be called in separate useEffect
         return [];
       });
       setFixedCustomers([]);
@@ -238,7 +271,7 @@ export default function ResultsDisplay({
       if (JSON.stringify(prev) === JSON.stringify(allResidents)) {
         return prev; // No change, return same reference
       }
-      onResidentsUpdated?.(allResidents);
+      // FIX: Don't call onResidentsUpdated here - will be called in separate useEffect
       return allResidents;
     });
     
@@ -249,6 +282,22 @@ export default function ResultsDisplay({
       setCurrentDatasetId(null);
     }
   }, [result, externalDatasetId, initialResidents, canEdit]); // onResidentsUpdated intentionally excluded to prevent infinite loops
+
+  // FIX: Notify parent of resident changes AFTER state update (prevents React warning)
+  // Only notify if residents actually changed (prevents infinite loops)
+  useEffect(() => {
+    // Compare with previous value using JSON.stringify (deep equality)
+    const currentJSON = JSON.stringify(editableResidents);
+    const prevJSON = JSON.stringify(prevResidentsRef.current);
+    
+    if (currentJSON !== prevJSON) {
+      console.log('[ResultsDisplay] Residents changed, notifying parent:', editableResidents.length);
+      prevResidentsRef.current = editableResidents; // Update ref BEFORE calling callback
+      onResidentsUpdated?.(editableResidents);
+    } else {
+      console.log('[ResultsDisplay] Residents unchanged, skipping parent notification');
+    }
+  }, [editableResidents]); // Intentionally exclude onResidentsUpdated to prevent infinite loops
 
   // Handle editing a resident from the list
   const handleEditResidentFromList = async (residentName: string, category: ResidentCategory) => {
@@ -279,48 +328,73 @@ export default function ResultsDisplay({
     setShowEditPopup(true);
   };
 
-  // Request dataset creation automatically without confirmation
+  // Request dataset creation automatically without confirmation (with debounce)
   const handleRequestDatasetCreation = async (): Promise<string | null> => {
+    // DEBOUNCE: Clear existing timer on rapid calls (300ms window)
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // Wait 300ms before proceeding (debounce window)
+    return new Promise((resolve) => {
+      debounceTimerRef.current = setTimeout(async () => {
+        debounceTimerRef.current = null;
+    
+    // LOCK: Prevent concurrent calls (Race Condition Protection)
+    if (isCreatingDataset) {
+      console.log('[handleRequestDatasetCreation] 🔒 Already creating dataset, ignoring duplicate call');
+      // Wait for existing creation to finish by returning null
+      // The calling component should handle this gracefully
+      resolve(null);
+      return;
+    }
+
     // If dataset already exists, return it
     if (currentDatasetId) {
-      return currentDatasetId;
+      resolve(currentDatasetId);
+      return;
     }
+    
+    // Set lock before starting async operations
+    setIsCreatingDataset(true);
     
     // Automatically create dataset without confirmation dialog
     try {
       if (!address) {
         toast({
-          variant: "destructive",
-          title: t('dataset.createError', 'Error creating'),
-          description: t('dataset.createErrorDesc', 'Dataset could not be created'),
-        });
-        return null;
-      }
+        variant: "destructive",
+        title: t('dataset.createError', 'Error creating'),
+        description: t('dataset.createErrorDesc', 'Dataset could not be created'),
+      });
+      setIsCreatingDataset(false); // Release lock
+      resolve(null);
+      return;
+    }
 
-      // Validate address completeness: street, number, and postal are required
-      if (!address.street || !address.number || !address.postal) {
-        toast({
-          variant: "destructive",
-          title: t('error.incompleteAddress', 'Unvollständige Adresse'),
-          description: t('error.incompleteAddressDesc', 'Straße, Hausnummer und Postleitzahl müssen angegeben werden'),
-        });
-        return null;
-      }
-
-      // Check if we're updating an existing editable dataset
+    // Validate address completeness: street, number, and postal are required
+    if (!address.street || !address.number || !address.postal) {
+      toast({
+        variant: "destructive",
+        title: t('error.incompleteAddress', 'Unvollständige Adresse'),
+        description: t('error.incompleteAddressDesc', 'Straße, Hausnummer und Postleitzahl müssen angegeben werden'),
+      });
+      setIsCreatingDataset(false); // Release lock
+      resolve(null);
+      return;
+    }      // Check if we're updating an existing editable dataset
       if (currentDatasetId && canEdit) {
         console.log('[handleRequestDatasetCreation] Updating existing dataset:', currentDatasetId);
-        await datasetAPI.bulkUpdateResidents(currentDatasetId, editableResidents);
+        await datasetAPI.bulkUpdateResidents(currentDatasetId, sanitizeResidents(editableResidents));
         
         toast({
           title: t('dataset.updated', 'Dataset updated'),
-          description: t('dataset.updatedDesc', 'Dataset was updated successfully'),
-        });
-        
-        return currentDatasetId;
-      }
-
-      // Create dataset with 15 second timeout
+        description: t('dataset.updatedDesc', 'Dataset was updated successfully'),
+      });
+      
+      setIsCreatingDataset(false); // Release lock
+      resolve(currentDatasetId);
+      return;
+    }      // Create dataset with 15 second timeout
       const timeoutPromise = new Promise<AddressDataset | null>((_, reject) => 
         setTimeout(() => reject(new Error('TIMEOUT_ERROR')), 15000)
       );
@@ -348,6 +422,7 @@ export default function ResultsDisplay({
             title: t('dataset.timeout', 'Timeout'),
             description: t('dataset.timeoutDesc', 'Dataset creation took too long. Please try again.'),
           });
+          setIsCreatingDataset(false); // Release lock
           return null;
         }
         
@@ -360,16 +435,26 @@ export default function ResultsDisplay({
       setCurrentDatasetId(newDataset.id);
       onDatasetCreatedAtChange?.(newDataset.createdAt.toString());
       
+      // Memory Optimization: Clear photo state after successful dataset creation
+      console.log('[ResultsDisplay] Memory cleanup: Clearing photo state after dataset creation');
+      if (typeof window !== 'undefined') {
+        // Trigger cleanup in parent component (scanner.tsx)
+        window.dispatchEvent(new CustomEvent('dataset-created-cleanup'));
+      }
+      
       toast({
         title: t('dataset.created', 'Dataset created'),
         description: t('dataset.createdDesc', 'New dataset was created successfully'),
       });
 
+      setIsCreatingDataset(false); // Release lock on success
       return newDataset.id;
-    } catch (error: any) {
-      console.error('Error creating dataset:', error);
-      
-      // Check if it's a 429 rate limit error
+    
+    // CRITICAL: Always release lock in catch block (prevents deadlock)
+    setIsCreatingDataset(false);
+    resolve(null);
+  } catch (error: any) {
+    console.error('Error creating dataset:', error);      // Check if it's a 429 rate limit error
       if (error?.response?.status === 429) {
         const errorData = error.response?.data || {};
         const errorMessage = errorData.message || 'Zu viele Anfragen. Bitte warte eine Minute.';
@@ -412,8 +497,13 @@ export default function ResultsDisplay({
           description: error.message || t('dataset.createErrorDesc', 'Datensatz konnte nicht erstellt werden'),
         });
       }
-      return null;
+      
+      // CRITICAL: Always release lock in catch block (prevents deadlock)
+      setIsCreatingDataset(false);
+      resolve(null);
     }
+      }, 300); // 300ms debounce
+    });
   };
 
   // Filter function for real-time search (substring matching)
@@ -428,17 +518,20 @@ export default function ResultsDisplay({
     try {
       console.log('[handleResidentSave] Saving resident:', JSON.stringify(updatedResident, null, 2));
       
+      // ✅ SANITIZE: Clear status if category is existing_customer
+      const sanitizedResident = sanitizeResident(updatedResident);
+      
       // Update local state first
       const updatedResidents = [...editableResidents];
       
       if (editingResidentIndex === null) {
         // Adding new resident
         console.log('[handleResidentSave] Adding new resident to list');
-        updatedResidents.push(updatedResident);
+        updatedResidents.push(sanitizedResident);
       } else {
         // Updating existing resident
         console.log('[handleResidentSave] Updating resident at index', editingResidentIndex);
-        updatedResidents[editingResidentIndex] = updatedResident;
+        updatedResidents[editingResidentIndex] = sanitizedResident;
       }
       
       setEditableResidents(updatedResidents);
@@ -450,7 +543,7 @@ export default function ResultsDisplay({
       // Live-Sync: Update backend immediately if dataset exists
       if (currentDatasetId && canEdit) {
         console.log('[handleResidentSave] Live-sync: Updating dataset', currentDatasetId);
-        await datasetAPI.bulkUpdateResidents(currentDatasetId, updatedResidents);
+        await datasetAPI.bulkUpdateResidents(currentDatasetId, sanitizeResidents(updatedResidents));
 
         toast({
           title: t('resident.edit.success', 'Resident saved'),
@@ -500,7 +593,7 @@ export default function ResultsDisplay({
     // Live-Sync: Update entire resident list in backend if dataset exists and is editable
     if (currentDatasetId && canEdit) {
       console.log('[handleResidentDelete] Live-sync: Deleting resident and updating dataset', currentDatasetId);
-      await datasetAPI.bulkUpdateResidents(currentDatasetId, updatedResidents);
+      await datasetAPI.bulkUpdateResidents(currentDatasetId, sanitizeResidents(updatedResidents));
     }
 
     // Update the names list to remove deleted resident from overlays
@@ -530,33 +623,76 @@ export default function ResultsDisplay({
     setShowDeleteConfirmation(true);
   };
 
-  // Handle status change from context menu (Long Press)
+  // Handle status/category change from context menu (Long Press)
   const handleStatusChange = async (newStatus: ResidentStatus) => {
     if (!statusMenuResident) return;
 
-    const { resident, index } = statusMenuResident;
+    const { resident } = statusMenuResident;
     
     try {
+      // FIX: If no dataset exists yet, create one first
+      if (!currentDatasetId) {
+        console.log('[handleStatusChange] No dataset exists, creating one first...');
+        const createdDatasetId = await handleRequestDatasetCreation();
+        if (!createdDatasetId) {
+          console.log('[handleStatusChange] Dataset creation failed or was cancelled');
+          setStatusMenuOpen(false);
+          setStatusMenuResident(null);
+          return;
+        }
+        console.log('[handleStatusChange] Dataset created:', createdDatasetId);
+        
+        // After dataset creation, editableResidents has been reloaded
+        // Re-trigger the status change with updated state
+        setTimeout(() => {
+          const newIndex = editableResidents.findIndex(r => 
+            r.name === resident.name && r.category === resident.category
+          );
+          
+          if (newIndex !== -1) {
+            console.log('[handleStatusChange] Re-triggering after dataset creation');
+            setStatusMenuResident({ resident: editableResidents[newIndex], index: newIndex });
+            handleStatusChange(newStatus);
+          }
+        }, 100);
+        
+        setStatusMenuOpen(false);
+        setStatusMenuResident(null);
+        return;
+      }
+      
+      // ✅ CRITICAL FIX: Find resident by name in CURRENT array (not using old index!)
+      const currentIndex = editableResidents.findIndex(r => 
+        r.name === resident.name && r.category === resident.category
+      );
+      
+      if (currentIndex === -1) {
+        console.error('[handleStatusChange] Resident not found in current array:', resident.name);
+        setStatusMenuOpen(false);
+        setStatusMenuResident(null);
+        return;
+      }
+      
+      console.log('[handleStatusChange] Found resident at index:', currentIndex, 'Name:', resident.name);
+      
       const updatedResident: EditableResident = {
-        ...resident,
+        ...editableResidents[currentIndex], // Use current resident from array
         status: newStatus
       };
 
+      // Create updated array BEFORE setState
+      const newResidents = [...editableResidents];
+      newResidents[currentIndex] = updatedResident;
+
       // Update local state
-      setEditableResidents(prev => {
-        const newResidents = [...prev];
-        newResidents[index] = updatedResident;
-        return newResidents;
-      });
+      setEditableResidents(newResidents);
 
       // Live-sync to backend if dataset exists
       if (canEdit && currentDatasetId) {
         console.log('[handleStatusChange] Live-sync: Updating status for resident', resident.name);
         
-        const allResidents = [...editableResidents];
-        allResidents[index] = updatedResident;
-
-        await datasetAPI.bulkUpdateResidents(currentDatasetId, allResidents);
+        // Use the updated array for backend sync
+        await datasetAPI.bulkUpdateResidents(currentDatasetId, sanitizeResidents(newResidents));
 
         // Track status change action
         trackingManager.logAction(
@@ -586,6 +722,242 @@ export default function ResultsDisplay({
     }
   };
 
+  // Handle category change (for existing_customer → potential_new_customer)
+  const handleCategoryChange = async (newCategory: ResidentCategory) => {
+    if (!statusMenuResident) return;
+
+    const { resident } = statusMenuResident;
+    
+    try {
+      // FIX: If no dataset exists yet, create one first
+      if (!currentDatasetId) {
+        console.log('[handleCategoryChange] No dataset exists, creating one first...');
+        const createdDatasetId = await handleRequestDatasetCreation();
+        if (!createdDatasetId) {
+          console.log('[handleCategoryChange] Dataset creation failed or was cancelled');
+          setStatusMenuOpen(false);
+          setStatusMenuResident(null);
+          return;
+        }
+        console.log('[handleCategoryChange] Dataset created:', createdDatasetId);
+        
+        // After dataset creation, editableResidents has been reloaded
+        // Re-trigger the category change with updated state
+        setTimeout(() => {
+          const newIndex = editableResidents.findIndex(r => 
+            r.name === resident.name && r.category === resident.category
+          );
+          
+          if (newIndex !== -1) {
+            console.log('[handleCategoryChange] Re-triggering after dataset creation');
+            setStatusMenuResident({ resident: editableResidents[newIndex], index: newIndex });
+            handleCategoryChange(newCategory);
+          }
+        }, 100);
+        
+        setStatusMenuOpen(false);
+        setStatusMenuResident(null);
+        return;
+      }
+      
+      // ✅ CRITICAL FIX: Find resident by name in CURRENT array (not using old index!)
+      const currentIndex = editableResidents.findIndex(r => 
+        r.name === resident.name && r.category === resident.category
+      );
+      
+      if (currentIndex === -1) {
+        console.error('[handleCategoryChange] Resident not found in current array:', resident.name);
+        setStatusMenuOpen(false);
+        setStatusMenuResident(null);
+        return;
+      }
+      
+      console.log('[handleCategoryChange] Found resident at index:', currentIndex, 'Name:', resident.name);
+      
+      const updatedResident: EditableResident = {
+        ...editableResidents[currentIndex], // Use current resident from array
+        category: newCategory,
+        // Clear status when changing to existing_customer
+        status: newCategory === 'existing_customer' ? undefined : editableResidents[currentIndex].status
+      };
+
+      // Create updated array
+      const newResidents = [...editableResidents];
+      newResidents[currentIndex] = updatedResident;
+
+      // Update local state
+      setEditableResidents(newResidents);
+
+      // Live-sync to backend if dataset exists
+      if (canEdit && currentDatasetId) {
+        console.log('[handleCategoryChange] Live-sync: Updating category for resident', resident.name);
+        
+        // Use the updated array for backend sync
+        await datasetAPI.bulkUpdateResidents(currentDatasetId, sanitizeResidents(newResidents));
+
+        toast({
+          title: t('resident.category.updated', 'Kategorie geändert'),
+          description: t('resident.category.updatedDescription', `Kategorie zu {{category}} geändert`, { 
+            category: newCategory === 'existing_customer' ? 'Bestandskunde' : 'Neukunde' 
+          }),
+        });
+      }
+    } catch (error) {
+      console.error('[handleCategoryChange] Error updating category:', error);
+      toast({
+        variant: 'destructive',
+        title: t('resident.category.error', 'Fehler'),
+        description: t('resident.category.errorDescription', 'Kategorie konnte nicht geändert werden'),
+      });
+    } finally {
+      // Close menu
+      setStatusMenuOpen(false);
+      setStatusMenuResident(null);
+    }
+  };
+
+  // ✅ NEU: Handle combined category + status change (in ONE transaction)
+  const handleCategoryAndStatusChange = async (newCategory: ResidentCategory, newStatus: ResidentStatus) => {
+    if (!statusMenuResident) return;
+
+    const { resident } = statusMenuResident;
+    
+    try {
+      // FIX: If no dataset exists yet, create one first
+      if (!currentDatasetId) {
+        console.log('[handleCategoryAndStatusChange] No dataset exists, creating one first...');
+        const createdDatasetId = await handleRequestDatasetCreation();
+        if (!createdDatasetId) {
+          console.log('[handleCategoryAndStatusChange] Dataset creation failed or was cancelled');
+          setStatusMenuOpen(false);
+          setStatusMenuResident(null);
+          return;
+        }
+        console.log('[handleCategoryAndStatusChange] Dataset created:', createdDatasetId);
+        
+        // After dataset creation, editableResidents has been reloaded
+        // We need to call this function again with the new state
+        // Wait a bit for state to update
+        setTimeout(() => {
+          // Find the resident again in the new array and trigger the change
+          const newIndex = editableResidents.findIndex(r => 
+            r.name === resident.name && r.category === 'existing_customer'
+          );
+          
+          if (newIndex !== -1) {
+            console.log('[handleCategoryAndStatusChange] Re-triggering after dataset creation');
+            setStatusMenuResident({ resident: editableResidents[newIndex], index: newIndex });
+            handleCategoryAndStatusChange(newCategory, newStatus);
+          }
+        }, 100);
+        
+        setStatusMenuOpen(false);
+        setStatusMenuResident(null);
+        return;
+      }
+      
+      // ✅ CRITICAL FIX: Find resident by name in CURRENT array (not using old index!)
+      // The index from statusMenuResident might be stale if dataset was just created
+      const currentIndex = editableResidents.findIndex(r => 
+        r.name === resident.name && r.category === resident.category
+      );
+      
+      if (currentIndex === -1) {
+        console.error('[handleCategoryAndStatusChange] Resident not found in current array:', resident.name);
+        setStatusMenuOpen(false);
+        setStatusMenuResident(null);
+        return;
+      }
+      
+      console.log('[handleCategoryAndStatusChange] Found resident at index:', currentIndex, 'Name:', resident.name);
+      
+      // ✅ Update BOTH category AND status in ONE operation
+      const updatedResident: EditableResident = {
+        ...editableResidents[currentIndex], // Use current resident from array
+        category: newCategory,
+        status: newStatus
+      };
+
+      // ✅ Create new array with updated resident
+      const newResidents = [...editableResidents];
+      newResidents[currentIndex] = updatedResident;
+
+      // Update local state
+      setEditableResidents(newResidents);
+
+      // Live-sync to backend if dataset exists - ONE backend call instead of two!
+      if (canEdit && currentDatasetId) {
+        console.log('[handleCategoryAndStatusChange] Live-sync: Updating category + status for resident', resident.name);
+        console.log('[handleCategoryAndStatusChange] Checking category change:', {
+          oldCategory: resident.category,
+          newCategory: newCategory,
+          willLog: resident.category !== newCategory
+        });
+        
+        // Use the updated array for backend sync
+        await datasetAPI.bulkUpdateResidents(currentDatasetId, sanitizeResidents(newResidents));
+
+        // Log category change if category was actually changed
+        if (resident.category !== newCategory) {
+          console.log('[handleCategoryAndStatusChange] Category changed, logging...', {
+            from: resident.category,
+            to: newCategory,
+            resident: resident.name,
+            datasetId: currentDatasetId,
+            hasAddress: !!address
+          });
+
+          try {
+            const logResponse = await fetch('/api/log-category-change', {
+              method: 'POST',
+              credentials: 'include',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                datasetId: currentDatasetId,
+                residentOriginalName: updatedResident.originalName || resident.name,
+                residentCurrentName: resident.name,
+                oldCategory: resident.category,
+                newCategory: newCategory,
+                addressDatasetSnapshot: JSON.stringify(address || {})
+              })
+            });
+
+            if (!logResponse.ok) {
+              console.error('[handleCategoryAndStatusChange] Failed to log category change:', logResponse.status);
+              const errorText = await logResponse.text();
+              console.error('[handleCategoryAndStatusChange] Error response:', errorText);
+            } else {
+              console.log('[handleCategoryAndStatusChange] Category change logged successfully');
+            }
+          } catch (logError) {
+            console.error('[handleCategoryAndStatusChange] Error logging category change:', logError);
+            // Don't fail the operation if logging fails
+          }
+        } else {
+          console.log('[handleCategoryAndStatusChange] ⚠️ No category change detected - skipping log');
+        }
+
+        toast({
+          title: t('resident.categoryStatus.updated', 'Kategorie & Status geändert'),
+          description: t('resident.categoryStatus.updatedDescription', `Zu Neukunde verschoben mit Status: ${STATUS_LABELS[newStatus]}`),
+        });
+      }
+    } catch (error) {
+      console.error('[handleCategoryAndStatusChange] Error updating category + status:', error);
+      toast({
+        variant: 'destructive',
+        title: t('resident.categoryStatus.error', 'Fehler'),
+        description: t('resident.categoryStatus.errorDescription', 'Änderung fehlgeschlagen'),
+      });
+    } finally {
+      // Close menu
+      setStatusMenuOpen(false);
+      setStatusMenuResident(null);
+    }
+  };
+
   // Handle delete confirmation
   const handleDeleteConfirm = async () => {
     if (!deletingResident) return;
@@ -598,7 +970,7 @@ export default function ResultsDisplay({
       // Live-Sync: Update entire resident list in backend if dataset exists and is editable
       if (currentDatasetId && canEdit) {
         console.log('[handleDeleteConfirm] Live-sync: Deleting resident and updating dataset', currentDatasetId);
-        await datasetAPI.bulkUpdateResidents(currentDatasetId, updatedResidents);
+        await datasetAPI.bulkUpdateResidents(currentDatasetId, sanitizeResidents(updatedResidents));
       }
 
       // Update the names list to remove deleted resident from overlays
@@ -657,7 +1029,24 @@ export default function ResultsDisplay({
       return;
     }
     
-    // Automatically create dataset without confirmation
+    // If dataset is already loaded (externalDatasetId exists), skip dataset creation
+    // and directly open the resident edit popup
+    if (externalDatasetId) {
+      console.log('[handleCreateResidentWithoutPhoto] Dataset already loaded, opening edit popup directly');
+      
+      // Open edit popup to add resident to existing dataset
+      const newResident: EditableResident = {
+        name: '',
+        category: 'potential_new_customer',
+        isFixed: false,
+      };
+      setEditingResident(newResident);
+      setEditingResidentIndex(null);
+      setShowEditPopup(true);
+      return;
+    }
+    
+    // Automatically create dataset without confirmation (only if no dataset loaded)
     try {
       // Create dataset with empty residents array
       const newDataset = await datasetAPI.createDataset({
@@ -729,6 +1118,39 @@ export default function ResultsDisplay({
     }
   };
 
+  // Calculate lists dynamically from editableResidents for real-time updates
+  const currentExistingCustomers = useMemo(() => 
+    editableResidents.filter(r => r.category === 'existing_customer'),
+    [editableResidents]
+  );
+  
+  const currentNewProspects = useMemo(() => 
+    editableResidents.filter(r => r.category === 'potential_new_customer'),
+    [editableResidents]
+  );
+
+  // Memoize current resident names to prevent infinite re-renders
+  const currentResidentNames = useMemo(() => 
+    editableResidents.map(r => r.name), 
+    [editableResidents]
+  );
+
+  // Memoize existing customers array to prevent infinite re-renders
+  const memoizedExistingCustomers = useMemo(() => 
+    currentExistingCustomers.map(r => ({ 
+      name: r.name, 
+      isExisting: true,
+      id: r.name 
+    })),
+    [currentExistingCustomers]
+  );
+
+  // Memoize new prospects array to prevent infinite re-renders
+  const memoizedNewProspects = useMemo(() => 
+    currentNewProspects.map(r => r.name),
+    [currentNewProspects]
+  );
+
   // Show empty state only if no results AND no dataset loaded
   if ((!result || (result.existingCustomers.length === 0 && result.newProspects.length === 0 && (!result.allCustomersAtAddress || result.allCustomersAtAddress.length === 0))) && !externalDatasetId) {
     return (
@@ -768,10 +1190,6 @@ export default function ResultsDisplay({
   // Show resident lists if we have overlays OR if we have a loaded dataset
   const showResidentLists = showImageOverlays || externalDatasetId !== null;
 
-  // Calculate lists dynamically from editableResidents for real-time updates
-  const currentExistingCustomers = editableResidents.filter(r => r.category === 'existing_customer');
-  const currentNewProspects = editableResidents.filter(r => r.category === 'potential_new_customer');
-
   // Helper to determine what to display in the Bestandskunden section
   const getMatchedNames = (): Array<{name: string, isPhotoName: boolean}> => {
     if (result && result.residentNames.length > 0) {
@@ -796,9 +1214,12 @@ export default function ResultsDisplay({
     index: number; 
     category: ResidentCategory;
   }) => {
+    // FIX: Enable Long Press for both categories (but with different menus)
+    const enableLongPress = canEdit;
+    
     const longPressHandlers = useLongPress({
       onLongPress: (x, y) => {
-        if (!canEdit) return;
+        if (!enableLongPress) return;
         setStatusMenuPosition({ x, y });
         setStatusMenuResident({ resident, index });
         setStatusMenuOpen(true);
@@ -887,18 +1308,33 @@ export default function ResultsDisplay({
 
   return (
     <>
+      {/* Dataset Creation Loading Dialog */}
+      {isCreatingDataset && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <Card className="w-full max-w-md mx-4 animate-in fade-in zoom-in-95 duration-200">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-3">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                {t('dataset.creating', 'Datensatz wird erstellt...')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                {t('dataset.creatingDesc', 'Bitte warten, der Datensatz wird angelegt...')}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+      
       {showImageOverlays && !hideImageOverlays && result && (
         <div className="mb-4">
           <ImageWithOverlays
             imageSrc={photoImageSrc!}
             fullVisionResponse={result.fullVisionResponse}
-            residentNames={result.residentNames}
-            existingCustomers={currentExistingCustomers.map(r => ({ 
-              name: r.name, 
-              isExisting: true,
-              id: r.name // Use name as ID for matching
-            }))}
-            newProspects={currentNewProspects.map(r => r.name)}
+            residentNames={currentResidentNames}
+            existingCustomers={memoizedExistingCustomers}
+            newProspects={memoizedNewProspects}
             allCustomersAtAddress={result.allCustomersAtAddress}
             address={address}
             onNamesUpdated={onNamesUpdated}
@@ -1261,6 +1697,24 @@ export default function ResultsDisplay({
               </AccordionItem>
             )}
           </Accordion>
+          
+          {/* Show "Create Resident" button when dataset loaded but no residents */}
+          {externalDatasetId && editableResidents.length === 0 && address && address.street && address.number && address.postal && canEdit && (
+            <div className="flex flex-col items-center justify-center py-8 text-center border-t pt-6">
+              <AlertCircle className="h-12 w-12 text-muted-foreground mb-3" />
+              <p className="text-sm text-muted-foreground mb-4">
+                {t('results.noResidentsInDataset', 'Keine Anwohner im Datensatz')}
+              </p>
+              <Button
+                onClick={handleCreateResidentWithoutPhoto}
+                className="gap-2"
+                data-testid="button-create-resident-dataset-empty"
+              >
+                <UserPlus className="h-4 w-4" />
+                {t('resident.create', 'Anwohner anlegen')}
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -1321,7 +1775,11 @@ export default function ResultsDisplay({
           setStatusMenuResident(null);
         }}
         onSelectStatus={handleStatusChange}
+        onSelectCategory={handleCategoryChange}
+        onSelectCategoryAndStatus={handleCategoryAndStatusChange}
         currentStatus={statusMenuResident?.resident.status}
+        currentCategory={statusMenuResident?.resident.category}
+        mode={statusMenuResident?.resident.category === 'existing_customer' ? 'category' : 'status'}
       />
     </>
   );

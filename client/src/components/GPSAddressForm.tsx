@@ -20,7 +20,6 @@ export interface Address {
   number: string;
   city: string;
   postal: string;
-  country: string;
 }
 
 export default function GPSAddressForm({ onAddressDetected, onAddressSearch, initialAddress }: GPSAddressFormProps) {
@@ -36,8 +35,7 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
     street: '',
     number: '',
     city: '',
-    postal: '',
-    country: ''
+    postal: ''
   });
 
   // Store previous initialAddress to detect changes
@@ -55,8 +53,7 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
         prevInitialAddressRef.current.street !== initialAddress.street ||
         prevInitialAddressRef.current.number !== initialAddress.number ||
         prevInitialAddressRef.current.postal !== initialAddress.postal ||
-        prevInitialAddressRef.current.city !== initialAddress.city ||
-        prevInitialAddressRef.current.country !== initialAddress.country
+        prevInitialAddressRef.current.city !== initialAddress.city
       ));
     
     if (!hasChanged) {
@@ -74,8 +71,7 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
         street: '',
         number: '',
         city: '',
-        postal: '',
-        country: ''
+        postal: ''
       });
     }
   }, [initialAddress]); // Only depend on initialAddress, NOT on address!
@@ -105,20 +101,27 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
     }
   };
 
+  // Store previous address to detect ACTUAL changes (not just re-renders)
+  const prevAddressRef = useRef<string>('');
+  
   // Notify parent component whenever address changes
   // Using JSON.stringify to detect actual changes and prevent infinite loops
   useEffect(() => {
     // Only notify if address has actual values (not empty initial state)
     if (address.street || address.postal || address.number) {
-      onAddressDetected?.(address);
+      // Compare with previous address using JSON to detect real changes
+      const addressStr = JSON.stringify(address);
+      if (addressStr !== prevAddressRef.current) {
+        prevAddressRef.current = addressStr;
+        onAddressDetected?.(address);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     address.street, 
     address.number, 
     address.city, 
-    address.postal, 
-    address.country
+    address.postal
     // DO NOT include onAddressDetected - causes infinite loop
   ]);
 
@@ -127,36 +130,52 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
     setDetected(false);
     
     if ('geolocation' in navigator) {
+      // Permissions-Check vorab
+      const permission = await navigator.permissions.query({ name: 'geolocation' });
+      if (permission.state === 'denied') {
+        toast({
+          variant: 'destructive',
+          title: 'Keine Standortberechtigung',
+          description: 'Die Standort-Berechtigung wurde verweigert. Bitte erlauben Sie den Standortzugriff in Ihren Browsereinstellungen, um diese Funktion zu nutzen.',
+        });
+        setLoading(false);
+        return;
+      }
+
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           try {
-            const addressData = await geocodeAPI.reverseGeocode(
+            const addressData: Partial<Address> = await geocodeAPI.reverseGeocode(
               position.coords.latitude,
               position.coords.longitude
             );
-            
-            // Check if the address is in Germany
-            if (addressData.country && addressData.country.toLowerCase() !== 'deutschland' && addressData.country.toLowerCase() !== 'germany') {
-              toast({
-                variant: 'destructive',
-                title: 'Standort nicht verfügbar',
-                description: 'Dieser Service ist nur für Adressen in Deutschland verfügbar.',
-              });
-              setLoading(false);
-              return;
-            }
-            
-            setAddress(addressData);
+
+            // Setze immer alle verfügbaren Felder mit Defaults für fehlende Werte
+            const completeAddress: Address = {
+              street: addressData.street || '',
+              number: addressData.number || '',
+              postal: addressData.postal || '',
+              city: addressData.city || ''
+            };
+
+            setAddress(completeAddress);
             setDetected(true);
-            onAddressDetected?.(addressData);
+            onAddressDetected?.(completeAddress);
+
+            // Warnung bei unvollständiger Adresse (z. B. keine street/number, aber PLZ/city vorhanden)
+            if (!completeAddress.street || !completeAddress.number) {
+              toast({
+                variant: 'default',
+                title: 'Unvollständige Adresse',
+                description: 'Straße oder Hausnummer konnte nicht genau ermittelt werden. Bitte überprüfen und ergänzen Sie die Eingabe manuell.',
+              });
+            }
           } catch (error: any) {
             console.error('Geocoding error:', error);
-            
-            // Check for rate limit error (429)
+
             if (error?.response?.status === 429) {
               const errorData = error.response?.data || {};
               const errorMessage = errorData.message || 'Zu viele Standortabfragen. Bitte warte eine Minute.';
-              
               toast({
                 variant: 'destructive',
                 title: 'Rate Limit erreicht',
@@ -164,18 +183,29 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
                 duration: 10000,
               });
             } else if (error?.response?.data?.errorCode === 'POSTAL_CODE_RESTRICTED') {
-              // Check for postal code restriction error
               toast({
                 variant: 'destructive',
                 title: 'Postleitzahl nicht erlaubt',
                 description: error.response.data.error,
                 duration: 8000,
               });
+            } else if (error?.response?.data?.error === 'No geocoding results found') {
+              toast({
+                variant: 'destructive',
+                title: 'Keine Ergebnisse',
+                description: 'Keine passende Adresse gefunden. Versuchen Sie eine andere Position oder geben Sie die Adresse manuell ein.',
+              });
+            } else if (error?.response?.data?.error === 'Location not in Germany') {
+              toast({
+                variant: 'destructive',
+                title: 'Standort nicht in Deutschland',
+                description: 'Dieser Service ist nur für Adressen in Deutschland verfügbar.',
+              });
             } else {
               toast({
                 variant: 'destructive',
                 title: 'Standort-Fehler',
-                description: 'Die Adresse konnte nicht vom Standort erkannt werden. Bitte versuchen Sie es erneut.',
+                description: error?.response?.data?.error || 'Die Adresse konnte nicht vom Standort erkannt werden. Bitte versuchen Sie es erneut.',
               });
             }
           } finally {
@@ -190,7 +220,8 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
             title: 'Standort-Berechtigung',
             description: 'Die Standort-Berechtigung wurde verweigert. Bitte erlauben Sie den Standortzugriff in Ihren Browsereinstellungen.',
           });
-        }
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }  // Hohe Genauigkeit, 15s Timeout, frische Position
       );
     } else {
       setLoading(false);
@@ -291,7 +322,6 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
         searchParams.number = houseNumber;
         if (address.postal?.trim()) searchParams.postal = address.postal;
         if (address.city?.trim()) searchParams.city = address.city;
-        if (address.country?.trim()) searchParams.country = address.country;
         
         const customers = await addressAPI.searchAddress(searchParams);
         allCustomers = [...allCustomers, ...customers];
@@ -324,7 +354,7 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
       toast({
         variant: 'destructive',
         title: t('address.searchError'),
-        description: 'Unable to search address',
+        description: 'Adresse konnte nicht gesucht werden',
       });
     } finally {
       setSearching(false);

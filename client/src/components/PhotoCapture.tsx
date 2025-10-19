@@ -54,6 +54,16 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
     };
   }, []);
 
+  // Memory Optimization: Revoke Object URLs when preview changes
+  useEffect(() => {
+    return () => {
+      if (preview) {
+        console.log('[PhotoCapture] Revoking Object URL to free memory:', preview);
+        URL.revokeObjectURL(preview);
+      }
+    };
+  }, [preview]);
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;

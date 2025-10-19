@@ -27,14 +27,31 @@ export function AddressDatasets({ address, onLoadDataset, shouldLoad }: AddressD
   const [datasets, setDatasets] = useState<AddressDataset[]>([]);
   const [loading, setLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [lastLoadedAddress, setLastLoadedAddress] = useState<string | null>(null);
 
-  // Load datasets only when explicitly triggered via shouldLoad prop
-  // This prevents unnecessary geocoding API calls while typing
+  // Create normalized address string for comparison
+  const normalizedAddress = address 
+    ? `${address.street || ''} ${address.number || ''} ${address.postal || ''} ${address.city || ''}`.toLowerCase().trim()
+    : null;
+
+  // FIX: Load datasets when shouldLoad changes OR address changes
   useEffect(() => {
-    if (shouldLoad) {
+    if (shouldLoad && normalizedAddress && normalizedAddress !== lastLoadedAddress) {
+      console.log('[AddressDatasets] Loading datasets for:', normalizedAddress);
       loadDatasets();
+      setLastLoadedAddress(normalizedAddress);
     }
-  }, [shouldLoad]);
+  }, [shouldLoad, normalizedAddress]);
+
+  // FIX: Clear datasets when address is cleared or changes dramatically
+  useEffect(() => {
+    if (!normalizedAddress) {
+      console.log('[AddressDatasets] Address cleared, resetting datasets');
+      setDatasets([]);
+      setLastLoadedAddress(null);
+      setIsExpanded(false);
+    }
+  }, [normalizedAddress]);
 
   const loadDatasets = async () => {
     setLoading(true);
@@ -109,41 +126,66 @@ export function AddressDatasets({ address, onLoadDataset, shouldLoad }: AddressD
 
       {isExpanded && (
         <CardContent className="pt-0 space-y-2">
-          {datasets.map((dataset) => (
-            <div
-              key={dataset.id}
-              className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-gray-50 transition-colors cursor-pointer"
-              onClick={() => onLoadDataset(dataset.id)}
-            >
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                  <User className="h-4 w-4 text-blue-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">{dataset.createdBy}</p>
-                  {dataset.isNonExactMatch && dataset.street && dataset.houseNumber && (
-                    <p className="text-xs font-medium text-blue-600 truncate">
-                      {dataset.street} {dataset.houseNumber}
-                    </p>
-                  )}
-                  <p className="text-xs text-muted-foreground truncate">
-                    {formatDate(dataset.createdAt)} • {dataset.residentCount} {t('datasets.residents', 'Bewohner')}
-                  </p>
-                </div>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-shrink-0 ml-2"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onLoadDataset(dataset.id);
-                }}
+          {datasets.map((dataset) => {
+            // Check if query has multiple house numbers (comma, slash, or hyphen)
+            const queryHasMultipleNumbers = address.number && (
+              address.number.includes(',') || 
+              address.number.includes('/') ||
+              address.number.includes('-')
+            );
+            
+            // Check if dataset has multiple house numbers
+            const datasetHasMultipleNumbers = dataset.houseNumber && (
+              dataset.houseNumber.includes(',') || 
+              dataset.houseNumber.includes('/') ||
+              dataset.houseNumber.includes('-')
+            );
+            
+            // Show address if:
+            // 1. It's a non-exact match (different house number), OR
+            // 2. Query has multiple numbers (e.g., "23,24"), OR
+            // 3. Dataset covers multiple numbers (e.g., "23/24")
+            const shouldShowAddress = 
+              dataset.isNonExactMatch || 
+              queryHasMultipleNumbers || 
+              datasetHasMultipleNumbers;
+            
+            return (
+              <div
+                key={dataset.id}
+                className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-gray-50 transition-colors cursor-pointer"
+                onClick={() => onLoadDataset(dataset.id)}
               >
-                {t('datasets.load', 'Laden')}
-              </Button>
-            </div>
-          ))}
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                    <User className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{dataset.createdBy}</p>
+                    {shouldShowAddress && dataset.street && dataset.houseNumber && (
+                      <p className="text-xs font-medium text-blue-600 truncate">
+                        {dataset.street} {dataset.houseNumber}
+                      </p>
+                    )}
+                    <p className="text-xs text-muted-foreground truncate">
+                      {formatDate(dataset.createdAt)} • {dataset.residentCount} {t('datasets.residents', 'Bewohner')}
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-shrink-0 ml-2"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onLoadDataset(dataset.id);
+                  }}
+                >
+                  {t('datasets.load', 'Laden')}
+                </Button>
+              </div>
+            );
+          })}
         </CardContent>
       )}
     </Card>

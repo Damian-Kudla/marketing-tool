@@ -32,6 +32,79 @@ export class GoogleSheetsStorage implements IStorage {
   }
 
   /**
+   * Expand house number range to individual numbers
+   * Examples:
+   * - "1-3" → ["1", "2", "3"]
+   * - "1,2,3" → ["1", "2", "3"]
+   * - "1,3-5" → ["1", "3", "4", "5"]
+   * - "23/24" → ["23", "24"]  (Slash-Notation from Google)
+   * - "2" → ["2"]
+   */
+  private expandHouseNumberRange(houseNumber: string): string[] {
+    if (!houseNumber) return [];
+    
+    // Split by comma AND slash (handles "1,2,3" or "23/24" or "1,3-5")
+    const parts = houseNumber.split(/[,\/]/).map(p => p.trim()).filter(p => p.length > 0);
+    
+    const expanded: string[] = [];
+    
+    for (const part of parts) {
+      // Check if this part is a range (contains hyphen)
+      if (part.includes('-')) {
+        const rangeParts = part.split('-');
+        if (rangeParts.length === 2) {
+          const start = parseInt(rangeParts[0].trim());
+          const end = parseInt(rangeParts[1].trim());
+          
+          if (!isNaN(start) && !isNaN(end) && start <= end) {
+            // Limit to max 50 numbers to prevent abuse
+            const rangeSize = end - start + 1;
+            if (rangeSize > 50) {
+              console.warn(`[HouseNumber] Range too large: ${part} (${rangeSize} numbers), limiting to 50`);
+              // Add only start and end as fallback
+              expanded.push(start.toString());
+              expanded.push(end.toString());
+            } else {
+              // Generate all numbers in range
+              for (let i = start; i <= end; i++) {
+                expanded.push(i.toString());
+              }
+            }
+          } else {
+            // Invalid range, treat as literal
+            expanded.push(part);
+          }
+        } else {
+          // Multiple hyphens, treat as literal
+          expanded.push(part);
+        }
+      } else {
+        // Single number or letter suffix (e.g., "10a")
+        expanded.push(part);
+      }
+    }
+    
+    // Remove duplicates and return
+    return Array.from(new Set(expanded));
+  }
+
+  /**
+   * Check if two house numbers match using expansion logic
+   * Examples:
+   * - matchesHouseNumber("2", "1-3") → true
+   * - matchesHouseNumber("4", "1-3") → false
+   * - matchesHouseNumber("1,2", "1-3") → true
+   * - matchesHouseNumber("1-3", "2") → true
+   */
+  private matchesHouseNumber(searchNumber: string, customerNumber: string): boolean {
+    const searchExpanded = this.expandHouseNumberRange(searchNumber);
+    const customerExpanded = this.expandHouseNumberRange(customerNumber);
+    
+    // Check if ANY number overlaps
+    return searchExpanded.some(s => customerExpanded.includes(s));
+  }
+
+  /**
    * Normalize street name by replacing street suffixes at the END with 'strasse' (consistent form for length preservation)
    * - Convert to lowercase
    * - Replace umlauts early
@@ -203,7 +276,7 @@ export class GoogleSheetsStorage implements IStorage {
       );
     }
     
-    // Filter by street using fuzzy matching (>=95% similarity)
+    // Filter by street using fuzzy matching (>=90% similarity)
     if (address.street) {
       const searchStreet = address.street;
       matches = matches.filter(customer => {
@@ -212,39 +285,29 @@ export class GoogleSheetsStorage implements IStorage {
       });
     }
     
-    // Filter by house number (STRICT matching - no fuzzy logic)
-    // Handle multiple house numbers (comma or hyphen separated): "30,31,32" or "30-33"
+    // Filter by house number with EXPANSION and DEDUPLICATION
+    // Handle multiple house numbers (comma or hyphen separated): "1,2,3" or "1-3"
     if (address.number) {
-      const normalizeNumber = (num: string) => num.toLowerCase().trim().replace(/[.\-\s]/g, '');
+      const searchNumber = address.number;
       
-      // Split by comma to handle multiple numbers
-      const searchNumbers = address.number.split(',').map(n => {
-        const trimmed = n.trim();
-        // Check if this is a range (contains hyphen)
-        if (trimmed.includes('-')) {
-          const [start, end] = trimmed.split('-').map(x => parseInt(x.trim()));
-          if (!isNaN(start) && !isNaN(end)) {
-            // Generate all numbers in range
-            const range: string[] = [];
-            for (let i = start; i <= end; i++) {
-              range.push(i.toString());
-            }
-            return range;
+      // Track customer IDs to avoid duplicates
+      const uniqueCustomerIds = new Set<string>();
+      const uniqueMatches: Customer[] = [];
+      
+      for (const customer of matches) {
+        if (!customer.houseNumber) continue;
+        
+        // Check if house numbers match using expansion logic
+        if (this.matchesHouseNumber(searchNumber, customer.houseNumber)) {
+          // Only add if not already in result set
+          if (!uniqueCustomerIds.has(customer.id)) {
+            uniqueCustomerIds.add(customer.id);
+            uniqueMatches.push(customer);
           }
         }
-        return [trimmed];
-      }).flat();
+      }
       
-      // Normalize all search numbers
-      const normalizedSearchNumbers = searchNumbers.map(normalizeNumber);
-      
-      matches = matches.filter(customer => {
-        if (!customer.houseNumber) return false;
-        const customerNumber = normalizeNumber(customer.houseNumber);
-        
-        // STRICT: Match if customer house number equals ANY of the search numbers
-        return normalizedSearchNumbers.includes(customerNumber);
-      });
+      matches = uniqueMatches;
     }
     
     return matches;

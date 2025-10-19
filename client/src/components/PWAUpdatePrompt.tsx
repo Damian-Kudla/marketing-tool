@@ -22,16 +22,29 @@ export function PWAUpdatePrompt() {
   const [isApplying, setIsApplying] = useState(false);
 
   useEffect(() => {
+    console.log('🎯 [PWA Update Prompt] Initializing update monitoring...');
+    
     // Register for update notifications
     pwaUpdateManager.onUpdate((status) => {
+      console.log('📣 [PWA Update Prompt] Update notification received:', status);
       setUpdateStatus(status);
       setIsVisible(true);
     });
 
-    // Check for updates on mount
-    pwaUpdateManager.checkForUpdates();
+    // Initialize and check for updates on mount
+    // The manager will only initialize once due to singleton pattern
+    const initializeUpdates = async () => {
+      console.log('🔄 [PWA Update Prompt] Starting update manager initialization...');
+      await pwaUpdateManager.ensureInitialized();
+      console.log('✅ [PWA Update Prompt] Update manager initialized');
+    };
+
+    initializeUpdates().catch(error => {
+      console.error('❌ [PWA Update Prompt] Initialization failed:', error);
+    });
 
     return () => {
+      console.log('🧹 [PWA Update Prompt] Cleaning up...');
       // Cleanup if needed
     };
   }, []);

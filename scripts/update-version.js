@@ -5,8 +5,12 @@
  * Run before building: node scripts/update-version.js
  */
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Read current version from version.json
 const versionPath = path.join(__dirname, '../client/public/version.json');
@@ -41,10 +45,10 @@ swContent = swContent.replace(
   `const VERSION = '${newVersion}';`
 );
 
-// Replace all cache names
+// Replace all cache names with correct patterns from sw.js
 swContent = swContent.replace(
-  /const CACHE_NAME = 'energy-scan-v[^']+';/,
-  `const CACHE_NAME = 'energy-scan-v${newVersion}';`
+  /const CACHE_NAME = 'akquise-tool-v[^']+';/,
+  `const CACHE_NAME = 'akquise-tool-v${newVersion}';`
 );
 swContent = swContent.replace(
   /const STATIC_CACHE = 'static-cache-v[^']+';/,
@@ -61,6 +65,16 @@ swContent = swContent.replace(
 
 fs.writeFileSync(swPath, swContent);
 console.log('✅ Updated sw.js');
+
+// Also update index.html meta tag
+const indexPath = path.join(__dirname, '../client/index.html');
+let indexContent = fs.readFileSync(indexPath, 'utf8');
+indexContent = indexContent.replace(
+  /(<meta name="app-version" content=")[^"]+(")/,
+  `$1${newVersion}$2`
+);
+fs.writeFileSync(indexPath, indexContent);
+console.log('✅ Updated index.html meta tag');
 
 console.log(`🎉 Version updated successfully to ${newVersion}`);
 console.log('📝 Next steps:');

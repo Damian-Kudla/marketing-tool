@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import type { ResidentStatus } from '@shared/schema';
+import type { ResidentStatus, ResidentCategory } from '@shared/schema';
 import { STATUS_LABELS } from '@/constants/statuses';
 
 export interface StatusMenuItem {
@@ -14,7 +14,12 @@ interface StatusContextMenuProps {
   x: number;
   y: number;
   onClose: () => void;
-  onSelectStatus: (status: ResidentStatus) => void;
+  onSelectStatus?: (status: ResidentStatus) => void;
+  onSelectCategory?: (category: ResidentCategory) => void;
+  /**
+   * NEU: Kombinierte Kategorie + Status Änderung in einem Schritt
+   */
+  onSelectCategoryAndStatus?: (category: ResidentCategory, status: ResidentStatus) => void;
   /**
    * Liste der verfügbaren Status-Optionen
    * Falls nicht angegeben, werden alle Status angezeigt
@@ -24,6 +29,14 @@ interface StatusContextMenuProps {
    * Aktueller Status (wird hervorgehoben)
    */
   currentStatus?: ResidentStatus;
+  /**
+   * Aktuelle Kategorie (bestimmt welches Menü angezeigt wird)
+   */
+  currentCategory?: ResidentCategory;
+  /**
+   * Modus: 'status' für Status-Auswahl, 'category' für Kategorie-Auswahl
+   */
+  mode?: 'status' | 'category';
 }
 
 /**
@@ -36,8 +49,12 @@ export function StatusContextMenu({
   y,
   onClose,
   onSelectStatus,
+  onSelectCategory,
+  onSelectCategoryAndStatus,
   availableStatuses,
-  currentStatus
+  currentStatus,
+  currentCategory,
+  mode = 'status'
 }: StatusContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -77,12 +94,12 @@ export function StatusContextMenu({
     }
   };
 
-  // Standard: Alle Status verfügbar
+  // Standard: Alle Status verfügbar AUSSER 'appointment' (nur über Bearbeitungsform mit Datum/Uhrzeit)
   const statusesToShow: ResidentStatus[] = availableStatuses || [
     'no_interest',
     'not_reached',
     'interest_later',
-    'appointment',
+    // 'appointment' wird ausgelassen - nur über ResidentEditPopup mit Datum/Uhrzeit-Pflichtfeldern
     'written'
   ];
 
@@ -162,10 +179,99 @@ export function StatusContextMenu({
   if (!isOpen) return null;
 
   const handleStatusClick = (status: ResidentStatus) => {
-    onSelectStatus(status);
+    onSelectStatus?.(status);
     onClose();
   };
 
+  const handleCategoryClick = (category: ResidentCategory) => {
+    onSelectCategory?.(category);
+    onClose();
+  };
+
+  const handleCategoryWithStatusClick = (category: ResidentCategory, status: ResidentStatus) => {
+    onSelectCategoryAndStatus?.(category, status);
+    onClose();
+  };
+
+  // Category mode: Show category change options WITH status selection
+  if (mode === 'category') {
+    return createPortal(
+      <>
+        {/* Backdrop (dezent) */}
+        <div 
+          className="fixed inset-0 z-[9998]"
+          style={{ 
+            backgroundColor: 'rgba(0, 0, 0, 0.1)',
+            backdropFilter: 'blur(2px)',
+            WebkitBackdropFilter: 'blur(2px)'
+          }}
+        />
+        
+        {/* Menü */}
+        <div
+          ref={menuRef}
+          className="fixed z-[9999] animate-in fade-in zoom-in-95 duration-200"
+          style={{
+            left: x,
+            top: y,
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            borderRadius: '16px',
+            boxShadow: '0 12px 48px rgba(0, 0, 0, 0.25), 0 0 1px rgba(0, 0, 0, 0.1)',
+            minWidth: '200px',
+            maxWidth: '280px',
+            overflow: 'hidden',
+            WebkitTouchCallout: 'none',
+            WebkitUserSelect: 'none',
+            userSelect: 'none'
+          }}
+        >
+          <div className="py-2">
+            {/* Titel */}
+            <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200">
+              Zu Neukunden verschieben
+            </div>
+
+            {/* Status-Optionen für Neukunde */}
+            <ul className="py-1">
+              {statusesToShow.map((status) => (
+                <li key={status}>
+                  <button
+                    onClick={() => handleCategoryWithStatusClick('potential_new_customer', status)}
+                    className={`
+                      w-full px-4 py-3 flex items-center gap-3
+                      transition-colors duration-150
+                      active:bg-gray-200 hover:bg-gray-50
+                    `}
+                    style={{
+                      WebkitTapHighlightColor: 'transparent'
+                    }}
+                  >
+                    {/* Icon */}
+                    <span className="text-xl flex-shrink-0">
+                      {getStatusIcon(status)}
+                    </span>
+                    
+                    {/* Label */}
+                    <span className={`
+                      flex-1 text-left font-medium text-[15px]
+                      ${getStatusColor(status)}
+                    `}>
+                      {STATUS_LABELS[status]}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </>,
+      document.body
+    );
+  }
+
+  // Status mode: Show status options
   return createPortal(
     <>
       {/* Backdrop (dezent) */}

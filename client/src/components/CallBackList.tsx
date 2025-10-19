@@ -146,8 +146,22 @@ export function CallBackList({ onLoadDataset }: CallBackListProps) {
 
   const handleAddressClick = async (datasetId: string, address: string, clickedIndex: number, fromCallBack: boolean = true) => {
     if (onLoadDataset && callBacks && period) {
-      // When clicking on a specific item, use current display order for session
-      startCallBackSession(callBacks, period, clickedIndex);
+      // FIX: UNIFIED LOGIC - Always use chronological list (oldest → newest)
+      const chronologicalList = [...callBacks].sort((a, b) => 
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+      
+      // Find the clicked dataset's index in the chronological list
+      const chronologicalIndex = chronologicalList.findIndex(item => item.datasetId === datasetId);
+      
+      if (chronologicalIndex === -1) {
+        console.error('[CallBackList] Dataset not found in chronological list');
+        return;
+      }
+      
+      // Start session with chronological list and correct index
+      // Index 0 = oldest, so "Nächster" always goes to newer datasets
+      startCallBackSession(chronologicalList, period, chronologicalIndex);
       
       // Load dataset in current view - mark as loaded from CallBack
       try {

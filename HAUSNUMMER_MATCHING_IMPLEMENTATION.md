@@ -1,10 +1,24 @@
-# Flexible Hausnummern-Matching Implementation
+# Hausnummer-Bereich Matching - Implementierung (Option 3: Hybrid-Ansatz)
 
-## Problem
-Wenn ein Benutzer ein Dataset mit mehreren Hausnummern erstellt (z.B. "30,31,32,33"), wurde es nicht gefunden, wenn später nur nach einer einzelnen Hausnummer gesucht wurde (z.B. "30").
+## Übersicht
 
-## Lösung
-Implementierung eines flexiblen Hausnummern-Matching-Systems, das Teilübereinstimmungen findet.
+Implementierung der **Option 3 (Hybrid-Ansatz)** aus der Analyse (siehe `HAUSNUMMER_BEREICH_ANALYSE.md`).
+
+### Kernprinzipien
+
+1. **Bestandskunden**: Hausnummern-Bereiche werden expandiert für Transparenz
+   - "1-3" wird zu ["1", "2", "3"]
+   - User sieht alle Kunden, die zu seinen Eingaben passen
+   - Deduplizierung verhindert mehrfache Anzeige
+
+2. **Datensätze**: Granulare 30-Tage-Sperrung
+   - Datensatz "1,2" sperrt nur "1", "2", "1,2" und "1-3"
+   - Datensatz "1,2" sperrt NICHT "3"
+   - Verhindert unnötige Blockierung ganzer Straßen
+
+3. **30-Tage-Regel**: User-Input wird bereits verarbeitet (nicht 3 Monate!)
+   - Sperre gilt 30 Tage ab Erstellung
+   - Creator kann immer neue Datensätze erstellen
 
 ## Technische Details
 

@@ -115,7 +115,7 @@ export async function logUserActivityWithRetry(
     timestamp: new Date().toISOString(),
     userId: req.userId!,
     username: req.username!,
-    endpoint: req.path,
+    endpoint: req.originalUrl || req.path, // Use originalUrl to include full path with router mount
     method: req.method,
     address,
     newProspects,

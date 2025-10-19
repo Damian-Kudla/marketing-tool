@@ -1,5 +1,6 @@
 import { useToast as useOriginalToast } from './use-toast';
 import { useUIPreferences } from '@/contexts/UIPreferencesContext';
+import { sessionStatusManager } from '@/services/sessionStatusManager';
 import { 
   type ToastCategory, 
   getCategoryFromVariant, 
@@ -31,6 +32,46 @@ export function useFilteredToast() {
   const { showSystemMessages } = useUIPreferences();
 
   const toast = (props: FilteredToastProps) => {
+    // ✅ PRIORITY CHECK: If session is expired, suppress ALL error toasts
+    // The SessionExpiredBanner will handle the user notification
+    if (sessionStatusManager.isExpired()) {
+      // Suppress all error messages - banner is already showing
+      return {
+        id: 'session-expired-suppressed',
+        dismiss: () => {},
+        update: () => {},
+      };
+    }
+    
+    // Check for auth-related errors
+    const description = props.description;
+    const title = props.title;
+    
+    const descStr = typeof description === 'string' ? description : String(description || '');
+    const titleStr = typeof title === 'string' ? title : String(title || '');
+    
+    // Detect auth errors
+    const isAuthError = descStr.includes('SESSION_EXPIRED') ||
+                        titleStr.includes('SESSION_EXPIRED') ||
+                        descStr.includes('Authentication required') || 
+                        descStr.includes('Authentifizierung fehlgeschlagen') ||
+                        descStr.includes('authentication failed') ||
+                        descStr.includes('Unauthorized') ||
+                        descStr.includes('401');
+    
+    // ✅ NEW: Check if user was authenticated (using localStorage instead of cookies)
+    const wasAuthenticated = localStorage.getItem('was_authenticated') === 'true';
+    
+    // If it's an auth error and user was previously authenticated, suppress it (banner will handle)
+    if (isAuthError && wasAuthenticated) {
+      console.log('[FilteredToast] 🚫 Suppressing auth error toast - banner will show');
+      return {
+        id: 'auth-error-suppressed',
+        dismiss: () => {},
+        update: () => {},
+      };
+    }
+    
     // Determine category from explicit prop or variant
     const category = props.category || getCategoryFromVariant(props.variant);
     

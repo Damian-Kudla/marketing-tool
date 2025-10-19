@@ -3,6 +3,37 @@ import { z } from 'zod';
 import { addressDatasetService, normalizeAddress } from '../services/googleSheets';
 import { logUserActivityWithRetry } from '../services/enhancedLogging';
 
+// ==================== LOCK MECHANISM FOR RACE CONDITION PREVENTION ====================
+// In-memory lock map to prevent concurrent dataset creation for the same address
+// Key format: "normalizedAddress:username"
+// Value: Promise of ongoing creation + timestamp
+interface CreationLock {
+  promise: Promise<any>;
+  timestamp: number;
+}
+
+const creationLocks = new Map<string, CreationLock>();
+const LOCK_TIMEOUT_MS = 10000; // 10 seconds
+
+// Cleanup expired locks (ran periodically)
+setInterval(() => {
+  const now = Date.now();
+  const expiredKeys: string[] = [];
+  
+  creationLocks.forEach((lock, key) => {
+    if (now - lock.timestamp > LOCK_TIMEOUT_MS) {
+      expiredKeys.push(key);
+    }
+  });
+  
+  expiredKeys.forEach(key => {
+    console.warn(`[Lock Cleanup] Removing expired lock for: ${key}`);
+    creationLocks.delete(key);
+  });
+}, 5000); // Check every 5 seconds
+
+// ==================== END LOCK MECHANISM ====================
+
 // Helper function to get current time (always use UTC internally)
 function getBerlinTime(): Date {
   // IMPORTANT: Always use UTC Date objects for consistent calculations
@@ -170,9 +201,30 @@ router.post('/', async (req, res) => {
 
     // Verify that normalization produced a valid result
     if (!normalized) {
+      console.warn('[POST /] Address normalization failed:', {
+        street: data.address.street,
+        number: data.address.number,
+        postal: data.address.postal,
+        city: data.address.city
+      });
+      
       return res.status(400).json({ 
         error: 'Address validation failed', 
-        message: `Die Adresse "${data.address.street} ${data.address.number}, ${data.address.postal}" konnte nicht gefunden werden. Bitte überprüfe die Eingabe.`,
+        message: `Die Adresse "${data.address.street} ${data.address.number}, ${data.address.postal}" konnte nicht gefunden werden.
+
+Mögliche Gründe:
+• Die Straße existiert nicht in dieser Postleitzahl
+• Es handelt sich um einen Gebäude- oder Haltestellennamen (z.B. "Neusser Weyhe" = Haltestelle)
+• Die Adresse ist zu ungenau oder unvollständig
+• Tippfehler im Straßennamen oder der Postleitzahl
+
+Bitte überprüfe die Eingabe oder verwende eine andere Schreibweise.`,
+        details: {
+          street: data.address.street,
+          number: data.address.number,
+          postal: data.address.postal,
+          city: data.address.city
+        }
       });
     }
 
@@ -229,40 +281,87 @@ router.post('/', async (req, res) => {
       }
     }
 
+    // ==================== LOCK CHECK: Prevent race conditions ====================
+    // Create unique lock key for this address + user combination
+    const lockKey = `${normalized.formattedAddress}:${username}`;
+    
+    // Check if creation is already in progress for this address
+    if (creationLocks.has(lockKey)) {
+      const existingLock = creationLocks.get(lockKey)!;
+      const lockAge = Date.now() - existingLock.timestamp;
+      
+      // If lock is fresh (< 10s), reject with 409
+      if (lockAge < LOCK_TIMEOUT_MS) {
+        console.warn(`[POST /] 🔒 Dataset creation already in progress for ${lockKey} (${lockAge}ms ago)`);
+        return res.status(409).json({
+          error: 'Dataset creation already in progress',
+          message: 'Datensatz wird bereits erstellt. Bitte warte einen Moment.',
+        });
+      } else {
+        // Lock is expired, remove it and continue
+        console.warn(`[POST /] 🔓 Removing expired lock for ${lockKey}`);
+        creationLocks.delete(lockKey);
+      }
+    }
+    // ==================== END LOCK CHECK ====================
+
     // Create the dataset using NORMALIZED address components
     // This ensures all datasets use Google's standardized address format
-    const dataset = await addressDatasetService.createAddressDataset({
-      normalizedAddress: normalized.formattedAddress,
-      street: normalized.street,      // Use normalized street (e.g., "Schnellweider Straße")
-      houseNumber: normalized.number, // Use normalized house number
-      city: normalized.city,          // Use normalized city
-      postalCode: normalized.postal,  // Use normalized postal code
-      createdBy: username,
-      rawResidentData: data.rawResidentData,
-      editableResidents: data.editableResidents,
-      fixedCustomers: [], // Will be populated from customer database
-    });
+    
+    // ==================== SET LOCK: Register creation promise ====================
+    const creationPromise = (async () => {
+      try {
+        const dataset = await addressDatasetService.createAddressDataset({
+          normalizedAddress: normalized.formattedAddress,
+          street: normalized.street,      // Use normalized street (e.g., "Schnellweider Straße")
+          houseNumber: normalized.number, // Use normalized house number
+          city: normalized.city,          // Use normalized city
+          postalCode: normalized.postal,  // Use normalized postal code
+          createdBy: username,
+          rawResidentData: data.rawResidentData,
+          editableResidents: data.editableResidents,
+          fixedCustomers: [], // Will be populated from customer database
+        });
 
-    // Log dataset creation activity
-    try {
-      await logUserActivityWithRetry(
-        req,
-        normalized.formattedAddress,
-        undefined, // No prospects at creation
-        undefined, // No existing customers at creation
-        { // Data field
-          action: 'dataset_create',
-          datasetId: dataset.id,
-          street: normalized.street,
-          houseNumber: normalized.number,
-          city: normalized.city,
-          postalCode: normalized.postal,
-          residentsCount: dataset.editableResidents.length
+        // Log dataset creation activity
+        try {
+          await logUserActivityWithRetry(
+            req,
+            normalized.formattedAddress,
+            undefined, // No prospects at creation
+            undefined, // No existing customers at creation
+            { // Data field
+              action: 'dataset_create',
+              datasetId: dataset.id,
+              street: normalized.street,
+              houseNumber: normalized.number,
+              city: normalized.city,
+              postalCode: normalized.postal,
+              residentsCount: dataset.editableResidents.length
+            }
+          );
+        } catch (logError) {
+          console.error('[POST /api/address-datasets] Failed to log activity:', logError);
         }
-      );
-    } catch (logError) {
-      console.error('[POST /api/address-datasets] Failed to log activity:', logError);
-    }
+
+        return dataset;
+      } finally {
+        // ALWAYS remove lock when done (success or failure)
+        creationLocks.delete(lockKey);
+        console.log(`[POST /] 🔓 Released lock for ${lockKey}`);
+      }
+    })();
+    
+    // Register the promise in the lock map BEFORE awaiting
+    creationLocks.set(lockKey, {
+      promise: creationPromise,
+      timestamp: Date.now()
+    });
+    console.log(`[POST /] 🔒 Set lock for ${lockKey}`);
+    // ==================== END SET LOCK ====================
+
+    // Await the creation (lock is already registered)
+    const dataset = await creationPromise;
 
     // New datasets are always editable by the creator
     res.json({
@@ -376,10 +475,20 @@ router.put('/residents', async (req, res) => {
       return res.status(403).json({ error: 'Cannot edit this dataset. Editing is only allowed within 30 days of creation by the creator.' });
     }
 
+    // Sanitize: Auto-clear status if category is not potential_new_customer
+    let sanitizedResidentData = data.residentData;
+    if (sanitizedResidentData && sanitizedResidentData.status && sanitizedResidentData.category !== 'potential_new_customer') {
+      console.warn(`[Update Resident] Auto-clearing status for ${sanitizedResidentData.name} (category: ${sanitizedResidentData.category})`);
+      sanitizedResidentData = {
+        ...sanitizedResidentData,
+        status: undefined
+      };
+    }
+
     await addressDatasetService.updateResidentInDataset(
       data.datasetId,
       data.residentIndex,
-      data.residentData
+      sanitizedResidentData
     );
 
     // Log resident update activity
@@ -421,6 +530,22 @@ router.put('/bulk-residents', async (req, res) => {
     if (!username) {
       return res.status(401).json({ error: 'Authentication required' });
     }
+
+    // FIX: Auto-clear status if category is not potential_new_customer
+    // This handles the case where a resident is changed from potential_new_customer → existing_customer
+    const sanitizedResidents = data.editableResidents.map(resident => {
+      if (resident.status && resident.category !== 'potential_new_customer') {
+        console.warn(`[Bulk Update] Auto-clearing status for ${resident.name} (category: ${resident.category})`);
+        return {
+          ...resident,
+          status: undefined
+        };
+      }
+      return resident;
+    });
+    
+    // Use sanitized residents for the update
+    data.editableResidents = sanitizedResidents;
 
     // Get the dataset to check permissions
     const dataset = await addressDatasetService.getDatasetById(data.datasetId);

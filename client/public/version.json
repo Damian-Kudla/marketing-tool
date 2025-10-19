@@ -1,28 +1,19 @@
-﻿{
-  \"version\": \"2.4.7\",
-  \"buildTime\": \"2025-10-17T15:00:00.000Z\",
-  \"buildNumber\": \"fix-infinite-loop-and-list-visibility\",
-  \"features\": [
-    \"Fix: Keine Endlosschleife mehr bei Adresseingabe (useRef statt address dependency)\",
-    \"Fix: Kundenliste wird korrekt angezeigt (Bedingung vereinfacht)\",
-    \"Fix: Count zeigt richtige Anzahl (nur gerenderte Items)\",
-    \"Optimierung: Deep comparison fuer initialAddress Aenderungen\"
+{
+  "version": "2.4.7",
+  "buildTime": "2025-10-17T23:41:28.516Z",
+  "buildNumber": "fix-infinite-loop-and-list-visibility",
+  "features": [
+    "Fix: Keine Endlosschleife mehr bei Adresseingabe",
+    "Fix: Kundenliste wird korrekt angezeigt",
+    "Fix: Count zeigt richtige Anzahl"
   ],
-  \"technicalDetails\": [
-    \"Admin Authentication: isAdmin check from JWT token\",
-    \"Phase 1-3 Tracking: GPS (30s), Session (Idle Detection), Device, PDF Reports\",
-    \"Leaflet 4.2.1: React 18 compatible mapping library\",
-    \"Recharts 2.15.2: Status changes bar charts with color coding\",
-    \"date-fns 3.6.0: Date formatting and picker\",
-    \"SW Exclusion: /admin + /api/admin bypassed for fresh data\",
-    \"Lazy Loading: AdminDashboard loaded on-demand (performance)\"
+  "technicalDetails": [
+    "Admin Authentication",
+    "Phase 1-3 Tracking",
+    "Leaflet 4.2.1"
   ],
-  \"previousFeatures\": [
-    \"Fix: Duplikate, Validation, Multi-Hausnummern (v2.4.6)\",
-    \"Kundenliste immer sichtbar wenn vorhanden (v2.4.5)\",
-    \"Backwards Compatibility: Alte Datensaetze bearbeitbar (v2.4.4)\",
-    \"Hausnummer-Anzeige bei mehreren Nummern (v2.4.4)\",
-    \"Phase 4: Admin Dashboard mit Maps & Charts (v2.4.0)\",
-    \"Storage Cleanup: 90% weniger Speicherverbrauch (v2.3.4)\"
+  "previousFeatures": [
+    "Fix: Duplikate, Validation (v2.4.6)",
+    "Kundenliste sichtbar (v2.4.5)"
   ]
 }

@@ -1,0 +1,111 @@
+﻿{
+    "results":  [
+                    {
+                        "address_components":  [
+                                                   {
+                                                       "long_name":  "Neuss Neusser Weyhe",
+                                                       "short_name":  "Neuss Neusser Weyhe",
+                                                       "types":  [
+                                                                     "establishment",
+                                                                     "point_of_interest",
+                                                                     "transit_station"
+                                                                 ]
+                                                   },
+                                                   {
+                                                       "long_name":  "Furth-Mitte",
+                                                       "short_name":  "Furth-Mitte",
+                                                       "types":  [
+                                                                     "political",
+                                                                     "sublocality",
+                                                                     "sublocality_level_1"
+                                                                 ]
+                                                   },
+                                                   {
+                                                       "long_name":  "Neuss",
+                                                       "short_name":  "Neuss",
+                                                       "types":  [
+                                                                     "locality",
+                                                                     "political"
+                                                                 ]
+                                                   },
+                                                   {
+                                                       "long_name":  "Rhein-Kreis Neuss",
+                                                       "short_name":  "Rhein-Kreis Neuss",
+                                                       "types":  [
+                                                                     "administrative_area_level_3",
+                                                                     "political"
+                                                                 ]
+                                                   },
+                                                   {
+                                                       "long_name":  "Düsseldorf",
+                                                       "short_name":  "Düsseldorf",
+                                                       "types":  [
+                                                                     "administrative_area_level_2",
+                                                                     "political"
+                                                                 ]
+                                                   },
+                                                   {
+                                                       "long_name":  "Nordrhein-Westfalen",
+                                                       "short_name":  "NRW",
+                                                       "types":  [
+                                                                     "administrative_area_level_1",
+                                                                     "political"
+                                                                 ]
+                                                   },
+                                                   {
+                                                       "long_name":  "Deutschland",
+                                                       "short_name":  "DE",
+                                                       "types":  [
+                                                                     "country",
+                                                                     "political"
+                                                                 ]
+                                                   },
+                                                   {
+                                                       "long_name":  "41462",
+                                                       "short_name":  "41462",
+                                                       "types":  [
+                                                                     "postal_code"
+                                                                 ]
+                                                   }
+                                               ],
+                        "formatted_address":  "Neuss Neusser Weyhe, 41462 Neuss, Deutschland",
+                        "geometry":  {
+                                         "location":  {
+                                                          "lat":  51.21572459999999,
+                                                          "lng":  6.6638015
+                                                      },
+                                         "location_type":  "GEOMETRIC_CENTER",
+                                         "viewport":  {
+                                                          "northeast":  {
+                                                                            "lat":  51.2170875802915,
+                                                                            "lng":  6.665196880291502
+                                                                        },
+                                                          "southwest":  {
+                                                                            "lat":  51.2143896197085,
+                                                                            "lng":  6.662498919708497
+                                                                        }
+                                                      }
+                                     },
+                        "navigation_points":  [
+                                                  {
+                                                      "location":  {
+                                                                       "latitude":  51.2157253,
+                                                                       "longitude":  6.6638037
+                                                                   }
+                                                  }
+                                              ],
+                        "partial_match":  true,
+                        "place_id":  "ChIJIdEO3Wu0uEcR_y-N6Tc2VjM",
+                        "plus_code":  {
+                                          "compound_code":  "6M87+7G Neuss, Deutschland",
+                                          "global_code":  "9F386M87+7G"
+                                      },
+                        "types":  [
+                                      "establishment",
+                                      "point_of_interest",
+                                      "transit_station"
+                                  ]
+                    }
+                ],
+    "status":  "OK"
+}

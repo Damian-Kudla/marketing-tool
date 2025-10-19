@@ -41,10 +41,10 @@ export const geocodingRequestSchema = z.object({
 export type GeocodingRequest = z.infer<typeof geocodingRequestSchema>;
 
 export const addressSchema = z.object({
-  street: z.string(),
-  number: z.string(),
+  street: z.string().min(1, 'Straße ist erforderlich').trim(),
+  number: z.string().min(1, 'Hausnummer ist erforderlich').trim(),
   city: z.string().optional(),
-  postal: z.string(),
+  postal: z.string().min(1, 'Postleitzahl ist erforderlich').trim(),
   country: z.string().optional(),
 });
 
