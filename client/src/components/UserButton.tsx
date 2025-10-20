@@ -267,6 +267,13 @@ export function UserButton({ onDatasetLoad }: UserButtonProps) {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <DropdownMenuSeparator />
+        
+        {/* Version info at bottom */}
+        <div className="px-2 py-1.5 text-center">
+          <p className="text-xs text-gray-400">Version 2.5.0</p>
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
 
