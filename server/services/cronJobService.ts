@@ -64,10 +64,15 @@ class CronJobService {
 
   /**
    * Run daily report generation
+   * Note: Reports are now generated on-demand only
+   * This function is kept for future use but currently disabled
    */
   private async runDailyReport() {
-    console.log('[CronJobService] Running daily report generation...');
+    console.log('[CronJobService] Daily report generation disabled (on-demand only)');
+    // Reports werden nur noch bei Download generiert und sofort gelöscht
+    // um Speicherplatz zu sparen
     
+    /* Deaktiviert - Reports werden on-demand generiert
     try {
       const date = new Date().toISOString().split('T')[0];
       const reportPath = await generateDailyReport(date);
@@ -80,6 +85,7 @@ class CronJobService {
         console.log('[CronJobService] No users with minimum 10 logs today - skipping report');
       }
     }
+    */
   }
 
   stop() {

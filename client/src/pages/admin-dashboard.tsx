@@ -21,7 +21,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Download, RefreshCw, Users, Activity, MapPin, Calendar } from 'lucide-react';
+import { Download, RefreshCw, Users, Activity, MapPin, Calendar, Route } from 'lucide-react';
+import RouteReplayMap from '../components/RouteReplayMap';
 
 // Fix Leaflet default icon issue with Vite
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -71,9 +72,10 @@ interface DashboardUser {
   todayStats: {
     activityScore: number;
     totalActions: number;
-    statusChanges: Map<string, number>;
+    statusChanges: Record<string, number>;
     activeTime: number;
     distance: number;
+    uniquePhotos: number; // New metric: deduplicated photo count
   };
 }
 
@@ -115,11 +117,34 @@ export default function AdminDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>(
-    format(new Date(), 'yyyy-MM-dd')
-  );
+  
+  // Helper: Get last weekday (skip weekends)
+  const getLastWeekday = (daysBack: number = 1): string => {
+    const date = new Date();
+    let count = 0;
+    
+    while (count < daysBack) {
+      date.setDate(date.getDate() - 1);
+      const dayOfWeek = date.getDay();
+      // Skip weekends (0 = Sunday, 6 = Saturday)
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        count++;
+      }
+    }
+    
+    return format(date, 'yyyy-MM-dd');
+  };
+  
+  const [selectedDate, setSelectedDate] = useState<string>(getLastWeekday(1)); // Auto-select last weekday
   const [sortBy, setSortBy] = useState<'score' | 'actions' | 'distance'>('score');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  
+  // Route Replay state
+  const [showRouteReplay, setShowRouteReplay] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedUsername, setSelectedUsername] = useState<string | null>(null);
+  const [routeData, setRouteData] = useState<any>(null);
+  const [loadingRoute, setLoadingRoute] = useState(false);
 
   // Redirect if not admin
   useEffect(() => {
@@ -203,6 +228,41 @@ export default function AdminDashboard() {
     }
   };
 
+  // Fetch route data for selected user
+  const fetchRouteData = async (userId: string, date: string) => {
+    setLoadingRoute(true);
+    try {
+      const response = await fetch(
+        `/api/admin/dashboard/route?userId=${userId}&date=${date}`,
+        {
+          credentials: 'include',
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch route data');
+      }
+
+      const result = await response.json();
+      setRouteData(result);
+      
+    } catch (err: any) {
+      alert(err.message || 'Failed to fetch route data');
+      console.error('Error fetching route data:', err);
+      setRouteData(null);
+    } finally {
+      setLoadingRoute(false);
+    }
+  };
+
+  // Handle show route for user
+  const handleShowRoute = (userId: string, username: string) => {
+    setSelectedUserId(userId);
+    setSelectedUsername(username);
+    setShowRouteReplay(true);
+    fetchRouteData(userId, mode === 'live' ? format(new Date(), 'yyyy-MM-dd') : selectedDate);
+  };
+
   // Initial data fetch
   useEffect(() => {
     if (mode === 'live') {
@@ -241,15 +301,14 @@ export default function AdminDashboard() {
 
   // Prepare chart data
   const chartData = sortedUsers.map(user => {
-    const statusChanges = user.todayStats.statusChanges;
-    const statusMap = statusChanges instanceof Map ? statusChanges : new Map(Object.entries(statusChanges || {}));
+    const statusChanges = user.todayStats.statusChanges || {};
     
     return {
       name: user.username,
-      interessiert: statusMap.get('interessiert') || 0,
-      nicht_interessiert: statusMap.get('nicht_interessiert') || 0,
-      nicht_angetroffen: statusMap.get('nicht_angetroffen') || 0,
-      termin_vereinbart: statusMap.get('termin_vereinbart') || 0,
+      interessiert: (statusChanges['interessiert'] || 0) + (statusChanges['interest_later'] || 0),
+      nicht_interessiert: (statusChanges['nicht_interessiert'] || 0) + (statusChanges['no_interest'] || 0),
+      nicht_angetroffen: (statusChanges['nicht_angetroffen'] || 0) + (statusChanges['not_reached'] || 0),
+      termin_vereinbart: (statusChanges['termin_vereinbart'] || 0) + (statusChanges['appointment'] || 0) + (statusChanges['written'] || 0),
     };
   });
 
@@ -308,25 +367,54 @@ export default function AdminDashboard() {
         {mode === 'historical' && (
           <Card className="mt-4">
             <CardContent className="pt-6">
-              <div className="flex items-end gap-4">
-                <div className="flex-1">
-                  <Label htmlFor="date">Datum auswählen</Label>
-                  <Input
-                    id="date"
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    max={format(new Date(), 'yyyy-MM-dd')}
-                  />
+              <div className="flex flex-col gap-4">
+                {/* Quick Select Buttons */}
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      const lastWeekday = getLastWeekday(1);
+                      setSelectedDate(lastWeekday);
+                      fetchHistoricalData(lastWeekday);
+                    }}
+                  >
+                    Letzter Wochentag
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      const secondLastWeekday = getLastWeekday(2);
+                      setSelectedDate(secondLastWeekday);
+                      fetchHistoricalData(secondLastWeekday);
+                    }}
+                  >
+                    Vorletzter Wochentag
+                  </Button>
                 </div>
-                <Button onClick={() => fetchHistoricalData(selectedDate)}>
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Laden
-                </Button>
-                <Button variant="outline" onClick={() => downloadReport(selectedDate)}>
-                  <Download className="h-4 w-4 mr-2" />
-                  PDF Report
-                </Button>
+                
+                {/* Date Picker and Action Buttons */}
+                <div className="flex items-end gap-4">
+                  <div className="flex-1">
+                    <Label htmlFor="date">Datum auswählen</Label>
+                    <Input
+                      id="date"
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      max={format(new Date(), 'yyyy-MM-dd')}
+                    />
+                  </div>
+                  <Button onClick={() => fetchHistoricalData(selectedDate)}>
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Laden
+                  </Button>
+                  <Button variant="outline" onClick={() => downloadReport(selectedDate)}>
+                    <Download className="h-4 w-4 mr-2" />
+                    PDF Report
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -380,9 +468,8 @@ export default function AdminDashboard() {
                 <div className="text-2xl font-bold">
                   {data.totalStatusChanges || 
                     data.users.reduce((sum, u) => {
-                      const statusChanges = u.todayStats.statusChanges;
-                      const statusMap = statusChanges instanceof Map ? statusChanges : new Map(Object.entries(statusChanges || {}));
-                      const values = Array.from(statusMap.values()) as number[];
+                      const statusChanges = u.todayStats.statusChanges || {};
+                      const values = Object.values(statusChanges);
                       return sum + values.reduce((s, c) => s + c, 0);
                     }, 0)}
                 </div>
@@ -455,6 +542,9 @@ export default function AdminDashboard() {
                                 </p>
                                 <p>
                                   <strong>Actions:</strong> {user.todayStats.totalActions}
+                                </p>
+                                <p>
+                                  <strong>Fotos:</strong> {user.todayStats.uniquePhotos || 0}
                                 </p>
                                 <p>
                                   <strong>Distanz:</strong>{' '}
@@ -542,6 +632,9 @@ export default function AdminDashboard() {
                                   <strong>Actions:</strong> {user.todayStats.totalActions}
                                 </p>
                                 <p>
+                                  <strong>Fotos:</strong> {user.todayStats.uniquePhotos || 0}
+                                </p>
+                                <p>
                                   <strong>Distanz:</strong>{' '}
                                   {formatDistance(user.todayStats.distance)}
                                 </p>
@@ -626,17 +719,18 @@ export default function AdminDashboard() {
                     <th className="text-left p-2">Name</th>
                     <th className="text-right p-2">Activity Score</th>
                     <th className="text-right p-2">Actions</th>
+                    <th className="text-right p-2">Fotos</th>
                     <th className="text-right p-2">Status-Änderungen</th>
                     <th className="text-right p-2">Distanz</th>
                     <th className="text-right p-2">Aktiv-Zeit</th>
                     <th className="text-center p-2">Status</th>
+                    <th className="text-center p-2">Route</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sortedUsers.map(user => {
-                    const statusChanges = user.todayStats.statusChanges;
-                    const statusMap = statusChanges instanceof Map ? statusChanges : new Map(Object.entries(statusChanges || {}));
-                    const values = Array.from(statusMap.values()) as number[];
+                    const statusChanges = user.todayStats.statusChanges || {};
+                    const values = Object.values(statusChanges);
                     const totalStatusChanges = values.reduce((s, c) => s + c, 0);
 
                     return (
@@ -651,6 +745,7 @@ export default function AdminDashboard() {
                           </span>
                         </td>
                         <td className="p-2 text-right">{user.todayStats.totalActions}</td>
+                        <td className="p-2 text-right">{user.todayStats.uniquePhotos || 0}</td>
                         <td className="p-2 text-right">{totalStatusChanges}</td>
                         <td className="p-2 text-right">
                           {formatDistance(user.todayStats.distance)}
@@ -668,6 +763,16 @@ export default function AdminDashboard() {
                               Inaktiv
                             </span>
                           )}
+                        </td>
+                        <td className="p-2 text-center">
+                          <button
+                            onClick={() => handleShowRoute(user.userId, user.username)}
+                            className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors"
+                            title="Route auf Karte anzeigen"
+                          >
+                            <Route className="w-3 h-3" />
+                            Route
+                          </button>
                         </td>
                       </tr>
                     );
@@ -704,6 +809,75 @@ export default function AdminDashboard() {
             </ResponsiveContainer>
           </CardContent>
         </Card>
+      )}
+
+      {/* Route Replay Modal/Overlay */}
+      {showRouteReplay && (
+        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-background rounded-lg shadow-xl w-full max-w-6xl my-8 flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-background z-10">
+              <div>
+                <h2 className="text-xl font-bold">Route Wiedergabe</h2>
+                <p className="text-sm text-muted-foreground">
+                  {selectedUsername} - {mode === 'live' ? format(new Date(), 'dd.MM.yyyy') : format(new Date(selectedDate), 'dd.MM.yyyy')}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowRouteReplay(false);
+                  setRouteData(null);
+                  setSelectedUserId(null);
+                  setSelectedUsername(null);
+                }}
+                className="p-2 hover:bg-muted rounded-md transition-colors"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 p-4">
+              {loadingRoute ? (
+                <div className="flex items-center justify-center h-full min-h-[400px]">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Route wird geladen...</p>
+                  </div>
+                </div>
+              ) : routeData && routeData.gpsPoints && routeData.gpsPoints.length > 0 ? (
+                <RouteReplayMap
+                  username={selectedUsername || 'Unbekannt'}
+                  gpsPoints={routeData.gpsPoints}
+                  date={mode === 'live' ? new Date().toISOString().split('T')[0] : selectedDate}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <Route className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-lg font-medium mb-2">Keine GPS-Daten verfügbar</p>
+                    <p className="text-sm text-muted-foreground">
+                      Für diesen Benutzer wurden an diesem Tag keine GPS-Punkte aufgezeichnet.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -6,11 +6,9 @@ import { scrapeDayData } from './historicalDataScraper';
 import type { DailyUserData, UserReport, DailyReport } from '../../shared/trackingTypes';
 
 /**
- * PDF Report Generator V3.0 - HTML Based (On-Demand)
- * - Uses Puppeteer to convert HTML to PDF
- * - Fetches data from Google Sheets via historicalDataScraper
- * - Reports are generated on-demand and deleted after download
- * - No persistent storage to save resources
+ * PDF Report Generator V3.0 - HTML Based
+ * Uses Puppeteer to convert HTML to PDF
+ * Fetches data from Google Sheets via historicalDataScraper
  */
 
 const __filename = fileURLToPath(import.meta.url);
@@ -22,34 +20,6 @@ if (!fs.existsSync(REPORTS_DIR)) {
   fs.mkdirSync(REPORTS_DIR, { recursive: true });
   console.log('[ReportGenerator] Created reports directory:', REPORTS_DIR);
 }
-
-/**
- * Clean up old reports on startup (if any exist)
- */
-export function cleanupOldReports(): void {
-  try {
-    if (!fs.existsSync(REPORTS_DIR)) {
-      return;
-    }
-
-    const files = fs.readdirSync(REPORTS_DIR);
-    const pdfFiles = files.filter(f => f.endsWith('.pdf'));
-
-    if (pdfFiles.length > 0) {
-      console.log(`[ReportGenerator] 🗑️ Cleaning up ${pdfFiles.length} old report(s)...`);
-      pdfFiles.forEach(file => {
-        const filePath = path.join(REPORTS_DIR, file);
-        fs.unlinkSync(filePath);
-      });
-      console.log('[ReportGenerator] ✅ Old reports cleaned up');
-    }
-  } catch (error) {
-    console.error('[ReportGenerator] Error cleaning up old reports:', error);
-  }
-}
-
-// Cleanup on module load
-cleanupOldReports();
 
 /**
  * Generate daily report for all users

@@ -70,6 +70,7 @@ export interface DailyUserData {
   totalActions: number;
   actionsByType: Map<string, number>;
   statusChanges: Map<string, number>; // key: status, value: count
+  uniquePhotos?: number; // Deduplicated OCR photo count (optional for backward compatibility)
   
   // Device Status
   avgBatteryLevel: number;
@@ -137,9 +138,10 @@ export interface DashboardLiveData {
     todayStats: {
       activityScore: number;
       totalActions: number;
-      statusChanges: Map<string, number>;
+      statusChanges: Record<string, number>; // Changed from Map to Record for JSON serialization
       activeTime: number;
       distance: number;
+      uniquePhotos: number; // Deduplizierte OCR-Anfragen
     };
   }[];
 }

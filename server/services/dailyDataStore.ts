@@ -6,6 +6,7 @@ import type {
   DeviceStatus, 
   ActionLog 
 } from '../../shared/trackingTypes';
+import crypto from 'crypto';
 
 /**
  * In-Memory Daily Data Store
@@ -16,6 +17,8 @@ class DailyDataStore {
   private data: Map<string, DailyUserData> = new Map();
   private currentDate: string = this.getCurrentDate();
   private midnightResetTimer: NodeJS.Timeout | null = null;
+  // Track unique photo hashes per user (deduplicated by prospect data)
+  private uniquePhotoHashes: Map<string, Set<string>> = new Map();
 
   constructor() {
     this.scheduleMidnightReset();
@@ -198,6 +201,48 @@ class DailyDataStore {
   }
 
   /**
+   * Track OCR photo submission (deduplicated by prospect data)
+   * @param userId User ID
+   * @param username Username
+   * @param prospectData Column G data from Google Sheets (New Prospects)
+   * @returns true if this is a unique photo, false if duplicate
+   */
+  trackOCRPhoto(userId: string, username: string, prospectData: any): boolean {
+    const userData = this.getUserData(userId, username);
+
+    // Create hash of prospect data to detect duplicates
+    const dataString = JSON.stringify(prospectData);
+    const hash = crypto.createHash('md5').update(dataString).digest('hex');
+
+    // Get or create user's photo hash set
+    let userHashes = this.uniquePhotoHashes.get(userId);
+    if (!userHashes) {
+      userHashes = new Set<string>();
+      this.uniquePhotoHashes.set(userId, userHashes);
+    }
+
+    // Check if this photo is unique
+    const isUnique = !userHashes.has(hash);
+    
+    if (isUnique) {
+      userHashes.add(hash);
+      console.log(`[DailyStore] Unique photo tracked for ${username}, total: ${userHashes.size}`);
+    } else {
+      console.log(`[DailyStore] Duplicate photo detected for ${username} (hash: ${hash.substring(0, 8)}...)`);
+    }
+
+    return isUnique;
+  }
+
+  /**
+   * Get unique photo count for user
+   */
+  getUniquePhotoCount(userId: string): number {
+    const userHashes = this.uniquePhotoHashes.get(userId);
+    return userHashes ? userHashes.size : 0;
+  }
+
+  /**
    * Calculate distance between two GPS points (Haversine formula)
    * Returns distance in meters
    */
@@ -313,6 +358,7 @@ class DailyDataStore {
   reset(): void {
     console.log('[DailyStore] Resetting daily data...');
     this.data.clear();
+    this.uniquePhotoHashes.clear(); // Reset photo tracking
     this.currentDate = this.getCurrentDate();
   }
 
@@ -321,6 +367,7 @@ class DailyDataStore {
    */
   clearUser(userId: string): void {
     this.data.delete(userId);
+    this.uniquePhotoHashes.delete(userId); // Clear user's photo hashes
   }
 
   /**

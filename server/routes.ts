@@ -18,6 +18,7 @@ import {
 import { requireAuth, type AuthenticatedRequest } from "./middleware/auth";
 import { rateLimitMiddleware } from "./middleware/rateLimit";
 import { logUserActivityWithRetry, logAuthAttemptWithRetry } from "./services/enhancedLogging";
+import { dailyDataStore } from "./services/dailyDataStore";
 import { authRouter } from "./routes/auth";
 import addressDatasetsRouter from "./routes/addressDatasets";
 import trackingRouter from "./routes/tracking";
@@ -547,8 +548,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         backendOrientationInfo: null,
       };
 
-      // Log the OCR request with results
+      // Prepare address string for logging
       const addressString = address ? `${address.street} ${address.number}, ${address.city} ${address.postal}`.trim() : undefined;
+
+      // Track unique photo submission (deduplicated by prospect data - Column G)
+      // Photos with identical prospect data are counted as 1 photo
+      if (req.userId && req.username) {
+        dailyDataStore.trackOCRPhoto(req.userId, req.username, {
+          newProspects,
+          existingCustomers: existingCustomers.map(c => ({ id: c.id, name: c.name })),
+          address: addressString,
+          timestamp: Date.now()
+        });
+      }
+
+      // Log the OCR request with results
       await logUserActivityWithRetry(req, addressString, newProspects, existingCustomers);
 
       res.json(response);
@@ -599,8 +613,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         allCustomersAtAddress,
       };
 
-      // Log the OCR correction request with results
+      // Prepare address string
       const addressString = address ? `${address.street} ${address.number}, ${address.city} ${address.postal}`.trim() : undefined;
+
+      // Track unique photo submission for OCR correction too
+      if (req.userId && req.username) {
+        dailyDataStore.trackOCRPhoto(req.userId, req.username, {
+          newProspects,
+          existingCustomers: existingCustomers.map(c => ({ id: c.id, name: c.name })),
+          address: addressString,
+          timestamp: Date.now()
+        });
+      }
+
+      // Log the OCR correction request with results
       await logUserActivityWithRetry(req, addressString, newProspects, existingCustomers);
 
       res.json(response);

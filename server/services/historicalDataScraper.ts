@@ -6,11 +6,11 @@
  */
 
 import { google, sheets_v4 } from 'googleapis';
+import crypto from 'crypto';
 import type { DailyUserData, GPSCoordinates, ActionLog, DeviceStatus } from '../../shared/trackingTypes';
 
-// Google Sheets Configuration (same as googleSheets.ts)
-const SPREADSHEET_ID = '1IF9ieZQ_irKs9XU7XZmDuBaT4XqQrtm0EmfKbA3zB4s';
-const SHEET_NAME = 'Logs';
+// Google Sheets Configuration - Uses individual user worksheets in LOG_SHEET_ID
+const LOG_SHEET_ID = '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw'; // Same as GoogleSheetsLoggingService
 
 // Cache für gescrapte Daten (wird nach Verwendung gelöscht)
 const historicalCache = new Map<string, DailyUserData[]>();
@@ -111,12 +111,28 @@ function calculateActivityScore(data: DailyUserData): number {
 
 /**
  * Parsed einen Log-Eintrag aus Google Sheets
+ * 
+ * Sheet Columns:
+ * A: Timestamp
+ * B: User ID
+ * C: Username
+ * D: Endpoint
+ * E: Method
+ * F: Address
+ * G: New Prospects
+ * H: Existing Customers
+ * I: User Agent
+ * J: Data (JSON with action, gps coords, etc.)
  */
 interface ParsedLog {
   timestamp: Date;
   userId: string;
   username: string;
-  type: 'gps' | 'session' | 'device' | 'action';
+  type: 'gps' | 'session' | 'device' | 'action' | 'photo';
+  endpoint?: string;
+  newProspects?: string;
+  existingCustomers?: string;
+  address?: string;
   data: any;
 }
 
@@ -125,29 +141,37 @@ function parseLogEntry(row: any[]): ParsedLog | null {
     const timestamp = new Date(row[0]); // Column A: Timestamp
     const userId = row[1]; // Column B: User ID
     const username = row[2]; // Column C: Username
-    const action = row[3]; // Column D: Action
-    const details = row[4]; // Column E: Details (JSON)
+    const endpoint = row[3]; // Column D: Endpoint
+    const method = row[4]; // Column E: Method
+    const address = row[5]; // Column F: Address
+    const newProspects = row[6]; // Column G: New Prospects
+    const existingCustomers = row[7]; // Column H: Existing Customers
+    const dataString = row[9]; // Column J: Data (JSON)
     
-    if (!userId || !username || !action) {
+    if (!userId || !username) {
       return null;
     }
 
-    let parsedDetails: any = {};
+    // Parse Data JSON (enthält action, GPS coordinates, etc.)
+    let parsedData: any = {};
     try {
-      parsedDetails = JSON.parse(details || '{}');
+      parsedData = JSON.parse(dataString || '{}');
     } catch {
-      parsedDetails = {};
+      parsedData = {};
     }
 
-    // Bestimme Log-Typ basierend auf Action
-    let type: 'gps' | 'session' | 'device' | 'action' = 'action';
+    // Bestimme Log-Typ basierend auf action im data field oder endpoint
+    let type: 'gps' | 'session' | 'device' | 'action' | 'photo' = 'action';
+    const action = parsedData.action || '';
     
-    if (action === 'gps_update') {
+    if (action === 'gps_update' || endpoint === '/api/tracking/gps') {
       type = 'gps';
-    } else if (action === 'session_start' || action === 'session_end' || action === 'idle_detected' || action === 'active_resumed') {
+    } else if (action === 'session_start' || action === 'session_end' || action === 'idle_detected' || action === 'active_resumed' || action === 'session_update' || endpoint === '/api/tracking/session') {
       type = 'session';
-    } else if (action === 'device_update') {
+    } else if (action === 'device_update' || endpoint === '/api/tracking/device') {
       type = 'device';
+    } else if (endpoint === '/api/ocr' || endpoint === '/api/ocr-correct') {
+      type = 'photo';
     }
 
     return {
@@ -155,7 +179,11 @@ function parseLogEntry(row: any[]): ParsedLog | null {
       userId,
       username,
       type,
-      data: parsedDetails,
+      endpoint,
+      newProspects,
+      existingCustomers,
+      address,
+      data: parsedData,
     };
   } catch (error) {
     console.error('[HistoricalDataScraper] Error parsing log entry:', error);
@@ -184,25 +212,67 @@ export async function scrapeDayData(date: string, userId?: string): Promise<Dail
   try {
     const sheets = getGoogleSheets();
     
-    // Alle Logs für den Tag abrufen
-    console.log(`[HistoricalDataScraper] Fetching logs from Google Sheets (${SPREADSHEET_ID})`);
+    // Get all worksheets in the spreadsheet
+    console.log(`[HistoricalDataScraper] Fetching worksheet list from Google Sheets (${LOG_SHEET_ID})`);
     
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!A:E`, // Timestamp, UserID, Username, Action, Details
+    const spreadsheetResponse = await sheets.spreadsheets.get({
+      spreadsheetId: LOG_SHEET_ID,
     });
 
-    const rows = response.data.values || [];
-    console.log(`[HistoricalDataScraper] ✅ Fetched ${rows.length} rows from Google Sheets`);
-    
-    if (rows.length === 0) {
-      console.log('[HistoricalDataScraper] ⚠️ No logs found in Google Sheets');
+    const allSheets = spreadsheetResponse.data.sheets || [];
+    console.log(`[HistoricalDataScraper] Found ${allSheets.length} worksheets`);
+
+    // Filter to user worksheets (format: username_userId) and optionally by specific user
+    let targetSheets = allSheets
+      .map((sheet: any) => sheet.properties.title as string)
+      .filter((title: string) => title !== 'AuthLogs' && title.includes('_')); // Exclude AuthLogs and other system sheets
+
+    if (userId) {
+      // Filter to specific user's worksheet
+      targetSheets = targetSheets.filter((title: string) => title.endsWith(`_${userId}`));
+      console.log(`[HistoricalDataScraper] Filtered to user ${userId}: ${targetSheets.length} worksheets`);
+    }
+
+    if (targetSheets.length === 0) {
+      console.log('[HistoricalDataScraper] ⚠️ No user worksheets found');
       return [];
     }
 
-    // Parse Logs (skip header row)
+    // Fetch data from all target worksheets
+    console.log(`[HistoricalDataScraper] Fetching data from ${targetSheets.length} worksheets...`);
+    
+    const fetchPromises = targetSheets.map(async (sheetName) => {
+      try {
+        const response = await sheets.spreadsheets.values.get({
+          spreadsheetId: LOG_SHEET_ID,
+          range: `${sheetName}!A:J`, // A:Timestamp, B:UserID, C:Username, D:Endpoint, E:Method, F:Address, G:NewProspects, H:ExistingCustomers, I:UserAgent, J:Data
+        });
+        return response.data.values || [];
+      } catch (error) {
+        console.error(`[HistoricalDataScraper] Error fetching worksheet ${sheetName}:`, error);
+        return [];
+      }
+    });
+
+    const allSheetData = await Promise.all(fetchPromises);
+    
+    // Combine all rows from all sheets (skip header row from each)
+    const rows: any[][] = [];
+    allSheetData.forEach((sheetRows) => {
+      if (sheetRows.length > 1) { // Skip if only header or empty
+        rows.push(...sheetRows.slice(1)); // Skip header row
+      }
+    });
+
+    console.log(`[HistoricalDataScraper] ✅ Fetched ${rows.length} total rows from ${targetSheets.length} worksheets`);
+    
+    if (rows.length === 0) {
+      console.log('[HistoricalDataScraper] ⚠️ No log entries found');
+      return [];
+    }
+
+    // Parse Logs
     const logs: ParsedLog[] = rows
-      .slice(1)
       .map(parseLogEntry)
       .filter((log): log is ParsedLog => log !== null);
 
@@ -258,7 +328,7 @@ export async function scrapeDayData(date: string, userId?: string): Promise<Dail
       throw new Error('Permission denied: Service account needs access to the spreadsheet.');
     } else if (error.code === 404) {
       console.error('[HistoricalDataScraper] ❌ Spreadsheet not found');
-      throw new Error(`Spreadsheet not found: ${SPREADSHEET_ID}`);
+      throw new Error(`Spreadsheet not found: ${LOG_SHEET_ID}`);
     } else if (error.message?.includes('credentials')) {
       // Credentials-Fehler bereits in getGoogleSheets() behandelt
       throw error;
@@ -310,10 +380,31 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
   let batterySum = 0;
   let batteryCount = 0;
   let isIdle = false;
+  
+  // Photo tracking with deduplication (same logic as dailyDataStore)
+  const uniquePhotoHashes = new Set<string>();
 
   // Verarbeite jeden Log
   logs.forEach((log, index) => {
     const timestamp = log.timestamp.getTime();
+    
+    // Photo Tracking (OCR requests)
+    if (log.type === 'photo') {
+      // Create hash from prospect data (Column G + Column H)
+      const prospectData = {
+        newProspects: log.newProspects || '',
+        existingCustomers: log.existingCustomers || '',
+        address: log.address || '',
+      };
+      
+      const dataString = JSON.stringify(prospectData);
+      const hash = crypto.createHash('md5').update(dataString).digest('hex');
+      
+      // Only count unique photos (deduplicated by prospect data)
+      if (!uniquePhotoHashes.has(hash)) {
+        uniquePhotoHashes.add(hash);
+      }
+    }
 
     // GPS Updates
     if (log.type === 'gps' && log.data.latitude && log.data.longitude) {
@@ -432,7 +523,7 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
         timestamp: timestamp,
         action: actionType,
         details: log.data.context ? JSON.stringify(log.data.context) : log.data.details,
-        residentStatus: log.data.status || log.data.context?.status,
+        residentStatus: log.data.residentStatus || log.data.status || log.data.context?.status,
       };
 
       data.totalActions++;
@@ -442,7 +533,17 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
       data.actionsByType.set(actionLog.action, count + 1);
 
       // Zähle Status Changes (wichtigster KPI!)
-      if (actionLog.action === 'status_change' && actionLog.residentStatus) {
+      // Für bulk_residents_update: Durchlaufe alle Residents im Array
+      if (actionType === 'bulk_residents_update' && log.data.residents && Array.isArray(log.data.residents)) {
+        log.data.residents.forEach((resident: any) => {
+          if (resident.status) {
+            const statusCount = data.statusChanges.get(resident.status) || 0;
+            data.statusChanges.set(resident.status, statusCount + 1);
+          }
+        });
+      }
+      // Für einzelne Updates (resident_update) oder andere Actions mit residentStatus
+      else if (actionLog.residentStatus) {
         const statusCount = data.statusChanges.get(actionLog.residentStatus) || 0;
         data.statusChanges.set(actionLog.residentStatus, statusCount + 1);
       }
@@ -492,6 +593,9 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
   const totalStatusChangesCount = Array.from(data.statusChanges.values()).reduce((sum, count) => sum + count, 0);
   const sessionHours = data.totalSessionTime / (1000 * 60 * 60);
   data.scansPerHour = sessionHours > 0 ? data.totalActions / sessionHours : 0;
+
+  // Set unique photos count
+  data.uniquePhotos = uniquePhotoHashes.size;
 
   // Berechne Activity Score
   data.activityScore = calculateActivityScore(data);

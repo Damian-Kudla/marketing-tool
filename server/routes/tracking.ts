@@ -75,12 +75,14 @@ router.post('/session', async (req: AuthenticatedRequest, res: Response) => {
 
     // Determine action type from session data
     let actionType = 'session_update';
+    let residentStatus: string | undefined;
     if (session.actions && session.actions.length > 0) {
       const lastAction = session.actions[session.actions.length - 1];
       actionType = lastAction.action || 'session_update';
+      residentStatus = lastAction.residentStatus; // ✅ Extract residentStatus from last action
     }
 
-    // Log to Google Sheets with session data + RAM usage
+    // Log to Google Sheets with session data + RAM usage + residentStatus
     await logUserActivityWithRetry(
       req,
       undefined,
@@ -92,6 +94,7 @@ router.post('/session', async (req: AuthenticatedRequest, res: Response) => {
         idleTime: session.idleTime,
         sessionDuration: session.sessionDuration,
         actionsCount: session.actions?.length || 0,
+        residentStatus, // ✅ Include residentStatus in logged data
         memoryUsageMB: memoryUsageMB ?? null, // Add RAM usage (null if not available)
         timestamp
       }

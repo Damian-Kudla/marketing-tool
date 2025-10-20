@@ -46,8 +46,16 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
 
     // Transformiere DailyUserData zu DashboardLiveData Format
     const dashboardUsers = usersArray.map(userData => {
-      const lastGpsPoint = userData.gpsPoints[userData.gpsPoints.length - 1];
+      const lastGpsPoint = userData.gpsPoints.length > 0 
+        ? userData.gpsPoints[userData.gpsPoints.length - 1]
+        : undefined;
       const totalStatusChanges = Array.from(userData.statusChanges.values()).reduce((sum, count) => sum + count, 0);
+
+      // Konvertiere Map zu Objekt für JSON-Serialisierung
+      const statusChangesObj: Record<string, number> = {};
+      userData.statusChanges.forEach((count, status) => {
+        statusChangesObj[status] = count;
+      });
 
       return {
         userId: userData.userId,
@@ -60,9 +68,10 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
         todayStats: {
           activityScore: userData.activityScore,
           totalActions: userData.totalActions,
-          statusChanges: userData.statusChanges,
+          statusChanges: statusChangesObj,
           activeTime: userData.activeTime,
           distance: userData.totalDistance,
+          uniquePhotos: dailyDataStore.getUniquePhotoCount(userData.userId),
         },
       };
     });
@@ -142,8 +151,16 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
 
     // Transformiere zu DashboardLiveData Format
     const dashboardUsers = userData.map(user => {
-      const lastGpsPoint = user.gpsPoints[user.gpsPoints.length - 1];
+      const lastGpsPoint = user.gpsPoints.length > 0 
+        ? user.gpsPoints[user.gpsPoints.length - 1]
+        : undefined;
       
+      // Konvertiere Map zu Objekt für JSON-Serialisierung
+      const statusChangesObj: Record<string, number> = {};
+      user.statusChanges.forEach((count, status) => {
+        statusChangesObj[status] = count;
+      });
+
       return {
         userId: user.userId,
         username: user.username,
@@ -155,9 +172,10 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
         todayStats: {
           activityScore: user.activityScore,
           totalActions: user.totalActions,
-          statusChanges: user.statusChanges,
+          statusChanges: statusChangesObj,
           activeTime: user.activeTime,
           distance: user.totalDistance,
+          uniquePhotos: user.uniquePhotos || 0, // Use actual value from historical data
         },
       };
     });
@@ -209,8 +227,80 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
 });
 
 /**
+ * GET /api/admin/dashboard/route
+ * Gibt GPS-Punkte für einen bestimmten User und Datum zurück
+ */
+router.get('/dashboard/route', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { userId, date } = req.query;
+
+    if (!userId || !date) {
+      return res.status(400).json({ error: 'userId and date are required' });
+    }
+
+    const dateStr = date as string;
+    const userIdStr = userId as string;
+
+    console.log(`[Admin API] Fetching route data for user ${userIdStr} on ${dateStr}`);
+
+    // Prüfe ob es heute ist (Live-Daten) oder historische Daten
+    const today = new Date().toISOString().split('T')[0];
+    let gpsPoints: any[] = [];
+    let username = '';
+
+    if (dateStr === today) {
+      // Live-Daten aus RAM
+      const userData = dailyDataStore.getUserDailyData(userIdStr);
+      if (userData) {
+        gpsPoints = userData.gpsPoints;
+        username = userData.username;
+      }
+    } else {
+      // Historische Daten aus Google Sheets
+      const historicalData = await scrapeDayData(dateStr, userIdStr);
+      
+      if (historicalData && historicalData.length > 0) {
+        const userData = historicalData[0];
+        gpsPoints = userData.gpsPoints;
+        username = userData.username;
+      }
+    }
+
+    if (gpsPoints.length === 0) {
+      return res.status(404).json({ 
+        error: 'No GPS data found for this user on this date',
+        gpsPoints: [],
+        username: username || 'Unknown',
+        date: dateStr
+      });
+    }
+
+    res.json({
+      gpsPoints,
+      username,
+      date: dateStr,
+      totalPoints: gpsPoints.length
+    });
+
+    // Cache nach Verwendung löschen bei historischen Daten
+    if (dateStr !== today) {
+      setTimeout(() => {
+        clearHistoricalCache(dateStr, userIdStr);
+      }, 5000);
+    }
+
+  } catch (error: any) {
+    console.error('[Admin API] ❌ Error fetching route data:', error);
+    res.status(500).json({ 
+      error: error.message || 'Failed to fetch route data' 
+    });
+  }
+});
+
+/**
  * GET /api/admin/reports/:date
- * Prüft ob ein Report für das Datum existiert
+ * Info: Reports werden on-demand generiert, nicht gespeichert
+ * Dieser Endpoint prüft nur, ob das Datumsformat valide ist
  */
 router.get('/reports/:date', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -222,30 +312,13 @@ router.get('/reports/:date', requireAuth, requireAdmin, async (req: Authenticate
       return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
     }
 
-    const reportsDir = path.join(process.cwd(), 'reports');
-    const filename = `daily-report-${date}.pdf`;
-    const filePath = path.join(reportsDir, filename);
-
-    const exists = fs.existsSync(filePath);
-
-    if (!exists) {
-      return res.status(404).json({ 
-        exists: false,
-        message: 'Report not found for this date' 
-      });
-    }
-
-    // Hole Datei-Statistiken
-    const stats = fs.statSync(filePath);
-
+    // Reports werden on-the-fly generiert beim Download
     res.json({
       exists: true,
       date,
-      filename,
-      size: stats.size,
-      createdAt: stats.birthtime,
-      modifiedAt: stats.mtime,
+      message: 'Report will be generated on download',
       downloadUrl: `/api/admin/reports/${date}/download`,
+      generatedOnDemand: true
     });
 
   } catch (error) {
@@ -256,9 +329,11 @@ router.get('/reports/:date', requireAuth, requireAdmin, async (req: Authenticate
 
 /**
  * GET /api/admin/reports/:date/download
- * Lädt den PDF-Report für ein bestimmtes Datum herunter
+ * Generiert on-the-fly einen PDF-Report, liefert ihn aus und löscht ihn sofort
  */
 router.get('/reports/:date/download', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  let tempFilePath: string | null = null;
+
   try {
     const { date } = req.params;
 
@@ -268,22 +343,29 @@ router.get('/reports/:date/download', requireAuth, requireAdmin, async (req: Aut
       return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
     }
 
-    const reportsDir = path.join(process.cwd(), 'reports');
-    const filename = `daily-report-${date}.pdf`;
-    const filePath = path.join(reportsDir, filename);
+    console.log(`[Admin API] 📄 Generating on-the-fly report for ${date}`);
 
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: 'Report not found for this date' });
+    // Dynamisch importiere generateDailyReport
+    const { generateDailyReport } = await import('../services/reportGenerator');
+
+    // Generiere Report on-the-fly
+    tempFilePath = await generateDailyReport(date);
+
+    if (!fs.existsSync(tempFilePath)) {
+      console.error('[Admin API] Generated file not found:', tempFilePath);
+      return res.status(500).json({ error: 'Report generation failed' });
     }
 
-    console.log(`[Admin API] Downloading report for ${date}`);
+    const filename = `daily-report-${date}.pdf`;
+
+    console.log(`[Admin API] ✅ Report generated, streaming to client...`);
 
     // Setze Response Headers für PDF-Download
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
     // Stream PDF-Datei
-    const fileStream = fs.createReadStream(filePath);
+    const fileStream = fs.createReadStream(tempFilePath);
     fileStream.pipe(res);
 
     fileStream.on('error', (error) => {
@@ -293,10 +375,28 @@ router.get('/reports/:date/download', requireAuth, requireAdmin, async (req: Aut
       }
     });
 
-  } catch (error) {
-    console.error('[Admin API] Error downloading report:', error);
+    // Lösche Datei nach erfolgreichem Stream
+    fileStream.on('end', () => {
+      if (tempFilePath && fs.existsSync(tempFilePath)) {
+        fs.unlinkSync(tempFilePath);
+        console.log(`[Admin API] 🗑️ Deleted temporary report: ${tempFilePath}`);
+      }
+    });
+
+  } catch (error: any) {
+    console.error('[Admin API] Error generating/downloading report:', error);
+    
+    // Cleanup bei Fehler
+    if (tempFilePath && fs.existsSync(tempFilePath)) {
+      fs.unlinkSync(tempFilePath);
+      console.log(`[Admin API] 🗑️ Cleaned up failed report: ${tempFilePath}`);
+    }
+
     if (!res.headersSent) {
-      res.status(500).json({ error: 'Failed to download report' });
+      res.status(500).json({ 
+        error: 'Failed to generate report',
+        details: error.message 
+      });
     }
   }
 });
