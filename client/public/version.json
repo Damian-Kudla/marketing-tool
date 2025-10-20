@@ -1,18 +1,24 @@
 {
-  "version": "2.4.7",
-  "buildTime": "2025-10-17T23:41:28.516Z",
-  "buildNumber": "fix-infinite-loop-and-list-visibility",
+  "version": "2.5.0",
+  "buildTime": "2025-10-20T03:15:00.000Z",
+  "buildNumber": "photo-tracking-camera-follow-ux-improvements",
   "features": [
-    "Fix: Keine Endlosschleife mehr bei Adresseingabe",
-    "Fix: Kundenliste wird korrekt angezeigt",
-    "Fix: Count zeigt richtige Anzahl"
+    "NEU: Foto-Tracking mit Deduplizierung (MD5-Hash)",
+    "NEU: Intelligentes Kamera-Follow-System (30% Schwellwert)",
+    "NEU: Quick-Select Buttons für historische Daten",
+    "NEU: Fotos-Spalte im Admin Dashboard",
+    "Fix: Route Replay Modal Overflow (scrollbar)",
+    "Fix: Wochenend-Skip-Logik für Datumsauswahl"
   ],
   "technicalDetails": [
-    "Admin Authentication",
-    "Phase 1-3 Tracking",
-    "Leaflet 4.2.1"
+    "Photo Deduplication (MD5)",
+    "Route Replay Camera Follow",
+    "PDF Report Generator V2.0",
+    "On-Demand Reports",
+    "Historical Photo Counting"
   ],
   "previousFeatures": [
+    "Fix: Infinite Loop & List Visibility (v2.4.7)",
     "Fix: Duplikate, Validation (v2.4.6)",
     "Kundenliste sichtbar (v2.4.5)"
   ]
