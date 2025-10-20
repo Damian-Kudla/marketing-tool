@@ -34,10 +34,10 @@ export function SessionExpiredBanner() {
     <div
       style={{
         position: 'fixed',
-        top: '64px', // Unter dem Header (Header ist ca. 64px hoch)
+        top: '64px', // Direkt unter dem Header (Header ist 64px hoch)
         left: 0,
         right: 0,
-        zIndex: 40, // Unter Header (z-50) aber über allem anderen
+        zIndex: 45, // Unter Header (z-50) aber über Content (z-40)
         backgroundColor: '#dc2626', // red-600
         color: 'white',
         padding: '16px 24px',
