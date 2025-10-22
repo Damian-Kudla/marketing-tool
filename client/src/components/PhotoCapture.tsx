@@ -7,6 +7,7 @@ import { useFilteredToast } from '@/hooks/use-filtered-toast';
 import type { Address } from '@/components/GPSAddressForm';
 import { ocrAPI } from '@/services/api';
 import { trackingManager } from '@/services/trackingManager';
+import { expandHouseNumberRange } from '@/utils/addressUtils';
 import { 
   correctImageOrientationNative,
   rotateImageManually,
@@ -216,9 +217,21 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
         return;
       }
 
+      // Process address with house number range expansion if needed
+      const processedAddress = { ...address };
+      if (address.number.includes('-')) {
+        const expanded = expandHouseNumberRange(
+          address.number,
+          address.onlyEven || false,
+          address.onlyOdd || false
+        );
+        // Join expanded numbers with comma for backend processing
+        processedAddress.number = expanded.join(',');
+      }
+      
       const formData = new FormData();
       formData.append('image', fileToProcess);
-      formData.append('address', JSON.stringify(address));
+      formData.append('address', JSON.stringify(processedAddress));
       
       // Include orientation info if available for backend logging
       if (orientationInfo) {

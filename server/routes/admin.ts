@@ -13,9 +13,133 @@ import { dailyDataStore } from '../services/dailyDataStore';
 import { scrapeDayData, clearHistoricalCache, getCacheStats } from '../services/historicalDataScraper';
 import fs from 'fs';
 import path from 'path';
-import type { DailyUserData, DashboardLiveData } from '../../shared/trackingTypes';
+import type { DailyUserData, DashboardLiveData, TrackingData, ActionLog } from '../../shared/trackingTypes';
 
 const router = Router();
+
+/**
+ * Calculate action details breakdown from actionsByType Map
+ */
+function calculateActionDetails(userData: DailyUserData): {
+  scans: number;
+  ocrCorrections: number;
+  datasetCreates: number;
+  geocodes: number;
+  edits: number;
+  saves: number;
+  deletes: number;
+  statusChanges: number;
+  navigations: number;
+  other: number;
+} {
+  const details = {
+    scans: userData.actionsByType.get('scan') || 0,
+    ocrCorrections: userData.actionsByType.get('bulk_residents_update') || 0,
+    datasetCreates: userData.actionsByType.get('dataset_create') || 0,
+    geocodes: userData.actionsByType.get('geocode') || 0,
+    edits: userData.actionsByType.get('edit') || 0,
+    saves: userData.actionsByType.get('save') || 0,
+    deletes: userData.actionsByType.get('delete') || 0,
+    statusChanges: userData.actionsByType.get('status_change') || 0,
+    navigations: userData.actionsByType.get('navigate') || 0,
+    other: 0
+  };
+
+  // Calculate "other" by summing all remaining unmapped action types
+  const knownActions = new Set([
+    'scan', 'bulk_residents_update', 'dataset_create', 'geocode',
+    'edit', 'save', 'delete', 'status_change', 'navigate'
+  ]);
+  userData.actionsByType.forEach((count, actionType) => {
+    if (!knownActions.has(actionType)) {
+      details.other += count;
+    }
+  });
+
+  return details;
+}
+
+/**
+ * Calculate peak time period (most active consecutive hours)
+ */
+function calculatePeakTime(rawLogs: TrackingData[]): string | undefined {
+  if (rawLogs.length === 0) return undefined;
+
+  // Group activities by hour
+  const hourlyActivity = new Map<number, number>();
+  
+  for (const log of rawLogs) {
+    const hour = new Date(log.timestamp).getHours();
+    hourlyActivity.set(hour, (hourlyActivity.get(hour) || 0) + 1);
+  }
+
+  if (hourlyActivity.size === 0) return undefined;
+
+  // Find consecutive hours with highest total activity
+  const hours = Array.from(hourlyActivity.keys()).sort((a, b) => a - b);
+  let maxActivity = 0;
+  let maxStart = hours[0];
+  let maxEnd = hours[0];
+
+  // Try different window sizes (1-4 hours)
+  for (let windowSize = 1; windowSize <= 4; windowSize++) {
+    for (let i = 0; i <= hours.length - windowSize; i++) {
+      const windowHours = hours.slice(i, i + windowSize);
+      // Check if hours are consecutive
+      let isConsecutive = true;
+      for (let j = 1; j < windowHours.length; j++) {
+        if (windowHours[j] - windowHours[j - 1] !== 1) {
+          isConsecutive = false;
+          break;
+        }
+      }
+      
+      if (isConsecutive) {
+        const windowActivity = windowHours.reduce((sum, h) => sum + (hourlyActivity.get(h) || 0), 0);
+        if (windowActivity > maxActivity) {
+          maxActivity = windowActivity;
+          maxStart = windowHours[0];
+          maxEnd = windowHours[windowHours.length - 1];
+        }
+      }
+    }
+  }
+
+  // Format as "HH:00-HH:00"
+  const startStr = maxStart.toString().padStart(2, '0');
+  const endStr = (maxEnd + 1).toString().padStart(2, '0');
+  return `${startStr}:00-${endStr}:00`;
+}
+
+/**
+ * Calculate top 3 breaks (largest time gaps between activities)
+ * A break is considered significant if it's at least 15 minutes
+ */
+function calculateBreaks(rawLogs: TrackingData[]): Array<{ start: number; end: number; duration: number }> {
+  if (rawLogs.length < 2) return [];
+
+  // Sort logs by timestamp
+  const sortedLogs = [...rawLogs].sort((a, b) => a.timestamp - b.timestamp);
+
+  // Calculate all gaps
+  const gaps: Array<{ start: number; end: number; duration: number }> = [];
+  
+  for (let i = 1; i < sortedLogs.length; i++) {
+    const gap = sortedLogs[i].timestamp - sortedLogs[i - 1].timestamp;
+    const minBreakDuration = 15 * 60 * 1000; // 15 minutes
+    
+    if (gap >= minBreakDuration) {
+      gaps.push({
+        start: sortedLogs[i - 1].timestamp,
+        end: sortedLogs[i].timestamp,
+        duration: gap
+      });
+    }
+  }
+
+  // Sort by duration (largest first) and take top 3
+  return gaps.sort((a, b) => b.duration - a.duration).slice(0, 3);
+}
 
 /**
  * Middleware: Prüft Admin-Rechte
@@ -37,11 +161,25 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
   try {
     console.log('[Admin API] Fetching live dashboard data');
 
+    // Import addressDatasetService for final status calculation
+    const { addressDatasetService } = await import('../services/googleSheets');
+
     const allUserData = dailyDataStore.getAllUserData();
 
-    // Konvertiere Map zu Array und sortiere nach Activity Score
+    // Calculate final statuses and conversions for all users
+    await Promise.all(
+      Array.from(allUserData.values()).map(userData => 
+        dailyDataStore.calculateFinalStatusesAndConversions(
+          userData.userId,
+          userData.username,
+          addressDatasetService
+        )
+      )
+    );
+
+    // Konvertiere Map zu Array und sortiere nach totalActions
     const usersArray = Array.from(allUserData.values()).sort((a, b) => {
-      return b.activityScore - a.activityScore;
+      return b.totalActions - a.totalActions;
     });
 
     // Transformiere DailyUserData zu DashboardLiveData Format
@@ -57,6 +195,29 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
         statusChangesObj[status] = count;
       });
 
+      // Berechne finalStatuses aus addressDatasetService (aktuelle Status der bearbeiteten Anwohner)
+      const finalStatusesMap = userData.finalStatuses || new Map();
+      const finalStatusesObj: Record<string, number> = {};
+      finalStatusesMap.forEach((count, status) => {
+        finalStatusesObj[status] = count;
+      });
+
+      // Berechne conversionRates aus historischen Status-Änderungen
+      const conversionRates = userData.conversionRates || {
+        interest_later_to_written: 0,
+        interest_later_to_no_interest: 0,
+        interest_later_to_appointment: 0,
+        interest_later_to_not_reached: 0,
+        interest_later_total: 0
+      };
+
+      // Calculate action details breakdown
+      const actionDetails = calculateActionDetails(userData);
+
+      // Calculate peak time and breaks
+      const peakTime = calculatePeakTime(userData.rawLogs);
+      const breaks = calculateBreaks(userData.rawLogs);
+
       return {
         userId: userData.userId,
         username: userData.username,
@@ -66,12 +227,16 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
           ? userData.rawLogs[userData.rawLogs.length - 1].timestamp 
           : Date.now(),
         todayStats: {
-          activityScore: userData.activityScore,
           totalActions: userData.totalActions,
+          actionDetails,
           statusChanges: statusChangesObj,
+          finalStatuses: finalStatusesObj,
+          conversionRates,
           activeTime: userData.activeTime,
           distance: userData.totalDistance,
           uniquePhotos: dailyDataStore.getUniquePhotoCount(userData.userId),
+          peakTime,
+          breaks,
         },
       };
     });
@@ -90,9 +255,6 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
       date: new Date().toISOString().split('T')[0],
       totalUsers: usersArray.length,
       activeUsers: usersArray.filter(u => u.activeTime > 0).length,
-      averageActivityScore: usersArray.length > 0
-        ? Math.round(usersArray.reduce((sum, u) => sum + u.activityScore, 0) / usersArray.length)
-        : 0,
       totalStatusChanges,
       totalDistance: usersArray.reduce((sum, u) => sum + u.totalDistance, 0),
     });
@@ -146,8 +308,8 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
       throw scrapeError; // Re-throw für äußeren catch
     }
 
-    // Sortiere nach Activity Score
-    userData.sort((a, b) => b.activityScore - a.activityScore);
+    // Sortiere nach totalActions
+    userData.sort((a, b) => b.totalActions - a.totalActions);
 
     // Transformiere zu DashboardLiveData Format
     const dashboardUsers = userData.map(user => {
@@ -161,6 +323,29 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
         statusChangesObj[status] = count;
       });
 
+      // Berechne finalStatuses aus historischen Daten
+      const finalStatusesMap = user.finalStatuses || new Map();
+      const finalStatusesObj: Record<string, number> = {};
+      finalStatusesMap.forEach((count, status) => {
+        finalStatusesObj[status] = count;
+      });
+
+      // Berechne conversionRates aus historischen Daten
+      const conversionRates = user.conversionRates || {
+        interest_later_to_written: 0,
+        interest_later_to_no_interest: 0,
+        interest_later_to_appointment: 0,
+        interest_later_to_not_reached: 0,
+        interest_later_total: 0
+      };
+
+      // Calculate action details breakdown
+      const actionDetails = calculateActionDetails(user);
+
+      // Calculate peak time and breaks
+      const peakTime = calculatePeakTime(user.rawLogs);
+      const breaks = calculateBreaks(user.rawLogs);
+
       return {
         userId: user.userId,
         username: user.username,
@@ -170,12 +355,16 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
           ? user.rawLogs[user.rawLogs.length - 1].timestamp 
           : Date.now(),
         todayStats: {
-          activityScore: user.activityScore,
           totalActions: user.totalActions,
+          actionDetails,
           statusChanges: statusChangesObj,
+          finalStatuses: finalStatusesObj,
+          conversionRates,
           activeTime: user.activeTime,
           distance: user.totalDistance,
           uniquePhotos: user.uniquePhotos || 0, // Use actual value from historical data
+          peakTime,
+          breaks,
         },
       };
     });
@@ -194,9 +383,6 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
       date,
       totalUsers: userData.length,
       activeUsers: userData.filter(u => u.activeTime > 0).length,
-      averageActivityScore: userData.length > 0
-        ? Math.round(userData.reduce((sum, u) => sum + u.activityScore, 0) / userData.length)
-        : 0,
       totalStatusChanges,
       totalDistance: userData.reduce((sum, u) => sum + u.totalDistance, 0),
     });
@@ -476,15 +662,14 @@ router.get('/users', requireAuth, requireAdmin, async (req: AuthenticatedRequest
       return {
         userId: userData.userId,
         username: userData.username,
-        activityScore: userData.activityScore,
         lastUpdate: lastLogTimestamp,
         statusChangesCount: totalStatusChanges,
         activeTime: userData.activeTime,
       };
     });
 
-    // Sortiere nach Activity Score
-    users.sort((a, b) => b.activityScore - a.activityScore);
+    // Sortiere nach totalActions
+    users.sort((a, b) => b.statusChangesCount - a.statusChangesCount);
 
     res.json({
       users,
@@ -494,6 +679,25 @@ router.get('/users', requireAuth, requireAdmin, async (req: AuthenticatedRequest
   } catch (error) {
     console.error('[Admin API] Error fetching users:', error);
     res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+/**
+ * POST /api/admin/reset-daily-data
+ * Manually reset daily data (for debugging/testing)
+ */
+router.post('/reset-daily-data', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    console.log('[Admin API] Manual reset of daily data requested by', req.username);
+    dailyDataStore.reset();
+    res.json({ 
+      success: true, 
+      message: 'Daily data has been reset. All tracking data cleared.',
+      resetTime: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[Admin API] Error resetting data:', error);
+    res.status(500).json({ error: 'Failed to reset daily data' });
   }
 });
 

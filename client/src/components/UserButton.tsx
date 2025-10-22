@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useViewMode } from '@/contexts/ViewModeContext';
 import { useUIPreferences } from '@/contexts/UIPreferencesContext';
@@ -54,6 +54,15 @@ export function UserButton({ onDatasetLoad }: UserButtonProps) {
   const [showCallBacks, setShowCallBacks] = useState(false);
   const [showAppointments, setShowAppointments] = useState(false);
   const [showLeonFilter, setShowLeonFilter] = useState(false);
+  const [appVersion, setAppVersion] = useState('2.5.2');
+
+  // Load version from version.json
+  useEffect(() => {
+    fetch('/version.json')
+      .then(res => res.json())
+      .then(data => setAppVersion(data.version))
+      .catch(() => setAppVersion('2.5.2')); // Fallback
+  }, []);
 
   const toggleLanguage = () => {
     const newLang = i18n.language === 'en' ? 'de' : 'en';
@@ -272,7 +281,7 @@ export function UserButton({ onDatasetLoad }: UserButtonProps) {
         
         {/* Version info at bottom */}
         <div className="px-2 py-1.5 text-center">
-          <p className="text-xs text-gray-400">Version 2.5.0</p>
+          <p className="text-xs text-gray-400">Version {appVersion}</p>
         </div>
       </DropdownMenuContent>
     </DropdownMenu>

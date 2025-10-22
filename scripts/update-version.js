@@ -76,6 +76,20 @@ indexContent = indexContent.replace(
 fs.writeFileSync(indexPath, indexContent);
 console.log('✅ Updated index.html meta tag');
 
+// Update fallback version in UserButton.tsx
+const userButtonPath = path.join(__dirname, '../client/src/components/UserButton.tsx');
+let userButtonContent = fs.readFileSync(userButtonPath, 'utf8');
+userButtonContent = userButtonContent.replace(
+  /const \[appVersion, setAppVersion\] = useState\('[^']+'\);/,
+  `const [appVersion, setAppVersion] = useState('${newVersion}');`
+);
+userButtonContent = userButtonContent.replace(
+  /\.catch\(\(\) => setAppVersion\('[^']+'\)\);/,
+  `.catch(() => setAppVersion('${newVersion}'));`
+);
+fs.writeFileSync(userButtonPath, userButtonContent);
+console.log('✅ Updated UserButton.tsx fallback version');
+
 console.log(`🎉 Version updated successfully to ${newVersion}`);
 console.log('📝 Next steps:');
 console.log('   1. npm run build');

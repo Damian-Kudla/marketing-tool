@@ -69,7 +69,15 @@ export interface DailyUserData {
   // Actions
   totalActions: number;
   actionsByType: Map<string, number>;
-  statusChanges: Map<string, number>; // key: status, value: count
+  statusChanges: Map<string, number>; // key: status, value: count (all changes made)
+  finalStatuses?: Map<string, number>; // key: status, value: count (final status per resident)
+  conversionRates?: { // Conversion rates from 'interest_later' to other statuses
+    interest_later_to_written?: number;
+    interest_later_to_no_interest?: number;
+    interest_later_to_appointment?: number;
+    interest_later_to_not_reached?: number;
+    interest_later_total?: number;
+  };
   uniquePhotos?: number; // Deduplicated OCR photo count (optional for backward compatibility)
   photoTimestamps?: number[]; // Timestamps when photos were taken (for route replay)
   
@@ -82,7 +90,6 @@ export interface DailyUserData {
   scansPerHour: number;
   avgTimePerAddress: number; // milliseconds
   conversionRate: number; // percentage
-  activityScore: number; // calculated
   
   // Raw logs for PDF generation
   rawLogs: TrackingData[];
@@ -93,7 +100,6 @@ export interface UserReport {
   userId: string;
   username: string;
   date: string;
-  activityScore: number;
   
   summary: {
     totalDistance: number;
@@ -137,12 +143,37 @@ export interface DashboardLiveData {
     isActive: boolean;
     lastSeen: number;
     todayStats: {
-      activityScore: number;
       totalActions: number;
-      statusChanges: Record<string, number>; // Changed from Map to Record for JSON serialization
+      actionDetails?: { // Breakdown of actions by type
+        scans?: number;
+        ocrCorrections?: number;
+        datasetCreates?: number;
+        geocodes?: number;
+        edits?: number;
+        saves?: number;
+        deletes?: number;
+        statusChanges?: number;
+        navigations?: number;
+        other?: number;
+      };
+      statusChanges: Record<string, number>; // All status changes made during the day
+      finalStatuses: Record<string, number>; // Final status assignments that remain at end of day
+      conversionRates: { // Conversion rates from 'interest_later' to other statuses
+        interest_later_to_written?: number;
+        interest_later_to_no_interest?: number;
+        interest_later_to_appointment?: number;
+        interest_later_to_not_reached?: number;
+        interest_later_total?: number; // Total 'interest_later' changes
+      };
       activeTime: number;
       distance: number;
       uniquePhotos: number; // Deduplizierte OCR-Anfragen
+      peakTime?: string; // e.g., "13:00-15:00" - most active time period
+      breaks?: Array<{ // Top 3 breaks (largest time gaps)
+        start: number; // timestamp
+        end: number; // timestamp
+        duration: number; // milliseconds
+      }>;
     };
   }[];
 }

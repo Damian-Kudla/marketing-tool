@@ -2,9 +2,11 @@
  * Admin Dashboard Page
  * 
  * Live & Historical View:
- * - Leaflet Map mit User-Markern (farbcodiert nach Activity Score)
+ * - Leaflet Map mit User-Markern
  * - User-Vergleichstabelle (sortierbar)
  * - Status-Changes Chart
+ * - Finale Status-Zuordnungen Chart
+ * - Conversion Rates Anzeige
  * - PDF-Report Download
  */
 
@@ -32,8 +34,8 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-// Custom colored marker icons
-const createColoredIcon = (color: string) => {
+// Custom colored marker icon (unified color)
+const createColoredIcon = (color: string = '#3b82f6') => {
   return L.divIcon({
     className: 'custom-marker',
     html: `
@@ -51,13 +53,6 @@ const createColoredIcon = (color: string) => {
   });
 };
 
-// Activity Score color mapping
-const getScoreColor = (score: number): string => {
-  if (score >= 75) return '#22c55e'; // Green
-  if (score >= 50) return '#eab308'; // Yellow
-  return '#ef4444'; // Red
-};
-
 interface DashboardUser {
   userId: string;
   username: string;
@@ -70,12 +65,37 @@ interface DashboardUser {
   isActive: boolean;
   lastSeen: number;
   todayStats: {
-    activityScore: number;
     totalActions: number;
+    actionDetails?: {
+      scans: number;
+      ocrCorrections: number;
+      datasetCreates: number;
+      geocodes: number;
+      edits: number;
+      saves: number;
+      deletes: number;
+      statusChanges: number;
+      navigations: number;
+      other: number;
+    };
     statusChanges: Record<string, number>;
+    finalStatuses: Record<string, number>; // Final status assignments for the day
+    conversionRates: { // Conversion rates from 'interest_later' to other statuses
+      interest_later_to_written?: number;
+      interest_later_to_no_interest?: number;
+      interest_later_to_appointment?: number;
+      interest_later_to_not_reached?: number;
+      interest_later_total?: number; // Total 'interest_later' changes
+    };
     activeTime: number;
     distance: number;
-    uniquePhotos: number; // New metric: deduplicated photo count
+    uniquePhotos: number; // Deduplicated photo count
+    peakTime?: string; // e.g., "13:00-15:00"
+    breaks?: Array<{
+      start: number;
+      end: number;
+      duration: number;
+    }>;
   };
 }
 
@@ -85,7 +105,6 @@ interface DashboardData {
   date?: string;
   totalUsers?: number;
   activeUsers?: number;
-  averageActivityScore?: number;
   totalStatusChanges?: number;
   totalDistance?: number;
 }
@@ -136,7 +155,7 @@ export default function AdminDashboard() {
   };
   
   const [selectedDate, setSelectedDate] = useState<string>(getLastWeekday(1)); // Auto-select last weekday
-  const [sortBy, setSortBy] = useState<'score' | 'actions' | 'distance'>('score');
+  const [sortBy, setSortBy] = useState<'actions' | 'distance' | 'written'>('actions');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   
   // Expanded rows state
@@ -283,10 +302,6 @@ export default function AdminDashboard() {
     let aValue: number, bValue: number;
 
     switch (sortBy) {
-      case 'score':
-        aValue = a.todayStats.activityScore;
-        bValue = b.todayStats.activityScore;
-        break;
       case 'actions':
         aValue = a.todayStats.totalActions;
         bValue = b.todayStats.totalActions;
@@ -295,6 +310,10 @@ export default function AdminDashboard() {
         aValue = a.todayStats.distance;
         bValue = b.todayStats.distance;
         break;
+      case 'written':
+        aValue = a.todayStats.finalStatuses?.['written'] || 0;
+        bValue = b.todayStats.finalStatuses?.['written'] || 0;
+        break;
       default:
         return 0;
     }
@@ -302,7 +321,7 @@ export default function AdminDashboard() {
     return sortOrder === 'desc' ? bValue - aValue : aValue - bValue;
   }) : [];
 
-  // Prepare chart data
+  // Prepare chart data for status changes
   const chartData = sortedUsers.map(user => {
     const statusChanges = user.todayStats.statusChanges || {};
     
@@ -313,6 +332,20 @@ export default function AdminDashboard() {
       nicht_angetroffen: (statusChanges['nicht_angetroffen'] || 0) + (statusChanges['not_reached'] || 0),
       termin_vereinbart: (statusChanges['termin_vereinbart'] || 0) + (statusChanges['appointment'] || 0),
       geschrieben: statusChanges['written'] || 0,
+    };
+  });
+
+  // Prepare chart data for final statuses (status assignments that remain at end of day)
+  const finalStatusChartData = sortedUsers.map(user => {
+    const finalStatuses = user.todayStats.finalStatuses || {};
+    
+    return {
+      name: user.username,
+      interessiert: (finalStatuses['interessiert'] || 0) + (finalStatuses['interest_later'] || 0),
+      nicht_interessiert: (finalStatuses['nicht_interessiert'] || 0) + (finalStatuses['no_interest'] || 0),
+      nicht_angetroffen: (finalStatuses['nicht_angetroffen'] || 0) + (finalStatuses['not_reached'] || 0),
+      termin_vereinbart: (finalStatuses['termin_vereinbart'] || 0) + (finalStatuses['appointment'] || 0),
+      geschrieben: finalStatuses['written'] || 0,
     };
   });
 
@@ -462,15 +495,14 @@ export default function AdminDashboard() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Ø Activity Score</CardTitle>
+                <CardTitle className="text-sm font-medium">Gesamt Fotos</CardTitle>
                 <Activity className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {data.averageActivityScore || 
-                    Math.round(data.users.reduce((sum, u) => sum + u.todayStats.activityScore, 0) / data.users.length || 0)}
+                  {data.users.reduce((sum, u) => sum + (u.todayStats.uniquePhotos || 0), 0)}
                 </div>
-                <p className="text-xs text-muted-foreground">von 100 Punkten</p>
+                <p className="text-xs text-muted-foreground">Unique Fotos heute</p>
               </CardContent>
             </Card>
 
@@ -539,22 +571,12 @@ export default function AdminDashboard() {
                             user.currentLocation!.latitude,
                             user.currentLocation!.longitude,
                           ]}
-                          icon={createColoredIcon(getScoreColor(user.todayStats.activityScore))}
+                          icon={createColoredIcon()}
                         >
                           <Popup>
                             <div className="space-y-2">
                               <h3 className="font-bold">{user.username}</h3>
                               <div className="text-sm space-y-1">
-                                <p>
-                                  <strong>Activity Score:</strong>{' '}
-                                  <span
-                                    style={{
-                                      color: getScoreColor(user.todayStats.activityScore),
-                                    }}
-                                  >
-                                    {user.todayStats.activityScore}
-                                  </span>
-                                </p>
                                 <p>
                                   <strong>Actions:</strong> {user.todayStats.totalActions}
                                 </p>
@@ -627,22 +649,12 @@ export default function AdminDashboard() {
                             user.currentLocation!.latitude,
                             user.currentLocation!.longitude,
                           ]}
-                          icon={createColoredIcon(getScoreColor(user.todayStats.activityScore))}
+                          icon={createColoredIcon()}
                         >
                           <Popup>
                             <div className="space-y-2">
                               <h3 className="font-bold">{user.username}</h3>
                               <div className="text-sm space-y-1">
-                                <p>
-                                  <strong>Activity Score:</strong>{' '}
-                                  <span
-                                    style={{
-                                      color: getScoreColor(user.todayStats.activityScore),
-                                    }}
-                                  >
-                                    {user.todayStats.activityScore}
-                                  </span>
-                                </p>
                                 <p>
                                   <strong>Actions:</strong> {user.todayStats.totalActions}
                                 </p>
@@ -684,20 +696,6 @@ export default function AdminDashboard() {
           <CardContent>
             <div className="mb-4 flex gap-2">
               <Button
-                variant={sortBy === 'score' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => {
-                  if (sortBy === 'score') {
-                    setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc');
-                  } else {
-                    setSortBy('score');
-                    setSortOrder('desc');
-                  }
-                }}
-              >
-                Activity Score {sortBy === 'score' && (sortOrder === 'desc' ? '↓' : '↑')}
-              </Button>
-              <Button
                 variant={sortBy === 'actions' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => {
@@ -725,6 +723,20 @@ export default function AdminDashboard() {
               >
                 Distanz {sortBy === 'distance' && (sortOrder === 'desc' ? '↓' : '↑')}
               </Button>
+              <Button
+                variant={sortBy === 'written' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => {
+                  if (sortBy === 'written') {
+                    setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc');
+                  } else {
+                    setSortBy('written');
+                    setSortOrder('desc');
+                  }
+                }}
+              >
+                Geschrieben {sortBy === 'written' && (sortOrder === 'desc' ? '↓' : '↑')}
+              </Button>
             </div>
 
             <div className="overflow-x-auto">
@@ -733,7 +745,7 @@ export default function AdminDashboard() {
                   <tr className="border-b">
                     <th className="text-left p-2 w-8"></th>
                     <th className="text-left p-2">Name</th>
-                    <th className="text-right p-2">Activity Score</th>
+                    <th className="text-right p-2">Geschrieben</th>
                     <th className="text-right p-2">Actions</th>
                     <th className="text-right p-2">Fotos</th>
                     <th className="text-right p-2">Status-Änderungen</th>
@@ -772,11 +784,8 @@ export default function AdminDashboard() {
                           </td>
                           <td className="p-2 font-medium">{user.username}</td>
                           <td className="p-2 text-right">
-                            <span
-                              className="font-bold"
-                              style={{ color: getScoreColor(user.todayStats.activityScore) }}
-                            >
-                              {user.todayStats.activityScore}
+                            <span className="font-bold text-green-600">
+                              {user.todayStats.finalStatuses?.['written'] || 0}
                             </span>
                           </td>
                           <td className="p-2 text-right">{user.todayStats.totalActions}</td>
@@ -877,42 +886,115 @@ export default function AdminDashboard() {
                                   </div>
                                 </div>
                                 <div>
-                                  <h4 className="font-semibold mb-2 text-primary">Weitere Metriken:</h4>
+                                  <h4 className="font-semibold mb-2 text-primary">Action Details:</h4>
                                   <div className="space-y-1">
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">Unique Fotos:</span>
-                                      <span className="font-medium">{user.todayStats.uniquePhotos || 0}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">Gesamt Actions:</span>
-                                      <span className="font-medium">{user.todayStats.totalActions}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">Status-Änd. gesamt:</span>
-                                      <span className="font-medium">{totalStatusChanges}</span>
-                                    </div>
+                                    {user.todayStats.actionDetails && (
+                                      <>
+                                        {user.todayStats.actionDetails.scans > 0 && (
+                                          <div>
+                                            <div className="flex justify-between">
+                                              <span className="text-muted-foreground">📸 Fotos hochgeladen:</span>
+                                              <span className="font-medium">{user.todayStats.actionDetails.scans}</span>
+                                            </div>
+                                            {user.todayStats.uniquePhotos > 0 && user.todayStats.uniquePhotos !== user.todayStats.actionDetails.scans && (
+                                              <div className="flex justify-between text-sm ml-4">
+                                                <span className="text-muted-foreground italic">└─ davon unique:</span>
+                                                <span className="font-medium">{user.todayStats.uniquePhotos}</span>
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+                                        {user.todayStats.actionDetails.ocrCorrections > 0 && (
+                                          <div className="flex justify-between">
+                                            <span className="text-muted-foreground">✏️ Namen korrigiert:</span>
+                                            <span className="font-medium">{user.todayStats.actionDetails.ocrCorrections}</span>
+                                          </div>
+                                        )}
+                                        {user.todayStats.actionDetails.datasetCreates > 0 && (
+                                          <div className="flex justify-between">
+                                            <span className="text-muted-foreground">📝 Datensätze erstellt:</span>
+                                            <span className="font-medium">{user.todayStats.actionDetails.datasetCreates}</span>
+                                          </div>
+                                        )}
+                                        {user.todayStats.actionDetails.statusChanges > 0 && (
+                                          <div className="flex justify-between">
+                                            <span className="text-muted-foreground">🔄 Status geändert:</span>
+                                            <span className="font-medium">{user.todayStats.actionDetails.statusChanges}</span>
+                                          </div>
+                                        )}
+                                        {user.todayStats.actionDetails.geocodes > 0 && (
+                                          <div className="flex justify-between">
+                                            <span className="text-muted-foreground">📍 GPS-Abfragen:</span>
+                                            <span className="font-medium">{user.todayStats.actionDetails.geocodes}</span>
+                                          </div>
+                                        )}
+                                        {user.todayStats.actionDetails.edits > 0 && (
+                                          <div className="flex justify-between">
+                                            <span className="text-muted-foreground">✏️ Bearbeitungen:</span>
+                                            <span className="font-medium">{user.todayStats.actionDetails.edits}</span>
+                                          </div>
+                                        )}
+                                        {user.todayStats.actionDetails.saves > 0 && (
+                                          <div className="flex justify-between">
+                                            <span className="text-muted-foreground">💾 Speicherungen:</span>
+                                            <span className="font-medium">{user.todayStats.actionDetails.saves}</span>
+                                          </div>
+                                        )}
+                                        {user.todayStats.actionDetails.deletes > 0 && (
+                                          <div className="flex justify-between">
+                                            <span className="text-muted-foreground">🗑️ Löschungen:</span>
+                                            <span className="font-medium">{user.todayStats.actionDetails.deletes}</span>
+                                          </div>
+                                        )}
+                                        {user.todayStats.actionDetails.navigations > 0 && (
+                                          <div className="flex justify-between">
+                                            <span className="text-muted-foreground">🧭 Navigationen:</span>
+                                            <span className="font-medium">{user.todayStats.actionDetails.navigations}</span>
+                                          </div>
+                                        )}
+                                        {user.todayStats.actionDetails.other > 0 && (
+                                          <div className="flex justify-between">
+                                            <span className="text-muted-foreground">➕ Sonstige:</span>
+                                            <span className="font-medium">{user.todayStats.actionDetails.other}</span>
+                                          </div>
+                                        )}
+                                        {/* Show total as summary */}
+                                        <div className="flex justify-between pt-1 border-t border-border">
+                                          <span className="text-muted-foreground font-semibold">Gesamt:</span>
+                                          <span className="font-semibold">{user.todayStats.totalActions}</span>
+                                        </div>
+                                      </>
+                                    )}
+                                    {(!user.todayStats.actionDetails || user.todayStats.totalActions === 0) && (
+                                      <div className="text-muted-foreground italic">Keine Actions</div>
+                                    )}
                                   </div>
                                 </div>
                                 <div>
-                                  <h4 className="font-semibold mb-2 text-primary">Leistung:</h4>
+                                  <h4 className="font-semibold mb-2 text-primary">Zeitanalyse:</h4>
                                   <div className="space-y-1">
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">Activity Score:</span>
-                                      <span 
-                                        className="font-bold"
-                                        style={{ color: getScoreColor(user.todayStats.activityScore) }}
-                                      >
-                                        {user.todayStats.activityScore}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">Distanz:</span>
-                                      <span className="font-medium">{formatDistance(user.todayStats.distance)}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                      <span className="text-muted-foreground">Aktiv-Zeit:</span>
-                                      <span className="font-medium">{formatDuration(user.todayStats.activeTime)}</span>
-                                    </div>
+                                    {user.todayStats.peakTime && (
+                                      <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Peak Time:</span>
+                                        <span className="font-medium">{user.todayStats.peakTime}</span>
+                                      </div>
+                                    )}
+                                    {user.todayStats.breaks && user.todayStats.breaks.length > 0 && (
+                                      <div className="mt-2">
+                                        <div className="text-muted-foreground font-medium mb-1">Pausen:</div>
+                                        {user.todayStats.breaks.map((breakItem, idx) => (
+                                          <div key={idx} className="flex justify-between text-sm">
+                                            <span className="text-muted-foreground">
+                                              {format(breakItem.start, 'HH:mm', { locale: de })} - {format(breakItem.end, 'HH:mm', { locale: de })}
+                                            </span>
+                                            <span className="font-medium">{formatDuration(breakItem.duration)}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {(!user.todayStats.peakTime && (!user.todayStats.breaks || user.todayStats.breaks.length === 0)) && (
+                                      <div className="text-muted-foreground italic">Keine Zeitdaten</div>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -953,6 +1035,111 @@ export default function AdminDashboard() {
                 <Bar dataKey="nicht_interessiert" fill="#ef4444" name="Nicht interessiert" />
               </BarChart>
             </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Final Status Assignments Chart */}
+      {data && finalStatusChartData.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Finale Status-Zuordnungen pro Mitarbeiter</CardTitle>
+            <CardDescription>
+              Endgültige Status, die Anwohnern am Tag zugeordnet wurden
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={400}>
+              <BarChart data={finalStatusChartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="interessiert" fill="#22c55e" name="Interessiert" />
+                <Bar dataKey="termin_vereinbart" fill="#3b82f6" name="Termin vereinbart" />
+                <Bar dataKey="geschrieben" fill="#059669" name="Geschrieben" stackId="a" />
+                <Bar dataKey="nicht_angetroffen" fill="#eab308" name="Nicht angetroffen" />
+                <Bar dataKey="nicht_interessiert" fill="#ef4444" name="Nicht interessiert" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Conversion Rates from "Interesse später" */}
+      {data && data.users.some(u => u.todayStats.conversionRates?.interest_later_total) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Conversion Rates von "Interesse später"</CardTitle>
+            <CardDescription>
+              Prozentuale Verteilung: Wie viele "Interesse später" wurden zu welchem Status geändert
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-6">
+              {sortedUsers.filter(u => u.todayStats.conversionRates?.interest_later_total).map(user => {
+                const rates = user.todayStats.conversionRates;
+                const total = rates.interest_later_total || 0;
+                
+                if (total === 0) return null;
+
+                return (
+                  <div key={user.userId} className="space-y-2">
+                    <h4 className="font-semibold text-lg">{user.username}</h4>
+                    <div className="text-sm text-muted-foreground mb-2">
+                      Gesamt "Interesse später" Änderungen: {total}
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {rates.interest_later_to_written !== undefined && rates.interest_later_to_written > 0 && (
+                        <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                          <div className="text-xs text-green-700 font-medium mb-1">→ Geschrieben</div>
+                          <div className="text-2xl font-bold text-green-600">
+                            {((rates.interest_later_to_written / total) * 100).toFixed(1)}%
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            ({rates.interest_later_to_written} von {total})
+                          </div>
+                        </div>
+                      )}
+                      {rates.interest_later_to_appointment !== undefined && rates.interest_later_to_appointment > 0 && (
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                          <div className="text-xs text-blue-700 font-medium mb-1">→ Termin</div>
+                          <div className="text-2xl font-bold text-blue-600">
+                            {((rates.interest_later_to_appointment / total) * 100).toFixed(1)}%
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            ({rates.interest_later_to_appointment} von {total})
+                          </div>
+                        </div>
+                      )}
+                      {rates.interest_later_to_no_interest !== undefined && rates.interest_later_to_no_interest > 0 && (
+                        <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                          <div className="text-xs text-red-700 font-medium mb-1">→ Kein Interesse</div>
+                          <div className="text-2xl font-bold text-red-600">
+                            {((rates.interest_later_to_no_interest / total) * 100).toFixed(1)}%
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            ({rates.interest_later_to_no_interest} von {total})
+                          </div>
+                        </div>
+                      )}
+                      {rates.interest_later_to_not_reached !== undefined && rates.interest_later_to_not_reached > 0 && (
+                        <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                          <div className="text-xs text-yellow-700 font-medium mb-1">→ Nicht erreicht</div>
+                          <div className="text-2xl font-bold text-yellow-600">
+                            {((rates.interest_later_to_not_reached / total) * 100).toFixed(1)}%
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            ({rates.interest_later_to_not_reached} von {total})
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
       )}

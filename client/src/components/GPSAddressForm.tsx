@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { MapPin, Loader2, Check, Search, Plus, Minus } from 'lucide-react';
 import { useFilteredToast } from '@/hooks/use-filtered-toast';
 import { geocodeAPI, addressAPI } from '@/services/api';
+import { expandHouseNumberRange } from '@/utils/addressUtils';
 
 interface GPSAddressFormProps {
   onAddressDetected?: (address: Address) => void;
@@ -20,6 +21,8 @@ export interface Address {
   number: string;
   city: string;
   postal: string;
+  onlyEven?: boolean;
+  onlyOdd?: boolean;
 }
 
 export default function GPSAddressForm({ onAddressDetected, onAddressSearch, initialAddress }: GPSAddressFormProps) {
@@ -113,7 +116,7 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
       const addressStr = JSON.stringify(address);
       if (addressStr !== prevAddressRef.current) {
         prevAddressRef.current = addressStr;
-        onAddressDetected?.(address);
+        onAddressDetected?.({ ...address, onlyEven, onlyOdd });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -160,7 +163,7 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
 
             setAddress(completeAddress);
             setDetected(true);
-            onAddressDetected?.(completeAddress);
+            onAddressDetected?.({ ...completeAddress, onlyEven, onlyOdd });
 
             // Warnung bei unvollständiger Adresse (z. B. keine street/number, aber PLZ/city vorhanden)
             if (!completeAddress.street || !completeAddress.number) {
@@ -234,35 +237,7 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
   };
 
   // Helper function to expand range notation (e.g., "1-5" -> [1,2,3,4,5])
-  const expandHouseNumberRange = (rangeStr: string): string[] => {
-    const parts = rangeStr.split('-').map(p => p.trim());
-    
-    // Must have exactly 2 parts
-    if (parts.length !== 2) return [rangeStr];
-    
-    // Both parts must be valid integers
-    const start = parseInt(parts[0]);
-    const end = parseInt(parts[1]);
-    
-    if (isNaN(start) || isNaN(end)) return [rangeStr];
-    
-    // Start must be less than end
-    if (start >= end) return [rangeStr];
-    
-    // Start must be positive
-    if (start < 1) return [rangeStr];
-    
-    // Generate range
-    const numbers: number[] = [];
-    for (let i = start; i <= end; i++) {
-      // Apply even/odd filters
-      if (onlyEven && i % 2 !== 0) continue;
-      if (onlyOdd && i % 2 === 0) continue;
-      numbers.push(i);
-    }
-    
-    return numbers.map(n => n.toString());
-  };
+
 
   const searchAddress = async () => {
     // VALIDATION: Check required fields before searching
@@ -301,8 +276,8 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
       
       for (const input of inputNumbers) {
         if (input.includes('-')) {
-          // Expand range
-          const expanded = expandHouseNumberRange(input);
+          // Expand range with filters
+          const expanded = expandHouseNumberRange(input, onlyEven, onlyOdd);
           allHouseNumbers = [...allHouseNumbers, ...expanded];
         } else {
           // Regular number
@@ -347,7 +322,7 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
       }
       
       // Set the address in parent component so it shows in header
-      onAddressDetected?.(address);
+      onAddressDetected?.({ ...address, onlyEven, onlyOdd });
       onAddressSearch?.(uniqueCustomers);
     } catch (error) {
       console.error('Address search error:', error);

@@ -69,44 +69,105 @@ function calculateDistance(coord1: GPSCoordinates, coord2: GPSCoordinates): numb
 }
 
 /**
- * Berechnet Activity Score (0-100) basierend auf KPIs
+ * Berechnet finalStatuses und conversionRates aus historischen Daten
  */
-function calculateActivityScore(data: DailyUserData): number {
-  let score = 0;
-  
-  // 30% - Status Changes (wichtigster KPI!)
-  const totalStatusChanges = Array.from(data.statusChanges.values()).reduce((sum, count) => sum + count, 0);
-  const statusChangeScore = Math.min(totalStatusChanges * 5, 30);
-  score += statusChangeScore;
-  
-  // 30% - Active Time (min 4 Stunden = volle Punkte)
-  const activeTimeScore = Math.min((data.activeTime / (4 * 60 * 60 * 1000)) * 30, 30);
-  score += activeTimeScore;
-  
-  // 25% - Actions (min 50 = volle Punkte)
-  const actionsScore = Math.min((data.totalActions / 50) * 25, 25);
-  score += actionsScore;
-  
-  // 10% - Distance (min 5km = volle Punkte)
-  const distanceScore = Math.min((data.totalDistance / 5000) * 10, 10);
-  score += distanceScore;
-  
-  // 5% - GPS Points (min 100 = volle Punkte)
-  const gpsScore = Math.min((data.gpsPoints.length / 100) * 5, 5);
-  score += gpsScore;
-  
-  // Abzüge:
-  // -10% wenn mehr als 2 Stunden idle
-  if (data.totalIdleTime > 2 * 60 * 60 * 1000) {
-    score -= 10;
+async function calculateFinalStatusesAndConversions(
+  data: DailyUserData, 
+  username: string, 
+  date: string
+): Promise<void> {
+  try {
+    // Import addressDatasetService
+    const { addressDatasetService } = await import('./googleSheets');
+
+    // Get datasets for this user on this date
+    const dateObj = new Date(date);
+    const datasets = await addressDatasetService.getUserDatasetsByDate(username, dateObj);
+
+    // Calculate final statuses from resident data
+    const finalStatuses = new Map<string, number>();
+    
+    datasets.forEach((dataset: any) => {
+      dataset.editableResidents.forEach((resident: any) => {
+        if (resident.status) {
+          const count = finalStatuses.get(resident.status) || 0;
+          finalStatuses.set(resident.status, count + 1);
+        }
+      });
+    });
+
+    data.finalStatuses = finalStatuses;
+
+    // Calculate conversion rates from rawLogs
+    const conversionRates = {
+      interest_later_to_written: 0,
+      interest_later_to_no_interest: 0,
+      interest_later_to_appointment: 0,
+      interest_later_to_not_reached: 0,
+      interest_later_total: 0
+    };
+
+    // Track status change sequences
+    const residentStatusHistory = new Map<string, string[]>();
+
+    // Build status history from action logs
+    data.rawLogs.forEach(log => {
+      if (log.session?.actions) {
+        log.session.actions.forEach((action: ActionLog) => {
+          if (action.residentStatus && action.details) {
+            const match = action.details.match(/Resident:\s*(.+)/);
+            if (match) {
+              const residentName = match[1].trim();
+              if (!residentStatusHistory.has(residentName)) {
+                residentStatusHistory.set(residentName, []);
+              }
+              residentStatusHistory.get(residentName)!.push(action.residentStatus);
+            }
+          }
+        });
+      }
+    });
+
+    // Analyze conversions from interest_later
+    residentStatusHistory.forEach((history) => {
+      for (let i = 0; i < history.length - 1; i++) {
+        const currentStatus = history[i];
+        const nextStatus = history[i + 1];
+
+        if (currentStatus === 'interest_later') {
+          conversionRates.interest_later_total++;
+
+          if (nextStatus === 'written') {
+            conversionRates.interest_later_to_written++;
+          } else if (nextStatus === 'no_interest') {
+            conversionRates.interest_later_to_no_interest++;
+          } else if (nextStatus === 'appointment') {
+            conversionRates.interest_later_to_appointment++;
+          } else if (nextStatus === 'not_reached') {
+            conversionRates.interest_later_to_not_reached++;
+          }
+        }
+      }
+    });
+
+    data.conversionRates = conversionRates;
+
+    console.log(`[HistoricalDataScraper] Calculated final statuses and conversions for ${username}:`, {
+      finalStatuses: Array.from(finalStatuses.entries()),
+      conversionRates
+    });
+  } catch (error) {
+    console.error('[HistoricalDataScraper] Error calculating final statuses and conversions:', error);
+    // Set empty values on error
+    data.finalStatuses = new Map();
+    data.conversionRates = {
+      interest_later_to_written: 0,
+      interest_later_to_no_interest: 0,
+      interest_later_to_appointment: 0,
+      interest_later_to_not_reached: 0,
+      interest_later_total: 0
+    };
   }
-  
-  // -5% wenn mehr als 5 offline events
-  if (data.offlineEvents > 5) {
-    score -= 5;
-  }
-  
-  return Math.max(0, Math.min(100, Math.round(score)));
 }
 
 /**
@@ -305,10 +366,15 @@ export async function scrapeDayData(date: string, userId?: string): Promise<Dail
     // Rekonstruiere DailyUserData für jeden User
     const dailyDataArray: DailyUserData[] = [];
 
-    userLogsMap.forEach((userLogs, uid) => {
+    for (const uid of Array.from(userLogsMap.keys())) {
+      const userLogs = userLogsMap.get(uid)!;
       const userData = reconstructDailyData(uid, userLogs);
+      
+      // Calculate final statuses and conversions
+      await calculateFinalStatusesAndConversions(userData, userData.username, date);
+      
       dailyDataArray.push(userData);
-    });
+    }
 
     // In Cache speichern
     historicalCache.set(cacheKey, dailyDataArray);
@@ -360,13 +426,20 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
     totalActions: 0,
     actionsByType: new Map(),
     statusChanges: new Map(),
+    finalStatuses: new Map(),
+    conversionRates: {
+      interest_later_to_written: 0,
+      interest_later_to_no_interest: 0,
+      interest_later_to_appointment: 0,
+      interest_later_to_not_reached: 0,
+      interest_later_total: 0
+    },
     avgBatteryLevel: 0,
     lowBatteryEvents: 0,
     offlineEvents: 0,
     scansPerHour: 0,
     avgTimePerAddress: 0,
     conversionRate: 0,
-    activityScore: 0,
     rawLogs: [],
     photoTimestamps: []
   };
@@ -384,6 +457,9 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
   
   // Photo tracking with deduplication (same logic as dailyDataStore)
   const uniquePhotoHashes = new Set<string>();
+  
+  // Action deduplication by timestamp (same logic as dailyDataStore)
+  const processedActionTimestamps = new Set<number>();
 
   // Verarbeite jeden Log
   logs.forEach((log, index) => {
@@ -533,26 +609,31 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
         residentStatus: log.data.residentStatus || log.data.status || log.data.context?.status,
       };
 
-      data.totalActions++;
+      // Deduplicate actions by timestamp (same logic as dailyDataStore)
+      if (!processedActionTimestamps.has(timestamp)) {
+        processedActionTimestamps.add(timestamp);
+        
+        data.totalActions++;
 
-      // Count by type
-      const count = data.actionsByType.get(actionLog.action) || 0;
-      data.actionsByType.set(actionLog.action, count + 1);
+        // Count by type
+        const count = data.actionsByType.get(actionLog.action) || 0;
+        data.actionsByType.set(actionLog.action, count + 1);
 
-      // Zähle Status Changes (wichtigster KPI!)
-      // Für bulk_residents_update: Durchlaufe alle Residents im Array
-      if (actionType === 'bulk_residents_update' && log.data.residents && Array.isArray(log.data.residents)) {
-        log.data.residents.forEach((resident: any) => {
-          if (resident.status) {
-            const statusCount = data.statusChanges.get(resident.status) || 0;
-            data.statusChanges.set(resident.status, statusCount + 1);
-          }
-        });
-      }
-      // Für einzelne Updates (resident_update) oder andere Actions mit residentStatus
-      else if (actionLog.residentStatus) {
-        const statusCount = data.statusChanges.get(actionLog.residentStatus) || 0;
-        data.statusChanges.set(actionLog.residentStatus, statusCount + 1);
+        // Zähle Status Changes (wichtigster KPI!)
+        // Für bulk_residents_update: Durchlaufe alle Residents im Array
+        if (actionType === 'bulk_residents_update' && log.data.residents && Array.isArray(log.data.residents)) {
+          log.data.residents.forEach((resident: any) => {
+            if (resident.status) {
+              const statusCount = data.statusChanges.get(resident.status) || 0;
+              data.statusChanges.set(resident.status, statusCount + 1);
+            }
+          });
+        }
+        // Für einzelne Updates (resident_update) oder andere Actions mit residentStatus
+        else if (actionLog.residentStatus) {
+          const statusCount = data.statusChanges.get(actionLog.residentStatus) || 0;
+          data.statusChanges.set(actionLog.residentStatus, statusCount + 1);
+        }
       }
 
       // Store raw log
@@ -603,9 +684,6 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
 
   // Set unique photos count
   data.uniquePhotos = uniquePhotoHashes.size;
-
-  // Berechne Activity Score
-  data.activityScore = calculateActivityScore(data);
 
   // Set date from first log
   if (logs.length > 0) {

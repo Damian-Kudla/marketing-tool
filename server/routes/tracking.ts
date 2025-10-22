@@ -172,7 +172,6 @@ router.get('/status', async (req: AuthenticatedRequest, res: Response) => {
       user: userData ? {
         totalActions: userData.totalActions,
         totalDistance: Math.round(userData.totalDistance),
-        activityScore: userData.activityScore,
         statusChanges: Object.fromEntries(userData.statusChanges)
       } : null
     });

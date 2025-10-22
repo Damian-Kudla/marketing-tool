@@ -41,20 +41,33 @@ export function ImageCropDialog({ isOpen, imageSrc, onCropComplete, onCancel }: 
     }
   }, [isOpen, imageSrc]);
 
-  const handleMouseDown = (handle: string) => (e: React.MouseEvent) => {
+  const handleMouseDown = (handle: string) => (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     setIsDragging(handle);
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
     if (!isDragging || !imageRef.current) return;
 
     const rect = imageRef.current.getBoundingClientRect();
     const scaleX = imageSize.width / rect.width;
     const scaleY = imageSize.height / rect.height;
     
-    const mouseX = (e.clientX - rect.left) * scaleX;
-    const mouseY = (e.clientY - rect.top) * scaleY;
+    // Support both mouse and touch events
+    let clientX: number, clientY: number;
+    if ('touches' in e) {
+      // Touch event
+      if (e.touches.length === 0) return;
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      // Mouse event
+      clientX = e.clientX;
+      clientY = e.clientY;
+    }
+    
+    const mouseX = (clientX - rect.left) * scaleX;
+    const mouseY = (clientY - rect.top) * scaleY;
 
     const newCrop = { ...cropArea };
     const minSize = 50;
@@ -185,7 +198,9 @@ export function ImageCropDialog({ isOpen, imageSrc, onCropComplete, onCancel }: 
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
-          style={{ userSelect: 'none', cursor: isDragging ? 'grabbing' : 'default' }}
+          onTouchMove={handleMouseMove}
+          onTouchEnd={handleMouseUp}
+          style={{ userSelect: 'none', cursor: isDragging ? 'grabbing' : 'default', touchAction: 'none' }}
         >
           {imageSrc && (
             <div className="relative">
@@ -212,45 +227,53 @@ export function ImageCropDialog({ isOpen, imageSrc, onCropComplete, onCancel }: 
                   {/* Corner handles */}
                   <div
                     className="absolute w-8 h-8 bg-white rounded-full border-2 border-blue-500 -left-4 -top-4 cursor-nw-resize"
-                    style={{ pointerEvents: 'auto' }}
+                    style={{ pointerEvents: 'auto', touchAction: 'none' }}
                     onMouseDown={handleMouseDown('tl')}
+                    onTouchStart={handleMouseDown('tl')}
                   />
                   <div
                     className="absolute w-8 h-8 bg-white rounded-full border-2 border-blue-500 -right-4 -top-4 cursor-ne-resize"
-                    style={{ pointerEvents: 'auto' }}
+                    style={{ pointerEvents: 'auto', touchAction: 'none' }}
                     onMouseDown={handleMouseDown('tr')}
+                    onTouchStart={handleMouseDown('tr')}
                   />
                   <div
                     className="absolute w-8 h-8 bg-white rounded-full border-2 border-blue-500 -left-4 -bottom-4 cursor-sw-resize"
-                    style={{ pointerEvents: 'auto' }}
+                    style={{ pointerEvents: 'auto', touchAction: 'none' }}
                     onMouseDown={handleMouseDown('bl')}
+                    onTouchStart={handleMouseDown('bl')}
                   />
                   <div
                     className="absolute w-8 h-8 bg-white rounded-full border-2 border-blue-500 -right-4 -bottom-4 cursor-se-resize"
-                    style={{ pointerEvents: 'auto' }}
+                    style={{ pointerEvents: 'auto', touchAction: 'none' }}
                     onMouseDown={handleMouseDown('br')}
+                    onTouchStart={handleMouseDown('br')}
                   />
                   
                   {/* Edge handles */}
                   <div
                     className="absolute w-full h-2 bg-blue-500 bg-opacity-50 left-0 -top-1 cursor-n-resize"
-                    style={{ pointerEvents: 'auto' }}
+                    style={{ pointerEvents: 'auto', touchAction: 'none' }}
                     onMouseDown={handleMouseDown('t')}
+                    onTouchStart={handleMouseDown('t')}
                   />
                   <div
                     className="absolute w-full h-2 bg-blue-500 bg-opacity-50 left-0 -bottom-1 cursor-s-resize"
-                    style={{ pointerEvents: 'auto' }}
+                    style={{ pointerEvents: 'auto', touchAction: 'none' }}
                     onMouseDown={handleMouseDown('b')}
+                    onTouchStart={handleMouseDown('b')}
                   />
                   <div
                     className="absolute h-full w-2 bg-blue-500 bg-opacity-50 -left-1 top-0 cursor-w-resize"
-                    style={{ pointerEvents: 'auto' }}
+                    style={{ pointerEvents: 'auto', touchAction: 'none' }}
                     onMouseDown={handleMouseDown('l')}
+                    onTouchStart={handleMouseDown('l')}
                   />
                   <div
                     className="absolute h-full w-2 bg-blue-500 bg-opacity-50 -right-1 top-0 cursor-e-resize"
-                    style={{ pointerEvents: 'auto' }}
+                    style={{ pointerEvents: 'auto', touchAction: 'none' }}
                     onMouseDown={handleMouseDown('r')}
+                    onTouchStart={handleMouseDown('r')}
                   />
                 </div>
               )}

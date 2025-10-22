@@ -19,6 +19,8 @@ class DailyDataStore {
   private midnightResetTimer: NodeJS.Timeout | null = null;
   // Track unique photo hashes per user (deduplicated by prospect data)
   private uniquePhotoHashes: Map<string, Set<string>> = new Map();
+  // Track processed action timestamps to avoid double-counting during multiple syncs
+  private processedActionTimestamps: Map<string, Set<number>> = new Map();
 
   constructor() {
     this.scheduleMidnightReset();
@@ -80,13 +82,20 @@ class DailyDataStore {
         totalActions: 0,
         actionsByType: new Map(),
         statusChanges: new Map(),
+        finalStatuses: new Map(), // Final status assignments per resident
+        conversionRates: { // Conversion tracking from 'interest_later'
+          interest_later_to_written: 0,
+          interest_later_to_no_interest: 0,
+          interest_later_to_appointment: 0,
+          interest_later_to_not_reached: 0,
+          interest_later_total: 0
+        },
         avgBatteryLevel: 0,
         lowBatteryEvents: 0,
         offlineEvents: 0,
         scansPerHour: 0,
         avgTimePerAddress: 0,
         conversionRate: 0,
-        activityScore: 0,
         rawLogs: [],
         photoTimestamps: []
       };
@@ -143,8 +152,22 @@ class DailyDataStore {
     }
 
     if (session.actions && session.actions.length > 0) {
-      // Process actions
+      // Process only NEW actions (track by timestamp to avoid duplicates from multiple syncs)
+      let processedTimestamps = this.processedActionTimestamps.get(userId);
+      if (!processedTimestamps) {
+        processedTimestamps = new Set<number>();
+        this.processedActionTimestamps.set(userId, processedTimestamps);
+      }
+
       session.actions.forEach((action: ActionLog) => {
+        // Skip if we've already processed this action
+        if (processedTimestamps!.has(action.timestamp)) {
+          return;
+        }
+
+        // Mark as processed
+        processedTimestamps!.add(action.timestamp);
+
         userData.totalActions++;
 
         // Count by type
@@ -290,46 +313,98 @@ class DailyDataStore {
     const interested = userData.statusChanges.get('interessiert') || 0;
     const totalStatusChanges = Array.from(userData.statusChanges.values()).reduce((a, b) => a + b, 0);
     userData.conversionRate = totalStatusChanges > 0 ? (interested / totalStatusChanges) * 100 : 0;
-
-    // Activity Score (custom algorithm)
-    userData.activityScore = this.calculateActivityScore(userData);
   }
 
   /**
-   * Calculate activity score (0-100)
-   * Higher score = more productive
+   * Calculate final statuses and conversion rates for a user
+   * This queries the address datasets to get current status of all edited residents
    */
-  private calculateActivityScore(userData: DailyUserData): number {
-    let score = 0;
+  async calculateFinalStatusesAndConversions(userId: string, username: string, addressDatasetService: any): Promise<void> {
+    const userData = this.data.get(userId);
+    if (!userData) return;
 
-    // Active time (max 30 points)
-    // Full points for 6+ hours of active time
-    const hoursActive = userData.activeTime / (1000 * 60 * 60);
-    score += Math.min(hoursActive / 6 * 30, 30);
+    try {
+      // Get all datasets created by this user today
+      const today = new Date();
+      const datasets = await addressDatasetService.getUserDatasetsByDate(username, today);
 
-    // Actions (max 25 points)
-    // Full points for 50+ actions
-    score += Math.min(userData.totalActions / 50 * 25, 25);
+      // Calculate final statuses from current resident data
+      const finalStatuses = new Map<string, number>();
+      
+      datasets.forEach((dataset: any) => {
+        dataset.editableResidents.forEach((resident: any) => {
+          if (resident.status) {
+            const count = finalStatuses.get(resident.status) || 0;
+            finalStatuses.set(resident.status, count + 1);
+          }
+        });
+      });
 
-    // Status changes (max 30 points)
-    // Full points for 30+ status changes (most important!)
-    const totalStatusChanges = Array.from(userData.statusChanges.values()).reduce((a, b) => a + b, 0);
-    score += Math.min(totalStatusChanges / 30 * 30, 30);
+      userData.finalStatuses = finalStatuses;
 
-    // Distance (max 10 points)
-    // Full points for 10+ km
-    score += Math.min(userData.totalDistance / 10000 * 10, 10);
+      // Calculate conversion rates from interest_later
+      // We need to track status changes over time from rawLogs
+      const conversionRates = {
+        interest_later_to_written: 0,
+        interest_later_to_no_interest: 0,
+        interest_later_to_appointment: 0,
+        interest_later_to_not_reached: 0,
+        interest_later_total: 0
+      };
 
-    // Penalty for high idle time (up to -5 points)
-    const idleRatio = userData.totalIdleTime / userData.totalSessionTime;
-    if (idleRatio > 0.5) {
-      score -= (idleRatio - 0.5) * 10; // -5 points at 100% idle
+      // Track status change sequences from rawLogs
+      const residentStatusHistory = new Map<string, string[]>(); // residentName -> [status1, status2, ...]
+
+      // Build status history from action logs
+      userData.rawLogs.forEach(log => {
+        if (log.session?.actions) {
+          log.session.actions.forEach((action: ActionLog) => {
+            if (action.residentStatus && action.details) {
+              // Extract resident name from details
+              const match = action.details.match(/Resident:\s*(.+)/);
+              if (match) {
+                const residentName = match[1].trim();
+                if (!residentStatusHistory.has(residentName)) {
+                  residentStatusHistory.set(residentName, []);
+                }
+                residentStatusHistory.get(residentName)!.push(action.residentStatus);
+              }
+            }
+          });
+        }
+      });
+
+      // Analyze conversions from interest_later
+      residentStatusHistory.forEach((history, residentName) => {
+        for (let i = 0; i < history.length - 1; i++) {
+          const currentStatus = history[i];
+          const nextStatus = history[i + 1];
+
+          if (currentStatus === 'interest_later') {
+            conversionRates.interest_later_total++;
+
+            if (nextStatus === 'written') {
+              conversionRates.interest_later_to_written++;
+            } else if (nextStatus === 'no_interest') {
+              conversionRates.interest_later_to_no_interest++;
+            } else if (nextStatus === 'appointment') {
+              conversionRates.interest_later_to_appointment++;
+            } else if (nextStatus === 'not_reached') {
+              conversionRates.interest_later_to_not_reached++;
+            }
+          }
+        }
+      });
+
+      userData.conversionRates = conversionRates;
+
+      console.log(`[DailyStore] Calculated final statuses and conversions for ${username}:`, {
+        finalStatuses: Array.from(finalStatuses.entries()),
+        conversionRates
+      });
+    } catch (error) {
+      console.error('[DailyStore] Error calculating final statuses and conversions:', error);
     }
-
-    // Penalty for offline events (up to -5 points)
-    score -= Math.min(userData.offlineEvents * 0.5, 5);
-
-    return Math.max(0, Math.min(100, Math.round(score)));
   }
 
   /**
@@ -369,6 +444,7 @@ class DailyDataStore {
     console.log('[DailyStore] Resetting daily data...');
     this.data.clear();
     this.uniquePhotoHashes.clear(); // Reset photo tracking
+    this.processedActionTimestamps.clear(); // Reset action tracking
     this.currentDate = this.getCurrentDate();
   }
 
@@ -378,6 +454,7 @@ class DailyDataStore {
   clearUser(userId: string): void {
     this.data.delete(userId);
     this.uniquePhotoHashes.delete(userId); // Clear user's photo hashes
+    this.processedActionTimestamps.delete(userId); // Clear user's processed actions
   }
 
   /**
