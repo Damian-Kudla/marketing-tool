@@ -4,6 +4,7 @@ import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { cronJobService } from "./services/cronJobService";
+import { dailyDataStore } from "./services/dailyDataStore";
 
 // Force Railway rebuild - production path fix
 
@@ -68,10 +69,14 @@ app.use((req, res, next) => {
   // It is the only port that is not firewalled.
   const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 5000;
   
-  server.listen(port, "0.0.0.0", () => {
+  server.listen(port, "0.0.0.0", async () => {
     log(`Server is running on port ${port}`);
     log(`Environment: ${app.get("env")}`);
     log(`Health check available at: http://0.0.0.0:${port}/api/auth/check`);
+    
+    // Initialize daily data store from today's logs
+    log('Initializing daily data from Google Sheets logs...');
+    await dailyDataStore.initializeFromLogs();
     
     // Start cron jobs for failed log retry
     cronJobService.start();

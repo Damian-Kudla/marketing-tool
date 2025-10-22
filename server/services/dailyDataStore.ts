@@ -438,6 +438,59 @@ class DailyDataStore {
   }
 
   /**
+   * Initialize store with today's data from Google Sheets logs
+   * Called on server startup to restore data after restart
+   */
+  async initializeFromLogs(): Promise<void> {
+    const today = this.getCurrentDate();
+    console.log(`[DailyStore] Initializing from logs for ${today}...`);
+    
+    try {
+      // Import dynamically to avoid circular dependency
+      const { scrapeDayData } = await import('./historicalDataScraper');
+      
+      // Scrape today's data from Google Sheets
+      const todayData = await scrapeDayData(today);
+      
+      if (todayData.length === 0) {
+        console.log('[DailyStore] No data found in logs for today');
+        return;
+      }
+
+      // Load each user's data into RAM
+      for (const userData of todayData) {
+        this.data.set(userData.userId, userData);
+        
+        // Restore photo hashes (if stored in photoTimestamps)
+        if (userData.photoTimestamps && userData.photoTimestamps.length > 0) {
+          const userHashes = new Set<string>();
+          // Note: We can't restore actual hashes, but we can track count
+          // Future photo uploads will be properly deduplicated
+          this.uniquePhotoHashes.set(userData.userId, userHashes);
+        }
+        
+        // Restore processed action timestamps from rawLogs
+        if (userData.rawLogs && userData.rawLogs.length > 0) {
+          const actionTimestamps = new Set<number>();
+          userData.rawLogs.forEach(log => {
+            if (log.session?.actions) {
+              log.session.actions.forEach(action => {
+                actionTimestamps.add(action.timestamp);
+              });
+            }
+          });
+          this.processedActionTimestamps.set(userData.userId, actionTimestamps);
+        }
+      }
+
+      console.log(`[DailyStore] ✅ Loaded ${todayData.length} users from logs`);
+    } catch (error) {
+      console.error('[DailyStore] ❌ Error initializing from logs:', error);
+      // Continue with empty store - not critical
+    }
+  }
+
+  /**
    * Reset all data (called at midnight)
    */
   reset(): void {
