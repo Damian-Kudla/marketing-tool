@@ -110,6 +110,7 @@ export class GoogleSheetsStorage implements IStorage {
    * - Replace umlauts early
    * - Replace variants ONLY at the end (no \b to allow attached suffixes)
    * - Handle more typos and remove special characters/spaces
+   * - Remove problematic characters that cause matching issues (apostrophes, special chars)
    */
   private normalizeStreet(street: string): string {
     return street
@@ -117,10 +118,71 @@ export class GoogleSheetsStorage implements IStorage {
       .trim()
       // Replace umlauts early (ß to ss)
       .replace(/ß/g, 'ss')
+      // Remove problematic characters BEFORE other normalization (apostrophes, backticks, quotes, etc.)
+      // This handles cases like "Auf'm Kamp" vs "Aufm Kamp" vs "Auf`m Kamp"
+      .replace(/['`´!"§$%&/()=?\\}\][{#*~^°]/g, '')
       // Replace variants at the END with 'strasse' (no \b, adjusted for ss)
       .replace(/(str(asse|.?|eet)?|strasse|st\.?|st|street|strse|strase|strsse)$/g, 'strasse')  // Removed \b, all variants without ß, added 'strsse' for typos
-      // Remove special characters and spaces
+      // Remove remaining special characters and spaces
       .replace(/[-\.\s]/g, '');
+  }
+
+  /**
+   * ✅ NEW: Clean and normalize street data from Google Sheets
+   * - Remove problematic special characters
+   * - Extract house number from street if present and houseNumber is empty
+   * - Remove all numbers from street field
+   * Returns: { street: string, houseNumber: string | null, shouldSkip: boolean }
+   */
+  private cleanStreetData(street: string | null, houseNumber: string | null): { 
+    street: string | null; 
+    houseNumber: string | null; 
+    shouldSkip: boolean;
+  } {
+    if (!street || !street.trim()) {
+      return { street: null, houseNumber: null, shouldSkip: true };
+    }
+
+    let cleanedStreet = street.trim();
+    let cleanedHouseNumber = houseNumber?.trim() || null;
+
+    // Remove problematic characters from street name
+    cleanedStreet = cleanedStreet.replace(/['`´!"§$%&/()=?\\}\][{#*~^°]/g, '');
+
+    // If house number is empty, check if street contains numbers
+    if (!cleanedHouseNumber || cleanedHouseNumber === '') {
+      // Look for numbers in the street name
+      const numberMatch = cleanedStreet.match(/\d+.*$/);
+      
+      if (numberMatch) {
+        // Extract numbers and everything after as house number
+        cleanedHouseNumber = numberMatch[0].trim();
+        // Remove the house number part from street
+        cleanedStreet = cleanedStreet.substring(0, numberMatch.index).trim();
+        
+        console.log(`[cleanStreetData] Extracted house number from street: "${street}" → street="${cleanedStreet}", number="${cleanedHouseNumber}"`);
+      } else {
+        // No house number in street and houseNumber field is empty → Skip this row
+        console.warn(`[cleanStreetData] ⚠️ Skipping row: No house number found in "${street}"`);
+        return { street: null, houseNumber: null, shouldSkip: true };
+      }
+    }
+
+    // Remove ALL remaining numbers from street (after extraction or if houseNumber was provided)
+    cleanedStreet = cleanedStreet.replace(/\d+/g, '').trim();
+
+    // Final cleanup: remove double spaces
+    cleanedStreet = cleanedStreet.replace(/\s+/g, ' ').trim();
+
+    if (!cleanedStreet) {
+      return { street: null, houseNumber: null, shouldSkip: true };
+    }
+
+    return { 
+      street: cleanedStreet, 
+      houseNumber: cleanedHouseNumber, 
+      shouldSkip: false 
+    };
   }
 
   /**
@@ -213,18 +275,39 @@ export class GoogleSheetsStorage implements IStorage {
       const rows = response.data.values || [];
       console.log(`📊 [CustomerCache] Fetched ${rows.length} rows from Google Sheets in ${fetchTime}ms`);
       
-      const customers: Customer[] = rows
-        .filter((row: any[]) => row[0]) // Must have a name
-        .map((row: any[]) => ({
+      let skippedRows = 0;
+      const customers: Customer[] = [];
+      
+      for (const row of rows) {
+        // Must have a name
+        if (!row[0]) {
+          skippedRows++;
+          continue;
+        }
+
+        // Clean and normalize street data
+        const cleaned = this.cleanStreetData(row[1] || null, row[2] || null);
+        
+        if (cleaned.shouldSkip) {
+          skippedRows++;
+          continue;
+        }
+
+        customers.push({
           id: randomUUID(),
           name: row[0] || '',
-          street: row[1] || null,
-          houseNumber: row[2] || null,
+          street: cleaned.street,
+          houseNumber: cleaned.houseNumber,
           postalCode: row[3] || null,
           isExisting: true, // All customers in the sheet are existing
-        }));
+        });
+      }
 
-      console.log(`✅ [CustomerCache] Parsed ${customers.length} customers and stored in cache`);
+      if (skippedRows > 0) {
+        console.warn(`⚠️ [CustomerCache] Skipped ${skippedRows} rows (missing name or invalid street/house number)`);
+      }
+
+      console.log(`✅ [CustomerCache] Parsed ${customers.length} valid customers and stored in cache`);
 
       this.cache.customers = customers;
       this.cache.timestamp = Date.now();
@@ -277,8 +360,9 @@ export class GoogleSheetsStorage implements IStorage {
     }
     
     // Filter by street using fuzzy matching (>=90% similarity)
+    // Clean the input street name to remove problematic characters (same as Google Sheets data)
     if (address.street) {
-      const searchStreet = address.street;
+      const searchStreet = address.street.replace(/['`´!"§$%&/()=?\\}\][{#*~^°]/g, '');
       matches = matches.filter(customer => {
         if (!customer.street) return false;
         return this.streetsMatch(searchStreet, customer.street);

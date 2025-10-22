@@ -139,6 +139,9 @@ export default function AdminDashboard() {
   const [sortBy, setSortBy] = useState<'score' | 'actions' | 'distance'>('score');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   
+  // Expanded rows state
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  
   // Route Replay state
   const [showRouteReplay, setShowRouteReplay] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -308,7 +311,8 @@ export default function AdminDashboard() {
       interessiert: (statusChanges['interessiert'] || 0) + (statusChanges['interest_later'] || 0),
       nicht_interessiert: (statusChanges['nicht_interessiert'] || 0) + (statusChanges['no_interest'] || 0),
       nicht_angetroffen: (statusChanges['nicht_angetroffen'] || 0) + (statusChanges['not_reached'] || 0),
-      termin_vereinbart: (statusChanges['termin_vereinbart'] || 0) + (statusChanges['appointment'] || 0) + (statusChanges['written'] || 0),
+      termin_vereinbart: (statusChanges['termin_vereinbart'] || 0) + (statusChanges['appointment'] || 0),
+      geschrieben: statusChanges['written'] || 0,
     };
   });
 
@@ -322,6 +326,17 @@ export default function AdminDashboard() {
   // Format distance
   const formatDistance = (meters: number): string => {
     return `${(meters / 1000).toFixed(2)} km`;
+  };
+
+  // Toggle expanded row
+  const toggleExpandRow = (userId: string) => {
+    const newExpanded = new Set(expandedRows);
+    if (newExpanded.has(userId)) {
+      newExpanded.delete(userId);
+    } else {
+      newExpanded.add(userId);
+    }
+    setExpandedRows(newExpanded);
   };
 
   if (isAdmin === null) {
@@ -716,6 +731,7 @@ export default function AdminDashboard() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b">
+                    <th className="text-left p-2 w-8"></th>
                     <th className="text-left p-2">Name</th>
                     <th className="text-right p-2">Activity Score</th>
                     <th className="text-right p-2">Actions</th>
@@ -732,49 +748,178 @@ export default function AdminDashboard() {
                     const statusChanges = user.todayStats.statusChanges || {};
                     const values = Object.values(statusChanges);
                     const totalStatusChanges = values.reduce((s, c) => s + c, 0);
+                    const isExpanded = expandedRows.has(user.userId);
 
                     return (
-                      <tr key={user.userId} className="border-b hover:bg-muted/50">
-                        <td className="p-2 font-medium">{user.username}</td>
-                        <td className="p-2 text-right">
-                          <span
-                            className="font-bold"
-                            style={{ color: getScoreColor(user.todayStats.activityScore) }}
-                          >
-                            {user.todayStats.activityScore}
-                          </span>
-                        </td>
-                        <td className="p-2 text-right">{user.todayStats.totalActions}</td>
-                        <td className="p-2 text-right">{user.todayStats.uniquePhotos || 0}</td>
-                        <td className="p-2 text-right">{totalStatusChanges}</td>
-                        <td className="p-2 text-right">
-                          {formatDistance(user.todayStats.distance)}
-                        </td>
-                        <td className="p-2 text-right">
-                          {formatDuration(user.todayStats.activeTime)}
-                        </td>
-                        <td className="p-2 text-center">
-                          {user.isActive ? (
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              Aktiv
+                      <>
+                        <tr key={user.userId} className="border-b hover:bg-muted/50">
+                          <td className="p-2">
+                            <button
+                              onClick={() => toggleExpandRow(user.userId)}
+                              className="text-muted-foreground hover:text-foreground transition-colors"
+                              title="Details anzeigen/verbergen"
+                            >
+                              {isExpanded ? (
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                </svg>
+                              )}
+                            </button>
+                          </td>
+                          <td className="p-2 font-medium">{user.username}</td>
+                          <td className="p-2 text-right">
+                            <span
+                              className="font-bold"
+                              style={{ color: getScoreColor(user.todayStats.activityScore) }}
+                            >
+                              {user.todayStats.activityScore}
                             </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                              Inaktiv
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-2 text-center">
-                          <button
-                            onClick={() => handleShowRoute(user.userId, user.username)}
-                            className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors"
-                            title="Route auf Karte anzeigen"
-                          >
-                            <Route className="w-3 h-3" />
-                            Route
-                          </button>
-                        </td>
-                      </tr>
+                          </td>
+                          <td className="p-2 text-right">{user.todayStats.totalActions}</td>
+                          <td className="p-2 text-right">{user.todayStats.uniquePhotos || 0}</td>
+                          <td className="p-2 text-right">{totalStatusChanges}</td>
+                          <td className="p-2 text-right">
+                            {formatDistance(user.todayStats.distance)}
+                          </td>
+                          <td className="p-2 text-right">
+                            {formatDuration(user.todayStats.activeTime)}
+                          </td>
+                          <td className="p-2 text-center">
+                            {user.isActive ? (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Aktiv
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                Inaktiv
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-2 text-center">
+                            <button
+                              onClick={() => handleShowRoute(user.userId, user.username)}
+                              className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 transition-colors"
+                              title="Route auf Karte anzeigen"
+                            >
+                              <Route className="w-3 h-3" />
+                              Route
+                            </button>
+                          </td>
+                        </tr>
+                        {isExpanded && (
+                          <tr key={`${user.userId}-details`} className="bg-muted/30">
+                            <td colSpan={10} className="p-4">
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                                <div>
+                                  <h4 className="font-semibold mb-2 text-primary">Status-Änderungen Details:</h4>
+                                  <div className="space-y-1">
+                                    {statusChanges['interessiert'] && (
+                                      <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Interessiert:</span>
+                                        <span className="font-medium">{statusChanges['interessiert']}</span>
+                                      </div>
+                                    )}
+                                    {statusChanges['interest_later'] && (
+                                      <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Später Interesse:</span>
+                                        <span className="font-medium">{statusChanges['interest_later']}</span>
+                                      </div>
+                                    )}
+                                    {statusChanges['appointment'] && (
+                                      <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Termin vereinbart:</span>
+                                        <span className="font-medium">{statusChanges['appointment']}</span>
+                                      </div>
+                                    )}
+                                    {statusChanges['termin_vereinbart'] && (
+                                      <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Termin vereinbart (alt):</span>
+                                        <span className="font-medium">{statusChanges['termin_vereinbart']}</span>
+                                      </div>
+                                    )}
+                                    {statusChanges['written'] && (
+                                      <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Geschrieben:</span>
+                                        <span className="font-medium text-green-600">{statusChanges['written']}</span>
+                                      </div>
+                                    )}
+                                    {statusChanges['nicht_interessiert'] && (
+                                      <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Nicht interessiert:</span>
+                                        <span className="font-medium">{statusChanges['nicht_interessiert']}</span>
+                                      </div>
+                                    )}
+                                    {statusChanges['no_interest'] && (
+                                      <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Kein Interesse:</span>
+                                        <span className="font-medium">{statusChanges['no_interest']}</span>
+                                      </div>
+                                    )}
+                                    {statusChanges['nicht_angetroffen'] && (
+                                      <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Nicht angetroffen:</span>
+                                        <span className="font-medium">{statusChanges['nicht_angetroffen']}</span>
+                                      </div>
+                                    )}
+                                    {statusChanges['not_reached'] && (
+                                      <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Nicht erreicht:</span>
+                                        <span className="font-medium">{statusChanges['not_reached']}</span>
+                                      </div>
+                                    )}
+                                    {totalStatusChanges === 0 && (
+                                      <div className="text-muted-foreground italic">Keine Status-Änderungen</div>
+                                    )}
+                                  </div>
+                                </div>
+                                <div>
+                                  <h4 className="font-semibold mb-2 text-primary">Weitere Metriken:</h4>
+                                  <div className="space-y-1">
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">Unique Fotos:</span>
+                                      <span className="font-medium">{user.todayStats.uniquePhotos || 0}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">Gesamt Actions:</span>
+                                      <span className="font-medium">{user.todayStats.totalActions}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">Status-Änd. gesamt:</span>
+                                      <span className="font-medium">{totalStatusChanges}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div>
+                                  <h4 className="font-semibold mb-2 text-primary">Leistung:</h4>
+                                  <div className="space-y-1">
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">Activity Score:</span>
+                                      <span 
+                                        className="font-bold"
+                                        style={{ color: getScoreColor(user.todayStats.activityScore) }}
+                                      >
+                                        {user.todayStats.activityScore}
+                                      </span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">Distanz:</span>
+                                      <span className="font-medium">{formatDistance(user.todayStats.distance)}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-muted-foreground">Aktiv-Zeit:</span>
+                                      <span className="font-medium">{formatDuration(user.todayStats.activeTime)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
                     );
                   })}
                 </tbody>
@@ -803,6 +948,7 @@ export default function AdminDashboard() {
                 <Legend />
                 <Bar dataKey="interessiert" fill="#22c55e" name="Interessiert" />
                 <Bar dataKey="termin_vereinbart" fill="#3b82f6" name="Termin vereinbart" />
+                <Bar dataKey="geschrieben" fill="#059669" name="Geschrieben" stackId="a" />
                 <Bar dataKey="nicht_angetroffen" fill="#eab308" name="Nicht angetroffen" />
                 <Bar dataKey="nicht_interessiert" fill="#ef4444" name="Nicht interessiert" />
               </BarChart>
@@ -862,6 +1008,7 @@ export default function AdminDashboard() {
                 <RouteReplayMap
                   username={selectedUsername || 'Unbekannt'}
                   gpsPoints={routeData.gpsPoints}
+                  photoTimestamps={routeData.photoTimestamps || []}
                   date={mode === 'live' ? new Date().toISOString().split('T')[0] : selectedDate}
                 />
               ) : (

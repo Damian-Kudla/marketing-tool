@@ -87,7 +87,8 @@ class DailyDataStore {
         avgTimePerAddress: 0,
         conversionRate: 0,
         activityScore: 0,
-        rawLogs: []
+        rawLogs: [],
+        photoTimestamps: []
       };
       this.data.set(userId, userData);
       console.log(`[DailyStore] Created new daily data for user: ${username}`);
@@ -205,9 +206,10 @@ class DailyDataStore {
    * @param userId User ID
    * @param username Username
    * @param prospectData Column G data from Google Sheets (New Prospects)
+   * @param timestamp Timestamp when photo was taken
    * @returns true if this is a unique photo, false if duplicate
    */
-  trackOCRPhoto(userId: string, username: string, prospectData: any): boolean {
+  trackOCRPhoto(userId: string, username: string, prospectData: any, timestamp?: number): boolean {
     const userData = this.getUserData(userId, username);
 
     // Create hash of prospect data to detect duplicates
@@ -226,6 +228,14 @@ class DailyDataStore {
     
     if (isUnique) {
       userHashes.add(hash);
+      
+      // Add timestamp to photoTimestamps array
+      const photoTimestamp = timestamp || Date.now();
+      if (!userData.photoTimestamps) {
+        userData.photoTimestamps = [];
+      }
+      userData.photoTimestamps.push(photoTimestamp);
+      
       console.log(`[DailyStore] Unique photo tracked for ${username}, total: ${userHashes.size}`);
     } else {
       console.log(`[DailyStore] Duplicate photo detected for ${username} (hash: ${hash.substring(0, 8)}...)`);

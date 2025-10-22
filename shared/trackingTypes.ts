@@ -71,6 +71,7 @@ export interface DailyUserData {
   actionsByType: Map<string, number>;
   statusChanges: Map<string, number>; // key: status, value: count
   uniquePhotos?: number; // Deduplicated OCR photo count (optional for backward compatibility)
+  photoTimestamps?: number[]; // Timestamps when photos were taken (for route replay)
   
   // Device Status
   avgBatteryLevel: number;

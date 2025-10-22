@@ -28,6 +28,7 @@ interface GPSPoint {
 interface RouteReplayMapProps {
   username: string;
   gpsPoints: GPSPoint[];
+  photoTimestamps?: number[];
   date: string;
 }
 
@@ -103,6 +104,55 @@ const createEndMarker = () => {
     iconSize: [25, 25],
     iconAnchor: [12, 12],
   });
+};
+
+// Photo flash marker
+const createPhotoFlashMarker = () => {
+  return L.divIcon({
+    className: 'custom-marker',
+    html: `
+      <div style="
+        font-size: 35px;
+        filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.8));
+        animation: flash-pulse 1s ease-in-out;
+      ">⚡</div>
+      <style>
+        @keyframes flash-pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.7; transform: scale(1.2); }
+        }
+      </style>
+    `,
+    iconSize: [35, 35],
+    iconAnchor: [17, 17],
+  });
+};
+
+// Small clickable marker for GPS points
+const createGPSPointMarker = () => {
+  return L.divIcon({
+    className: 'custom-marker',
+    html: `
+      <div style="
+        background-color: #3b82f6;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        cursor: pointer;
+      "></div>
+    `,
+    iconSize: [8, 8],
+    iconAnchor: [4, 4],
+  });
+};
+
+// Generate Google Maps URL with proper pin marker
+const getGoogleMapsUrl = (lat: number, lng: number): string => {
+  // Format: https://www.google.com/maps/search/?api=1&query=lat,lng
+  // This format ensures a proper pin/marker is shown at the exact coordinates
+  return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
 };
 
 // Component to follow current position with intelligent panning
@@ -194,12 +244,13 @@ function InitialBounds({ points }: { points: GPSPoint[] }) {
   return null;
 }
 
-export default function RouteReplayMap({ username, gpsPoints, date }: RouteReplayMapProps) {
+export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = [], date }: RouteReplayMapProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showFullRoute, setShowFullRoute] = useState(true);
   const [zoomLevel, setZoomLevel] = useState(13);
   const [animationSpeed, setAnimationSpeed] = useState(5); // Duration in seconds
+  const [activePhotoFlash, setActivePhotoFlash] = useState<number | null>(null);
   const animationRef = useRef<number | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const pausedIndexRef = useRef<number>(0);
@@ -209,6 +260,76 @@ export default function RouteReplayMap({ username, gpsPoints, date }: RouteRepla
 
   // Sort GPS points by timestamp
   const sortedPoints = [...gpsPoints].sort((a, b) => a.timestamp - b.timestamp);
+
+  // Calculate photo positions between GPS points
+  const calculatePhotoPosition = (photoTimestamp: number): [number, number] | null => {
+    if (sortedPoints.length < 2) return null;
+
+    // Find the two GPS points surrounding the photo timestamp
+    let beforePoint: GPSPoint | null = null;
+    let afterPoint: GPSPoint | null = null;
+
+    for (let i = 0; i < sortedPoints.length - 1; i++) {
+      if (sortedPoints[i].timestamp <= photoTimestamp && sortedPoints[i + 1].timestamp >= photoTimestamp) {
+        beforePoint = sortedPoints[i];
+        afterPoint = sortedPoints[i + 1];
+        break;
+      }
+    }
+
+    // If photo is before first GPS or after last GPS, use closest point
+    if (!beforePoint && !afterPoint) {
+      if (photoTimestamp < sortedPoints[0].timestamp) {
+        return [sortedPoints[0].latitude, sortedPoints[0].longitude];
+      } else {
+        const last = sortedPoints[sortedPoints.length - 1];
+        return [last.latitude, last.longitude];
+      }
+    }
+
+    if (!beforePoint || !afterPoint) return null;
+
+    // Calculate interpolation ratio
+    const totalTimeDiff = afterPoint.timestamp - beforePoint.timestamp;
+    const photoTimeDiff = photoTimestamp - beforePoint.timestamp;
+    const ratio = totalTimeDiff > 0 ? photoTimeDiff / totalTimeDiff : 0;
+
+    // Interpolate latitude and longitude
+    const lat = beforePoint.latitude + (afterPoint.latitude - beforePoint.latitude) * ratio;
+    const lng = beforePoint.longitude + (afterPoint.longitude - beforePoint.longitude) * ratio;
+
+    return [lat, lng];
+  };
+
+  // Photo markers with calculated positions
+  const photoPositions = photoTimestamps
+    .map(timestamp => ({
+      timestamp,
+      position: calculatePhotoPosition(timestamp)
+    }))
+    .filter(p => p.position !== null) as Array<{ timestamp: number; position: [number, number] }>;
+
+  // Check if current animation time should trigger a photo flash
+  useEffect(() => {
+    if (!isPlaying || sortedPoints.length === 0) return;
+
+    const currentPoint = sortedPoints[currentIndex];
+    if (!currentPoint) return;
+
+    // Check if any photo timestamp is close to current position (within 5 seconds)
+    const activePhoto = photoTimestamps.find(timestamp => {
+      const diff = Math.abs(timestamp - currentPoint.timestamp);
+      return diff < 5000; // 5 seconds tolerance
+    });
+
+    if (activePhoto && activePhotoFlash !== activePhoto) {
+      setActivePhotoFlash(activePhoto);
+      // Remove flash after 1 second
+      setTimeout(() => {
+        setActivePhotoFlash(null);
+      }, 1000);
+    }
+  }, [currentIndex, isPlaying, photoTimestamps, sortedPoints, activePhotoFlash]);
 
   // Calculate time span
   const timeSpan = sortedPoints.length > 0
@@ -544,6 +665,59 @@ export default function RouteReplayMap({ username, gpsPoints, date }: RouteRepla
                   </Popup>
                 </Marker>
               )}
+
+              {/* Photo Flash Markers */}
+              {activePhotoFlash !== null && photoPositions.map(photo => {
+                if (photo.timestamp !== activePhotoFlash) return null;
+                
+                return (
+                  <Marker
+                    key={`photo-flash-${photo.timestamp}`}
+                    position={photo.position}
+                    icon={createPhotoFlashMarker()}
+                    zIndexOffset={2000}
+                  >
+                    <Popup>
+                      <div className="text-sm">
+                        <p className="font-bold">📸 Foto aufgenommen</p>
+                        <p>{format(new Date(photo.timestamp), 'HH:mm:ss', { locale: de })}</p>
+                      </div>
+                    </Popup>
+                  </Marker>
+                );
+              })}
+
+              {/* Clickable GPS Point Markers (only show every 5th point to avoid clutter) */}
+              {sortedPoints
+                .filter((_, index) => index % 5 === 0)
+                .map((point, index) => (
+                  <Marker
+                    key={`gps-point-${index}`}
+                    position={[point.latitude, point.longitude]}
+                    icon={createGPSPointMarker()}
+                    eventHandlers={{
+                      click: () => {
+                        window.open(getGoogleMapsUrl(point.latitude, point.longitude), '_blank');
+                      }
+                    }}
+                  >
+                    <Popup>
+                      <div className="text-sm">
+                        <p className="font-bold">GPS-Punkt</p>
+                        <p className="text-xs">{format(new Date(point.timestamp), 'HH:mm:ss', { locale: de })}</p>
+                        <p className="text-xs mt-1">
+                          {point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}
+                        </p>
+                        <button
+                          onClick={() => window.open(getGoogleMapsUrl(point.latitude, point.longitude), '_blank')}
+                          className="mt-2 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 w-full"
+                        >
+                          In Google Maps öffnen
+                        </button>
+                      </div>
+                    </Popup>
+                  </Marker>
+                ))}
             </MapContainer>
           </div>
         </CardContent>

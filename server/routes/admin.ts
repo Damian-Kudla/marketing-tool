@@ -228,7 +228,7 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
 
 /**
  * GET /api/admin/dashboard/route
- * Gibt GPS-Punkte für einen bestimmten User und Datum zurück
+ * Gibt GPS-Punkte und Photo-Timestamps für einen bestimmten User und Datum zurück
  */
 router.get('/dashboard/route', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -246,6 +246,7 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
     // Prüfe ob es heute ist (Live-Daten) oder historische Daten
     const today = new Date().toISOString().split('T')[0];
     let gpsPoints: any[] = [];
+    let photoTimestamps: number[] = [];
     let username = '';
 
     if (dateStr === today) {
@@ -254,6 +255,7 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
       if (userData) {
         gpsPoints = userData.gpsPoints;
         username = userData.username;
+        photoTimestamps = userData.photoTimestamps || [];
       }
     } else {
       // Historische Daten aus Google Sheets
@@ -263,6 +265,7 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
         const userData = historicalData[0];
         gpsPoints = userData.gpsPoints;
         username = userData.username;
+        photoTimestamps = userData.photoTimestamps || [];
       }
     }
 
@@ -270,6 +273,7 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
       return res.status(404).json({ 
         error: 'No GPS data found for this user on this date',
         gpsPoints: [],
+        photoTimestamps: [],
         username: username || 'Unknown',
         date: dateStr
       });
@@ -277,9 +281,11 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
 
     res.json({
       gpsPoints,
+      photoTimestamps,
       username,
       date: dateStr,
-      totalPoints: gpsPoints.length
+      totalPoints: gpsPoints.length,
+      totalPhotos: photoTimestamps.length
     });
 
     // Cache nach Verwendung löschen bei historischen Daten

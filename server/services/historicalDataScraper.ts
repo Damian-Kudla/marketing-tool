@@ -368,6 +368,7 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
     conversionRate: 0,
     activityScore: 0,
     rawLogs: [],
+    photoTimestamps: []
   };
 
   // Sortiere Logs nach Timestamp
@@ -403,6 +404,12 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
       // Only count unique photos (deduplicated by prospect data)
       if (!uniquePhotoHashes.has(hash)) {
         uniquePhotoHashes.add(hash);
+        
+        // Track photo timestamp for route replay
+        if (!data.photoTimestamps) {
+          data.photoTimestamps = [];
+        }
+        data.photoTimestamps.push(timestamp);
       }
     }
 

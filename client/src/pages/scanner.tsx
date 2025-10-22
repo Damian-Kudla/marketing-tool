@@ -25,6 +25,28 @@ const createNormalizedAddressString = (address: Address | null): string | null =
   return `${address.street || ''} ${address.number || ''} ${address.postal || ''} ${address.city || ''}`.toLowerCase().trim();
 };
 
+/**
+ * ✅ UTILITY: Sanitize single resident before saving
+ * Existing customers should NOT have status set
+ */
+const sanitizeResident = (resident: any): any => {
+  if (resident.category === 'existing_customer' && resident.status) {
+    console.warn(`[sanitizeResident] ⚠️ Clearing status "${resident.status}" for existing_customer:`, resident.name);
+    return {
+      ...resident,
+      status: undefined
+    };
+  }
+  return resident;
+};
+
+/**
+ * ✅ UTILITY: Sanitize array of residents
+ */
+const sanitizeResidents = (residents: any[]): any[] => {
+  return residents.map(sanitizeResident);
+};
+
 export default function ScannerPage() {
   const { t } = useTranslation();
   const { toast } = useFilteredToast();
@@ -50,6 +72,34 @@ export default function ScannerPage() {
   
   // Debounce timer for rapid successive calls
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /**
+   * ✅ FIX: Handle resident updates from AddressOverview table
+   * Updates local state AND persists to database via API
+   */
+  const handleResidentUpdate = useCallback(async (updatedResidents: any[]) => {
+    console.log('[handleResidentUpdate] Saving resident changes to database...');
+    
+    // Update local state immediately for responsive UI
+    setEditableResidents(updatedResidents);
+    
+    // Persist to database
+    if (currentDatasetId) {
+      try {
+        await datasetAPI.bulkUpdateResidents(currentDatasetId, sanitizeResidents(updatedResidents));
+        console.log('[handleResidentUpdate] ✅ Residents saved successfully');
+      } catch (error) {
+        console.error('[handleResidentUpdate] ❌ Failed to save residents:', error);
+        toast({
+          title: t('error.saveFailed', 'Save failed'),
+          description: t('error.saveFailedDesc', 'Could not save resident changes'),
+          variant: 'destructive',
+        });
+      }
+    } else {
+      console.warn('[handleResidentUpdate] ⚠️ No currentDatasetId - skipping API save');
+    }
+  }, [currentDatasetId, toast, t]);
 
   // Memory Optimization: Listen for dataset creation and cleanup photo state
   useEffect(() => {
@@ -502,7 +552,7 @@ export default function ScannerPage() {
               residents={editableResidents}
               asDialog={false}
               canEdit={canEdit}
-              onResidentUpdate={setEditableResidents}
+              onResidentUpdate={handleResidentUpdate}
               currentDatasetId={currentDatasetId}
             />
           </div>
@@ -583,7 +633,7 @@ export default function ScannerPage() {
                   residents={editableResidents} 
                   canEdit={canEdit}
                   datasetCreatedAt={datasetCreatedAt}
-                  onResidentsUpdate={setEditableResidents}
+                  onResidentsUpdate={handleResidentUpdate}
                   currentDatasetId={currentDatasetId}
                 />
               )}

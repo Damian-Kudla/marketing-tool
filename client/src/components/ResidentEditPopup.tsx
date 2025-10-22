@@ -404,21 +404,22 @@ export function ResidentEditPopup({
                   {/* Floor and door fields for all statuses */}
                   <div className="space-y-2">
                     <Label htmlFor="floor">
-                      {t('resident.edit.floor', 'Etage')} <span className="text-muted-foreground text-xs">(optional)</span>
+                      {t('resident.edit.floor', 'Etage')} <span className="text-muted-foreground text-xs">(0 = Erdgeschoss, optional)</span>
                     </Label>
                     <Input
                       id="floor"
                       type="number"
                       min="0"
                       max="100"
-                      value={formData.floor || ''}
-                      onChange={(e) => 
+                      value={formData.floor !== undefined ? formData.floor : ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
                         setFormData({ 
                           ...formData, 
-                          floor: e.target.value ? parseInt(e.target.value) : undefined 
-                        })
-                      }
-                      placeholder={t('resident.edit.floorPlaceholder', 'z.B. 3')}
+                          floor: value === '' ? undefined : parseInt(value)
+                        });
+                      }}
+                      placeholder={t('resident.edit.floorPlaceholder', '0 für Erdgeschoss')}
                       disabled={loading}
                     />
                   </div>

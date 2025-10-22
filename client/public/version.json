@@ -1,25 +1,25 @@
 {
-  "version": "2.5.0",
-  "buildTime": "2025-10-20T03:15:00.000Z",
-  "buildNumber": "photo-tracking-camera-follow-ux-improvements",
+  "version": "2.5.1",
+  "buildTime": "2025-10-21T23:44:37.838Z",
+  "buildNumber": "build-1761090277839",
   "features": [
-    "NEU: Foto-Tracking mit Deduplizierung (MD5-Hash)",
-    "NEU: Intelligentes Kamera-Follow-System (30% Schwellwert)",
-    "NEU: Quick-Select Buttons für historische Daten",
-    "NEU: Fotos-Spalte im Admin Dashboard",
-    "Fix: Route Replay Modal Overflow (scrollbar)",
-    "Fix: Wochenend-Skip-Logik für Datumsauswahl"
+    "Fix: Status-Persistenz in Tabellenansicht (AddressOverview)",
+    "Fix: Etagen-Feld erlaubt jetzt 0 (Erdgeschoss)",
+    "Optimize: Bestandskunden-Normalisierung beim Einlesen",
+    "Optimize: Sonderzeichen-Entfernung bei Straßen-Matching",
+    "Optimize: Automatische Hausnummer-Extraktion aus Straßenfeld"
   ],
   "technicalDetails": [
-    "Photo Deduplication (MD5)",
-    "Route Replay Camera Follow",
-    "PDF Report Generator V2.0",
-    "On-Demand Reports",
-    "Historical Photo Counting"
+    "Table View Status Persistence Fix",
+    "Floor Field: 0 (Ground Floor) Support",
+    "Customer Data Normalization on Load",
+    "Street Name Special Character Removal",
+    "Automatic House Number Extraction"
   ],
   "previousFeatures": [
-    "Fix: Infinite Loop & List Visibility (v2.4.7)",
-    "Fix: Duplikate, Validation (v2.4.6)",
-    "Kundenliste sichtbar (v2.4.5)"
+    "Foto-Tracking mit MD5-Deduplizierung (v2.5.0)",
+    "Kamera-Follow-System (v2.5.0)",
+    "Infinite Loop Fix (v2.4.7)",
+    "Duplikate & Validation (v2.4.6)"
   ]
 }
