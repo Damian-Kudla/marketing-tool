@@ -62,6 +62,30 @@ function updateServiceWorkerVersion() {
     writeFileSync(swPath, swContent, 'utf-8');
     console.log('✅ Service Worker version updated successfully');
 
+    // Update index.html meta tag
+    const indexPath = join(process.cwd(), 'client', 'index.html');
+    let indexContent = readFileSync(indexPath, 'utf-8');
+    indexContent = indexContent.replace(
+      /<meta name="app-version" content="[\d.]+" \/>/g,
+      `<meta name="app-version" content="${version}" />`
+    );
+    writeFileSync(indexPath, indexContent, 'utf-8');
+    console.log(`✅ Updated index.html meta tag to version ${version}`);
+
+    // Update UserButton.tsx fallback version
+    const userButtonPath = join(process.cwd(), 'client', 'src', 'components', 'UserButton.tsx');
+    let userButtonContent = readFileSync(userButtonPath, 'utf-8');
+    userButtonContent = userButtonContent.replace(
+      /const \[appVersion, setAppVersion\] = useState\('[\d.]+'\);/g,
+      `const [appVersion, setAppVersion] = useState('${version}');`
+    );
+    userButtonContent = userButtonContent.replace(
+      /\.catch\(\(\) => setAppVersion\('[\d.]+'\)\);/g,
+      `.catch(() => setAppVersion('${version}'));`
+    );
+    writeFileSync(userButtonPath, userButtonContent, 'utf-8');
+    console.log(`✅ Updated UserButton.tsx fallback version to ${version}`);
+
     // Create version.json for version checking
     const versionJsonPath = join(process.cwd(), 'client', 'public', 'version.json');
     const versionJson = {
