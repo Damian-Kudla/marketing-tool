@@ -187,6 +187,8 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
       const lastGpsPoint = userData.gpsPoints.length > 0 
         ? userData.gpsPoints[userData.gpsPoints.length - 1]
         : undefined;
+      
+      // Status changes are now tracked consistently in statusChanges Map (backward compatible)
       const totalStatusChanges = Array.from(userData.statusChanges.values()).reduce((sum, count) => sum + count, 0);
 
       // Konvertiere Map zu Objekt für JSON-Serialisierung

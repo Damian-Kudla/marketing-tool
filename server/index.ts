@@ -5,6 +5,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { cronJobService } from "./services/cronJobService";
 import { dailyDataStore } from "./services/dailyDataStore";
+import { shouldLogEndpoint } from "./config/logConfig";
 
 // Force Railway rebuild - production path fix
 
@@ -26,14 +27,20 @@ app.use((req, res, next) => {
 
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+    
+    // Only log API requests that match our filter criteria
+    if (path.startsWith("/api") && shouldLogEndpoint(path)) {
+      // Extract username from session if available
+      const username = (req as any).username;
+      const userPrefix = username ? `[${username}]` : '';
+      
+      let logLine = `${userPrefix} ${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
 
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
+      if (logLine.length > 120) {
+        logLine = logLine.slice(0, 119) + "…";
       }
 
       log(logLine);

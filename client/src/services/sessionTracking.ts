@@ -254,7 +254,8 @@ class SessionTrackingService {
   logAction(
     action: ActionLog['action'],
     details?: string,
-    residentStatus?: ActionLog['residentStatus']
+    residentStatus?: ActionLog['residentStatus'],
+    previousStatus?: ActionLog['residentStatus']
   ): void {
     if (!this.sessionData) {
       return;
@@ -264,7 +265,8 @@ class SessionTrackingService {
       timestamp: Date.now(),
       action,
       details,
-      residentStatus
+      residentStatus,
+      previousStatus
     };
 
     this.sessionData.actions.push(actionLog);

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { addressDatasetService, normalizeAddress } from '../services/googleSheets';
 import { logUserActivityWithRetry } from '../services/enhancedLogging';
+import { storage } from '../storage';
 
 // ==================== LOCK MECHANISM FOR RACE CONDITION PREVENTION ====================
 // In-memory lock map to prevent concurrent dataset creation for the same address
@@ -178,6 +179,17 @@ router.post('/', async (req, res) => {
         error: 'Incomplete address', 
         message: `Folgende Pflichtfelder fehlen: ${missingFields.join(', ')}`,
         missingFields: missingFields,
+      });
+    }
+
+    // Validate house number format
+    try {
+      storage.validateHouseNumber(data.address.number);
+    } catch (error: any) {
+      console.error('[POST /address-datasets] Invalid house number format:', data.address.number, error.message);
+      return res.status(400).json({ 
+        error: 'Invalid house number format',
+        message: error.message || 'Ungültige Hausnummer',
       });
     }
 
@@ -367,6 +379,13 @@ Bitte überprüfe die Eingabe oder verwende eine andere Schreibweise.`,
     res.json({
       ...dataset,
       canEdit: true,
+      // Return normalized address so frontend can update its state
+      normalizedAddress: {
+        street: normalized.street,
+        number: normalized.number,
+        city: normalized.city,
+        postal: normalized.postal,
+      }
     });
   } catch (error) {
     console.error('Error creating address dataset:', error);
@@ -377,7 +396,57 @@ Bitte überprüfe die Eingabe oder verwende eine andere Schreibweise.`,
   }
 });
 
-// Get address datasets for a specific address
+// Search for existing datasets WITHOUT normalization (for +/- button navigation)
+router.get('/search-local', async (req, res) => {
+  try {
+    // IMPORTANT: Only execute search if we have a 5-digit postal code
+    // This prevents unnecessary API calls while user is still typing
+    const postal = req.query.postal as string;
+    
+    // Check if postal code is exactly 5 digits
+    if (!postal || !/^\d{5}$/.test(postal)) {
+      // Return empty result if postal code is not valid yet
+      return res.json({
+        datasets: [],
+        recentDatasetExists: false,
+      });
+    }
+    
+    // Now validate the full address (postal is guaranteed to be valid)
+    const address = addressSchema.parse(req.query);
+    const username = (req as any).username;
+    
+    // Build search string WITHOUT calling normalizeAddress (no API calls!)
+    const searchAddress = `${address.street || ''} ${address.postal || ''} ${address.city || ''}`.trim().toLowerCase();
+    
+    // Search directly in database without normalization
+    const datasets = await addressDatasetService.getAddressDatasets(searchAddress, 5, address.number);
+    
+    // Add canEdit property and non-exact match flag
+    const datasetsWithEditFlag = datasets.map(dataset => {
+      const creationDate = new Date(dataset.createdAt);
+      const isEditable = isWithin30Days(creationDate);
+      const isCreator = dataset.createdBy === username;
+      const isNonExactMatch = dataset.houseNumber !== address.number;
+      
+      return {
+        ...dataset,
+        canEdit: isCreator && isEditable,
+        isNonExactMatch,
+      };
+    });
+
+    res.json({
+      datasets: datasetsWithEditFlag,
+      recentDatasetExists: datasetsWithEditFlag.length > 0,
+    });
+  } catch (error) {
+    console.error('Error searching local datasets:', error);
+    res.status(500).json({ error: 'Failed to search local datasets' });
+  }
+});
+
+// Get address datasets for a specific address (WITH normalization - only for "Adresse durchsuchen" button)
 router.get('/', async (req, res) => {
   try {
     const address = addressSchema.parse(req.query);
@@ -424,6 +493,13 @@ router.get('/', async (req, res) => {
       canCreateNew: !recentDataset || recentDataset.createdBy === username,
       existingTodayBy: recentDataset?.createdBy !== username ? recentDataset?.createdBy : undefined,
       normalizedAddress: normalized.formattedAddress,
+      // Return corrected address components for frontend update
+      correctedAddress: {
+        street: normalized.street,
+        number: normalized.number,
+        city: normalized.city,
+        postal: normalized.postal,
+      }
     };
 
     // Log dataset retrieval activity

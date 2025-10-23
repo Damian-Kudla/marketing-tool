@@ -213,6 +213,17 @@ export const datasetAPI = {
     return response.json();
   },
   
+  // Search for datasets locally (no normalization - for +/- button navigation)
+  searchDatasetsLocal: async (address: any) => {
+    const params = new URLSearchParams(address).toString();
+    const response = await apiService.get(`/address-datasets/search-local?${params}`);
+    if (!response.ok) {
+      throw new Error('Failed to search local datasets');
+    }
+    return response.json();
+  },
+  
+  // Get datasets with normalization (for "Adresse durchsuchen" button)
   getDatasets: async (address: any) => {
     const params = new URLSearchParams(address).toString();
     const response = await apiService.get(`/address-datasets?${params}`);

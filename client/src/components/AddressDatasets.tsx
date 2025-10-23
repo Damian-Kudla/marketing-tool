@@ -20,35 +20,34 @@ interface AddressDatasetsProps {
   address: Address;
   onLoadDataset: (datasetId: string) => void;
   shouldLoad?: boolean; // Signal to load datasets
+  useNormalization?: boolean; // If true, uses normalized search (for "Adresse durchsuchen" button)
+  onAddressCorrected?: (correctedAddress: Address) => void; // Callback when backend returns corrected address
 }
 
-export function AddressDatasets({ address, onLoadDataset, shouldLoad }: AddressDatasetsProps) {
+export function AddressDatasets({ address, onLoadDataset, shouldLoad, useNormalization = false, onAddressCorrected }: AddressDatasetsProps) {
   const { t } = useTranslation();
   const [datasets, setDatasets] = useState<AddressDataset[]>([]);
   const [loading, setLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [lastLoadedAddress, setLastLoadedAddress] = useState<string | null>(null);
 
   // Create normalized address string for comparison
   const normalizedAddress = address 
     ? `${address.street || ''} ${address.number || ''} ${address.postal || ''} ${address.city || ''}`.toLowerCase().trim()
     : null;
 
-  // FIX: Load datasets when shouldLoad changes OR address changes
+  // Load datasets when address changes (automatically on every address change)
   useEffect(() => {
-    if (shouldLoad && normalizedAddress && normalizedAddress !== lastLoadedAddress) {
-      console.log('[AddressDatasets] Loading datasets for:', normalizedAddress);
+    if (shouldLoad && normalizedAddress) {
+      console.log(`[AddressDatasets] Address changed, loading datasets (${useNormalization ? 'normalized' : 'local'} search) for:`, normalizedAddress);
       loadDatasets();
-      setLastLoadedAddress(normalizedAddress);
     }
-  }, [shouldLoad, normalizedAddress]);
+  }, [shouldLoad, normalizedAddress, useNormalization]);
 
-  // FIX: Clear datasets when address is cleared or changes dramatically
+  // Clear datasets when address is cleared
   useEffect(() => {
     if (!normalizedAddress) {
       console.log('[AddressDatasets] Address cleared, resetting datasets');
       setDatasets([]);
-      setLastLoadedAddress(null);
       setIsExpanded(false);
     }
   }, [normalizedAddress]);
@@ -56,7 +55,26 @@ export function AddressDatasets({ address, onLoadDataset, shouldLoad }: AddressD
   const loadDatasets = async () => {
     setLoading(true);
     try {
-      const response = await datasetAPI.getDatasets(address);
+      // Choose endpoint based on useNormalization prop
+      const response = useNormalization
+        ? await datasetAPI.getDatasets(address)        // WITH normalization (for "Adresse durchsuchen")
+        : await datasetAPI.searchDatasetsLocal(address); // WITHOUT normalization (for +/- buttons)
+      
+      console.log(`[AddressDatasets] Loaded datasets using ${useNormalization ? 'normalized' : 'local'} search:`, response.datasets.length);
+      
+      // If backend returned corrected address, notify parent
+      if (useNormalization && response.correctedAddress && onAddressCorrected) {
+        const { street, number, city, postal } = response.correctedAddress;
+        console.log('[AddressDatasets] Backend returned corrected address:', response.correctedAddress);
+        onAddressCorrected({
+          street,
+          number,
+          city,
+          postal,
+          onlyEven: address?.onlyEven,
+          onlyOdd: address?.onlyOdd
+        });
+      }
       
       // Transform datasets to AddressDataset format
       const addressDatasets = response.datasets.map((ds: any) => ({

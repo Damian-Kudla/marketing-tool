@@ -4,7 +4,7 @@ interface CallBackSessionContextType {
   currentCallBackList: any[];
   currentCallBackIndex: number;
   callBackPeriod: 'today' | 'yesterday' | 'custom' | null;
-  startCallBackSession: (list: any[], period: 'today' | 'yesterday' | 'custom', startIndex?: number) => void;
+  startCallBackSession: (list: any[], period: 'today' | 'yesterday' | 'custom', startIndex?: number, isDescending?: boolean) => void;
   moveToNext: () => string | null; // Returns next dataset ID or null if at end
   moveToPrevious: () => string | null; // Returns previous dataset ID or null if at beginning
   hasNext: () => boolean;
@@ -21,18 +21,22 @@ export function CallBackSessionProvider({ children }: { children: ReactNode }) {
   const [currentCallBackIndex, setCurrentCallBackIndex] = useState(-1);
   const [callBackPeriod, setCallBackPeriod] = useState<'today' | 'yesterday' | 'custom' | null>(null);
   const [loadedFromCallBack, setLoadedFromCallBack] = useState(false);
+  const [isDescendingOrder, setIsDescendingOrder] = useState(true); // Track if list is in descending order
 
-  const startCallBackSession = (list: any[], period: 'today' | 'yesterday' | 'custom', startIndex: number = 0) => {
+  const startCallBackSession = (list: any[], period: 'today' | 'yesterday' | 'custom', startIndex: number = 0, isDescending: boolean = true) => {
     setCurrentCallBackList(list);
     setCurrentCallBackIndex(startIndex);
     setCallBackPeriod(period);
     setLoadedFromCallBack(true);
+    setIsDescendingOrder(isDescending);
   };
 
   const moveToNext = (): string | null => {
-    // Move forward in the list (increase index)
-    if (currentCallBackIndex < currentCallBackList.length - 1) {
-      const nextIndex = currentCallBackIndex + 1;
+    // "Nächster" always means moving UP in the visual list (towards index 0)
+    // This represents "next address to process" (from bottom to top)
+    const nextIndex = currentCallBackIndex - 1;
+    
+    if (nextIndex >= 0) {
       setCurrentCallBackIndex(nextIndex);
       return currentCallBackList[nextIndex].datasetId;
     }
@@ -40,9 +44,11 @@ export function CallBackSessionProvider({ children }: { children: ReactNode }) {
   };
 
   const moveToPrevious = (): string | null => {
-    // Move backward in the list (decrease index)
-    if (currentCallBackIndex > 0) {
-      const prevIndex = currentCallBackIndex - 1;
+    // "Vorheriger" always means moving DOWN in the visual list (towards higher index)
+    // This represents "go back to previous address" (from top to bottom)
+    const prevIndex = currentCallBackIndex + 1;
+    
+    if (prevIndex < currentCallBackList.length) {
       setCurrentCallBackIndex(prevIndex);
       return currentCallBackList[prevIndex].datasetId;
     }
@@ -50,13 +56,13 @@ export function CallBackSessionProvider({ children }: { children: ReactNode }) {
   };
 
   const hasNext = (): boolean => {
-    // Can move forward if not at the end
-    return currentCallBackIndex < currentCallBackList.length - 1;
+    // Can move to "next" if there's an item above (lower index)
+    return currentCallBackIndex > 0;
   };
 
   const hasPrevious = (): boolean => {
-    // Can move backward if not at the beginning
-    return currentCallBackIndex > 0;
+    // Can move to "previous" if there's an item below (higher index)
+    return currentCallBackIndex < currentCallBackList.length - 1;
   };
 
   const clearSession = () => {
@@ -64,6 +70,7 @@ export function CallBackSessionProvider({ children }: { children: ReactNode }) {
     setCurrentCallBackIndex(-1);
     setCallBackPeriod(null);
     setLoadedFromCallBack(false);
+    setIsDescendingOrder(true);
   };
 
   return (

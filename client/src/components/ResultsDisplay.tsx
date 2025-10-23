@@ -32,6 +32,7 @@ import { StatusContextMenu } from './StatusContextMenu';
 import { useFilteredToast } from '@/hooks/use-filtered-toast';
 import { useLongPress } from '@/hooks/use-long-press';
 import { datasetAPI } from '@/services/api';
+import { expandHouseNumberRange } from '@/utils/addressUtils';
 import type { Address } from '@/components/GPSAddressForm';
 import type { 
   EditableResident, 
@@ -399,10 +400,22 @@ export default function ResultsDisplay({
         setTimeout(() => reject(new Error('TIMEOUT_ERROR')), 15000)
       );
       
+      // Process address with house number range expansion if needed
+      let processedNumber = address.number;
+      if (address.number.includes('-')) {
+        const expanded = expandHouseNumberRange(
+          address.number,
+          address.onlyEven || false,
+          address.onlyOdd || false
+        );
+        // Join expanded numbers with comma for backend processing
+        processedNumber = expanded.join(',');
+      }
+      
       const datasetPromise = datasetAPI.createDataset({
         address: {
           street: address.street,
-          number: address.number,
+          number: processedNumber,
           city: address.city,
           postal: address.postal,
         },
@@ -675,8 +688,11 @@ export default function ResultsDisplay({
       
       console.log('[handleStatusChange] Found resident at index:', currentIndex, 'Name:', resident.name);
       
+      const oldResident = editableResidents[currentIndex];
+      const oldStatus = oldResident.status;
+      
       const updatedResident: EditableResident = {
-        ...editableResidents[currentIndex], // Use current resident from array
+        ...oldResident, // Use current resident from array
         status: newStatus
       };
 
@@ -694,11 +710,12 @@ export default function ResultsDisplay({
         // Use the updated array for backend sync
         await datasetAPI.bulkUpdateResidents(currentDatasetId, sanitizeResidents(newResidents));
 
-        // Track status change action
+        // Track status change action with old and new status
         trackingManager.logAction(
           'status_change',
-          `Resident: ${resident.name}`,
-          newStatus as 'interessiert' | 'nicht_interessiert' | 'nicht_angetroffen' | 'termin_vereinbart'
+          `Resident: ${resident.name} | Old: ${oldStatus || 'none'} → New: ${newStatus}`,
+          newStatus as 'interessiert' | 'nicht_interessiert' | 'nicht_angetroffen' | 'termin_vereinbart',
+          oldStatus as 'interessiert' | 'nicht_interessiert' | 'nicht_angetroffen' | 'termin_vereinbart' | undefined
         );
 
         toast({
@@ -1048,11 +1065,23 @@ export default function ResultsDisplay({
     
     // Automatically create dataset without confirmation (only if no dataset loaded)
     try {
+      // Process address with house number range expansion if needed
+      let processedNumber = address.number;
+      if (address.number.includes('-')) {
+        const expanded = expandHouseNumberRange(
+          address.number,
+          address.onlyEven || false,
+          address.onlyOdd || false
+        );
+        // Join expanded numbers with comma for backend processing
+        processedNumber = expanded.join(',');
+      }
+      
       // Create dataset with empty residents array
       const newDataset = await datasetAPI.createDataset({
         address: {
           street: address.street,
-          number: address.number,
+          number: processedNumber,
           city: address.city,
           postal: address.postal,
         },

@@ -155,11 +155,14 @@ export default function AdminDashboard() {
   };
   
   const [selectedDate, setSelectedDate] = useState<string>(getLastWeekday(1)); // Auto-select last weekday
-  const [sortBy, setSortBy] = useState<'actions' | 'distance' | 'written'>('actions');
+  const [sortBy, setSortBy] = useState<'actions' | 'statusChanges' | 'written'>('actions');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   
   // Expanded rows state
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  
+  // Expanded dataset updates state (nested expansion)
+  const [expandedDatasetUpdates, setExpandedDatasetUpdates] = useState<Set<string>>(new Set());
   
   // Route Replay state
   const [showRouteReplay, setShowRouteReplay] = useState(false);
@@ -306,9 +309,10 @@ export default function AdminDashboard() {
         aValue = a.todayStats.totalActions;
         bValue = b.todayStats.totalActions;
         break;
-      case 'distance':
-        aValue = a.todayStats.distance;
-        bValue = b.todayStats.distance;
+      case 'statusChanges':
+        // Sum all status changes
+        aValue = Object.values(a.todayStats.statusChanges || {}).reduce((sum: number, count) => sum + (count as number), 0);
+        bValue = Object.values(b.todayStats.statusChanges || {}).reduce((sum: number, count) => sum + (count as number), 0);
         break;
       case 'written':
         aValue = a.todayStats.finalStatuses?.['written'] || 0;
@@ -370,6 +374,17 @@ export default function AdminDashboard() {
       newExpanded.add(userId);
     }
     setExpandedRows(newExpanded);
+  };
+
+  // Toggle expanded dataset updates (nested)
+  const toggleExpandDatasetUpdates = (userId: string) => {
+    const newExpanded = new Set(expandedDatasetUpdates);
+    if (newExpanded.has(userId)) {
+      newExpanded.delete(userId);
+    } else {
+      newExpanded.add(userId);
+    }
+    setExpandedDatasetUpdates(newExpanded);
   };
 
   if (isAdmin === null) {
@@ -710,18 +725,18 @@ export default function AdminDashboard() {
                 Actions {sortBy === 'actions' && (sortOrder === 'desc' ? '↓' : '↑')}
               </Button>
               <Button
-                variant={sortBy === 'distance' ? 'default' : 'outline'}
+                variant={sortBy === 'statusChanges' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => {
-                  if (sortBy === 'distance') {
+                  if (sortBy === 'statusChanges') {
                     setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc');
                   } else {
-                    setSortBy('distance');
+                    setSortBy('statusChanges');
                     setSortOrder('desc');
                   }
                 }}
               >
-                Distanz {sortBy === 'distance' && (sortOrder === 'desc' ? '↓' : '↑')}
+                Status-Änderungen {sortBy === 'statusChanges' && (sortOrder === 'desc' ? '↓' : '↑')}
               </Button>
               <Button
                 variant={sortBy === 'written' ? 'default' : 'outline'}
@@ -789,7 +804,9 @@ export default function AdminDashboard() {
                             </span>
                           </td>
                           <td className="p-2 text-right">{user.todayStats.totalActions}</td>
-                          <td className="p-2 text-right">{user.todayStats.uniquePhotos || 0}</td>
+                          <td className="p-2 text-right">
+                            {user.todayStats.actionDetails?.scans || 0}
+                          </td>
                           <td className="p-2 text-right">{totalStatusChanges}</td>
                           <td className="p-2 text-right">
                             {formatDistance(user.todayStats.distance)}
@@ -823,6 +840,128 @@ export default function AdminDashboard() {
                           <tr key={`${user.userId}-details`} className="bg-muted/30">
                             <td colSpan={10} className="p-4">
                               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                                {/* Action Details - FIRST COLUMN */}
+                                <div>
+                                  <h4 className="font-semibold mb-2 text-primary">Action Details:</h4>
+                                  <div className="space-y-1">
+                                    {user.todayStats.actionDetails && (
+                                      <>
+                                        {user.todayStats.actionDetails.scans > 0 && (
+                                          <div>
+                                            <div className="flex justify-between">
+                                              <span className="text-muted-foreground">📸 Fotos hochgeladen:</span>
+                                              <span className="font-medium">{user.todayStats.actionDetails.scans}</span>
+                                            </div>
+                                            {user.todayStats.uniquePhotos > 0 && user.todayStats.uniquePhotos !== user.todayStats.actionDetails.scans && (
+                                              <div className="flex justify-between text-sm ml-4">
+                                                <span className="text-muted-foreground italic">└─ davon unique:</span>
+                                                <span className="font-medium">{user.todayStats.uniquePhotos}</span>
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+                                        {user.todayStats.actionDetails.ocrCorrections > 0 && (
+                                          <div>
+                                            <div 
+                                              className="flex justify-between items-center cursor-pointer hover:bg-muted/50 rounded px-1 -mx-1"
+                                              onClick={() => toggleExpandDatasetUpdates(user.userId)}
+                                            >
+                                              <span className="text-muted-foreground flex items-center gap-1">
+                                                {expandedDatasetUpdates.has(user.userId) ? (
+                                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                  </svg>
+                                                ) : (
+                                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                  </svg>
+                                                )}
+                                                👤 Datensatz-Updates:
+                                              </span>
+                                              <span className="font-medium">{user.todayStats.actionDetails.ocrCorrections}</span>
+                                            </div>
+                                            {expandedDatasetUpdates.has(user.userId) && (
+                                              <div className="ml-6 mt-1 space-y-1 text-sm border-l-2 border-muted pl-2">
+                                                {user.todayStats.actionDetails.statusChanges > 0 && (
+                                                  <div className="flex justify-between">
+                                                    <span className="text-muted-foreground">🔄 Status geändert:</span>
+                                                    <span className="font-medium">{user.todayStats.actionDetails.statusChanges}</span>
+                                                  </div>
+                                                )}
+                                                {user.todayStats.actionDetails.edits > 0 && (
+                                                  <div className="flex justify-between">
+                                                    <span className="text-muted-foreground">✏️ Bearbeitet:</span>
+                                                    <span className="font-medium">{user.todayStats.actionDetails.edits}</span>
+                                                  </div>
+                                                )}
+                                                {user.todayStats.actionDetails.saves > 0 && (
+                                                  <div className="flex justify-between">
+                                                    <span className="text-muted-foreground">💾 Gespeichert:</span>
+                                                    <span className="font-medium">{user.todayStats.actionDetails.saves}</span>
+                                                  </div>
+                                                )}
+                                                {user.todayStats.actionDetails.deletes > 0 && (
+                                                  <div className="flex justify-between">
+                                                    <span className="text-muted-foreground">🗑️ Gelöscht:</span>
+                                                    <span className="font-medium">{user.todayStats.actionDetails.deletes}</span>
+                                                  </div>
+                                                )}
+                                                {/* Show info if no breakdown available */}
+                                                {user.todayStats.actionDetails.statusChanges === 0 && 
+                                                 user.todayStats.actionDetails.edits === 0 && 
+                                                 user.todayStats.actionDetails.saves === 0 && 
+                                                 user.todayStats.actionDetails.deletes === 0 && (
+                                                  <div className="text-xs text-muted-foreground italic">
+                                                    Alle Updates wurden als Bulk-Updates erfasst.<br />
+                                                    Detaillierte Aufschlüsselung nur für neue Sessions verfügbar.
+                                                  </div>
+                                                )}
+                                                {/* Show total */}
+                                                <div className="text-xs text-muted-foreground font-medium pt-1 border-t">
+                                                  Gesamt: {user.todayStats.actionDetails.ocrCorrections} Updates
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+                                        {user.todayStats.actionDetails.datasetCreates > 0 && (
+                                          <div className="flex justify-between">
+                                            <span className="text-muted-foreground">📝 Datensätze erstellt:</span>
+                                            <span className="font-medium">{user.todayStats.actionDetails.datasetCreates}</span>
+                                          </div>
+                                        )}
+                                        {user.todayStats.actionDetails.geocodes > 0 && (
+                                          <div className="flex justify-between">
+                                            <span className="text-muted-foreground">📍 GPS-Abfragen:</span>
+                                            <span className="font-medium">{user.todayStats.actionDetails.geocodes}</span>
+                                          </div>
+                                        )}
+                                        {user.todayStats.actionDetails.navigations > 0 && (
+                                          <div className="flex justify-between">
+                                            <span className="text-muted-foreground">🧭 Navigiert:</span>
+                                            <span className="font-medium">{user.todayStats.actionDetails.navigations}</span>
+                                          </div>
+                                        )}
+                                        {user.todayStats.actionDetails.other > 0 && (
+                                          <div className="flex justify-between">
+                                            <span className="text-muted-foreground">➕ Sonstige:</span>
+                                            <span className="font-medium">{user.todayStats.actionDetails.other}</span>
+                                          </div>
+                                        )}
+                                        {/* Show total as summary */}
+                                        <div className="flex justify-between pt-1 border-t border-border">
+                                          <span className="text-muted-foreground font-semibold">Gesamt:</span>
+                                          <span className="font-semibold">{user.todayStats.totalActions}</span>
+                                        </div>
+                                      </>
+                                    )}
+                                    {(!user.todayStats.actionDetails || user.todayStats.totalActions === 0) && (
+                                      <div className="text-muted-foreground italic">Keine Actions</div>
+                                    )}
+                                  </div>
+                                </div>
+                                
+                                {/* Status-Änderungen Details - SECOND COLUMN */}
                                 <div>
                                   <h4 className="font-semibold mb-2 text-primary">Status-Änderungen Details:</h4>
                                   <div className="space-y-1">
@@ -882,91 +1021,6 @@ export default function AdminDashboard() {
                                     )}
                                     {totalStatusChanges === 0 && (
                                       <div className="text-muted-foreground italic">Keine Status-Änderungen</div>
-                                    )}
-                                  </div>
-                                </div>
-                                <div>
-                                  <h4 className="font-semibold mb-2 text-primary">Action Details:</h4>
-                                  <div className="space-y-1">
-                                    {user.todayStats.actionDetails && (
-                                      <>
-                                        {user.todayStats.actionDetails.scans > 0 && (
-                                          <div>
-                                            <div className="flex justify-between">
-                                              <span className="text-muted-foreground">📸 Fotos hochgeladen:</span>
-                                              <span className="font-medium">{user.todayStats.actionDetails.scans}</span>
-                                            </div>
-                                            {user.todayStats.uniquePhotos > 0 && user.todayStats.uniquePhotos !== user.todayStats.actionDetails.scans && (
-                                              <div className="flex justify-between text-sm ml-4">
-                                                <span className="text-muted-foreground italic">└─ davon unique:</span>
-                                                <span className="font-medium">{user.todayStats.uniquePhotos}</span>
-                                              </div>
-                                            )}
-                                          </div>
-                                        )}
-                                        {user.todayStats.actionDetails.ocrCorrections > 0 && (
-                                          <div className="flex justify-between">
-                                            <span className="text-muted-foreground">✏️ Namen korrigiert:</span>
-                                            <span className="font-medium">{user.todayStats.actionDetails.ocrCorrections}</span>
-                                          </div>
-                                        )}
-                                        {user.todayStats.actionDetails.datasetCreates > 0 && (
-                                          <div className="flex justify-between">
-                                            <span className="text-muted-foreground">📝 Datensätze erstellt:</span>
-                                            <span className="font-medium">{user.todayStats.actionDetails.datasetCreates}</span>
-                                          </div>
-                                        )}
-                                        {user.todayStats.actionDetails.statusChanges > 0 && (
-                                          <div className="flex justify-between">
-                                            <span className="text-muted-foreground">🔄 Status geändert:</span>
-                                            <span className="font-medium">{user.todayStats.actionDetails.statusChanges}</span>
-                                          </div>
-                                        )}
-                                        {user.todayStats.actionDetails.geocodes > 0 && (
-                                          <div className="flex justify-between">
-                                            <span className="text-muted-foreground">📍 GPS-Abfragen:</span>
-                                            <span className="font-medium">{user.todayStats.actionDetails.geocodes}</span>
-                                          </div>
-                                        )}
-                                        {user.todayStats.actionDetails.edits > 0 && (
-                                          <div className="flex justify-between">
-                                            <span className="text-muted-foreground">✏️ Bearbeitungen:</span>
-                                            <span className="font-medium">{user.todayStats.actionDetails.edits}</span>
-                                          </div>
-                                        )}
-                                        {user.todayStats.actionDetails.saves > 0 && (
-                                          <div className="flex justify-between">
-                                            <span className="text-muted-foreground">💾 Speicherungen:</span>
-                                            <span className="font-medium">{user.todayStats.actionDetails.saves}</span>
-                                          </div>
-                                        )}
-                                        {user.todayStats.actionDetails.deletes > 0 && (
-                                          <div className="flex justify-between">
-                                            <span className="text-muted-foreground">🗑️ Löschungen:</span>
-                                            <span className="font-medium">{user.todayStats.actionDetails.deletes}</span>
-                                          </div>
-                                        )}
-                                        {user.todayStats.actionDetails.navigations > 0 && (
-                                          <div className="flex justify-between">
-                                            <span className="text-muted-foreground">🧭 Navigationen:</span>
-                                            <span className="font-medium">{user.todayStats.actionDetails.navigations}</span>
-                                          </div>
-                                        )}
-                                        {user.todayStats.actionDetails.other > 0 && (
-                                          <div className="flex justify-between">
-                                            <span className="text-muted-foreground">➕ Sonstige:</span>
-                                            <span className="font-medium">{user.todayStats.actionDetails.other}</span>
-                                          </div>
-                                        )}
-                                        {/* Show total as summary */}
-                                        <div className="flex justify-between pt-1 border-t border-border">
-                                          <span className="text-muted-foreground font-semibold">Gesamt:</span>
-                                          <span className="font-semibold">{user.todayStats.totalActions}</span>
-                                        </div>
-                                      </>
-                                    )}
-                                    {(!user.todayStats.actionDetails || user.todayStats.totalActions === 0) && (
-                                      <div className="text-muted-foreground italic">Keine Actions</div>
                                     )}
                                   </div>
                                 </div>

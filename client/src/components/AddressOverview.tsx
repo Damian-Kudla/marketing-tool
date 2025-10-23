@@ -273,6 +273,12 @@ export function AddressOverview({ isOpen, onClose, address, residents, asDialog 
             }}
             resident={editingResident}
             onSave={handleResidentSave}
+            isEditing={true}
+            currentDatasetId={currentDatasetId}
+            addressDataset={{
+              address,
+              editableResidents: residents
+            }}
           />
         )}
       </>
@@ -300,6 +306,12 @@ export function AddressOverview({ isOpen, onClose, address, residents, asDialog 
           }}
           resident={editingResident}
           onSave={handleResidentSave}
+          isEditing={true}
+          currentDatasetId={currentDatasetId}
+          addressDataset={{
+            address,
+            editableResidents: residents
+          }}
         />
       )}
     </>

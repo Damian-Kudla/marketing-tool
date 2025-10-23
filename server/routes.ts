@@ -229,7 +229,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Unauthorized" });
       }
 
-      const appointments = await appointmentService.getUpcomingAppointments(username);
+      // Check if we should include past appointments
+      const includePast = req.query.includePast === 'true';
+      
+      const appointments = includePast 
+        ? await appointmentService.getUserAppointments(username)
+        : await appointmentService.getUpcomingAppointments(username);
+        
       res.json(appointments);
     } catch (error) {
       console.error("Error getting upcoming appointments:", error);
@@ -424,6 +430,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ 
           error: "Address is required for photo upload. Please enter at least postal code, street, or house number." 
         });
+      }
+
+      // Validate house number format if provided
+      if (address.number) {
+        try {
+          // Try to expand house number - this will throw if invalid format
+          storage.validateHouseNumber(address.number);
+        } catch (error: any) {
+          console.error('[OCR] Invalid house number format:', address.number, error.message);
+          return res.status(400).json({ 
+            error: error.message || "Ungültige Hausnummer" 
+          });
+        }
       }
 
       // Parse orientation info if provided from frontend

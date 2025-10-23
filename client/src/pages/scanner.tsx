@@ -4,6 +4,7 @@ import GPSAddressForm, { type Address } from '@/components/GPSAddressForm';
 import PhotoCapture from '@/components/PhotoCapture';
 import ResultsDisplay, { type OCRResult } from '@/components/ResultsDisplay';
 import { UserButton } from '@/components/UserButton';
+import { expandHouseNumberRange } from '@/utils/addressUtils';
 import { ClickableAddressHeader } from '@/components/ClickableAddressHeader';
 import { AddressDatasets } from '@/components/AddressDatasets';
 import { AddressOverview } from '@/components/AddressOverview';
@@ -52,7 +53,7 @@ export default function ScannerPage() {
   const { toast } = useFilteredToast();
   const { viewMode, maximizedPanel, setMaximizedPanel } = useViewMode();
   const { callBackMode } = useUIPreferences();
-  const { hasNext, hasPrevious, moveToNext, moveToPrevious, loadedFromCallBack, setLoadedFromCallBack } = useCallBackSession();
+  const { hasNext, hasPrevious, moveToNext, moveToPrevious, loadedFromCallBack, setLoadedFromCallBack, clearSession } = useCallBackSession();
   const [address, setAddress] = useState<Address | null>(null);
   const [normalizedAddress, setNormalizedAddress] = useState<string | null>(null);
   const [ocrResult, setOcrResult] = useState<OCRResult | null>(null);
@@ -61,7 +62,9 @@ export default function ScannerPage() {
   const [currentDatasetId, setCurrentDatasetId] = useState<string | null>(null);
   const [datasetCreatedAt, setDatasetCreatedAt] = useState<string | null>(null);
   const [showDatasets, setShowDatasets] = useState(false);
+  const [useNormalizedDatasetSearch, setUseNormalizedDatasetSearch] = useState(false); // true when "Adresse durchsuchen" is clicked
   const [editableResidents, setEditableResidents] = useState<any[]>([]);
+  const [showCorrectionEffect, setShowCorrectionEffect] = useState(false); // Trigger visual effect for address correction
   // Dataset creation confirmation removed - now creates automatically
   const [showAddressOverview, setShowAddressOverview] = useState(false);
   const [showCallBackModeBanner, setShowCallBackModeBanner] = useState(false);
@@ -160,6 +163,11 @@ export default function ScannerPage() {
     try {
       console.log('[handleDatasetLoad] Loading dataset:', dataset);
       
+      // Clear CallBack session if NOT loaded from CallBack (e.g., from history)
+      if (!fromCallBack) {
+        clearSession();
+      }
+      
       // Show Call Back Mode banner if loaded from Call Back List and mode is not active
       if (fromCallBack && !callBackMode) {
         setShowCallBackModeBanner(true);
@@ -196,6 +204,8 @@ export default function ScannerPage() {
       setCanEdit(canEditDataset);
       setCurrentDatasetId(dataset.id);
       setDatasetCreatedAt(dataset.createdAt);
+      setShowDatasets(true); // Keep datasets visible
+      setUseNormalizedDatasetSearch(false); // Use local search when loading a dataset
       
       // Ensure editableResidents is an array
       const editableResidentsList = Array.isArray(dataset.editableResidents) 
@@ -347,10 +357,22 @@ export default function ScannerPage() {
 
       console.log('[handleRequestDatasetCreation] Creating dataset for address:', address);
       
+      // Process address with house number range expansion if needed
+      let processedNumber = address.number;
+      if (address.number.includes('-')) {
+        const expanded = expandHouseNumberRange(
+          address.number,
+          address.onlyEven || false,
+          address.onlyOdd || false
+        );
+        // Join expanded numbers with comma for backend processing
+        processedNumber = expanded.join(',');
+      }
+      
       const dataset = await datasetAPI.createDataset({
         address: {
           street: address.street,
-          number: address.number,
+          number: processedNumber,
           city: address.city,
           postal: address.postal,
         },
@@ -359,6 +381,20 @@ export default function ScannerPage() {
       });
 
       console.log('[handleRequestDatasetCreation] Dataset created:', dataset.id);
+      
+      // Update address state if backend returned a normalized/corrected address
+      if (dataset.normalizedAddress) {
+        const { street, number, city, postal } = dataset.normalizedAddress;
+        console.log('[handleRequestDatasetCreation] Updating address with normalized values:', dataset.normalizedAddress);
+        setAddress({
+          street,
+          number,
+          city,
+          postal,
+          onlyEven: address?.onlyEven,
+          onlyOdd: address?.onlyOdd
+        });
+      }
       
       // Update state with new dataset ID
       setCurrentDatasetId(dataset.id);
@@ -428,6 +464,8 @@ export default function ScannerPage() {
   const handleAddressDetected = useCallback((detectedAddress: Address) => {
     console.log('Address detected:', detectedAddress);
     setAddress(detectedAddress);
+    setShowDatasets(true); // Show datasets to trigger local search
+    setUseNormalizedDatasetSearch(false); // Use local search (no API) for +/- buttons
   }, []);
 
   const handleAddressSearch = useCallback((customers: any[]) => {
@@ -442,7 +480,31 @@ export default function ScannerPage() {
       allCustomersAtAddress: customers, // Include all customers to show in dedicated section
     });
     setShowDatasets(true); // Show datasets after address search
+    setUseNormalizedDatasetSearch(true); // Use normalized search (with API call) for "Adresse durchsuchen"
   }, []);
+
+  const handleAddressCorrected = useCallback((correctedAddress: Address) => {
+    console.log('[Scanner] Address corrected by backend:', correctedAddress);
+    
+    // Check if street was actually corrected (different from current)
+    if (address && address.street !== correctedAddress.street && address.street.trim() !== '' && correctedAddress.street.trim() !== '') {
+      console.log('[Scanner] Street corrected:', address.street, '→', correctedAddress.street);
+      
+      // Trigger visual effect
+      setShowCorrectionEffect(true);
+      setTimeout(() => setShowCorrectionEffect(false), 100); // Reset quickly to allow retriggering
+      
+      // Show toast notification with correction details
+      toast({
+        title: '✨ Adresse korrigiert',
+        description: `Straßenname wurde von "${address.street}" zu "${correctedAddress.street}" korrigiert`,
+        category: 'system',
+        duration: 4000,
+      });
+    }
+    
+    setAddress(correctedAddress);
+  }, [address, toast]);
 
   const handleReset = () => {
     // Reset all state to initial values
@@ -455,6 +517,8 @@ export default function ScannerPage() {
     setCurrentDatasetId(null);
     setEditableResidents([]);
     setShowDatasets(false);
+    setUseNormalizedDatasetSearch(false); // Reset to local search
+    setShowCorrectionEffect(false); // Reset correction effect
     setShowCallBackModeBanner(false);
     setResetKey(prev => prev + 1); // Increment key to force PhotoCapture remount
     
@@ -561,8 +625,8 @@ export default function ScannerPage() {
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-background border-t safe-area-bottom">
           <div className="container mx-auto">
             <div className="flex flex-col gap-2">
-              {/* Navigation buttons row */}
-              {(hasPrevious() || hasNext()) && (
+              {/* Navigation buttons row - only show when loaded from CallBack list */}
+              {loadedFromCallBack && (hasPrevious() || hasNext()) && (
                 <div className="flex gap-2">
                   {hasPrevious() && (
                     <Button
@@ -655,6 +719,8 @@ export default function ScannerPage() {
                 onAddressDetected={handleAddressDetected}
                 onAddressSearch={handleAddressSearch}
                 initialAddress={address}
+                onResetDataset={handleReset}
+                showCorrectionEffect={showCorrectionEffect}
               />
             </div>
             
@@ -663,6 +729,8 @@ export default function ScannerPage() {
                 address={address}
                 onLoadDataset={handleDatasetLoadById}
                 shouldLoad={showDatasets}
+                useNormalization={useNormalizedDatasetSearch}
+                onAddressCorrected={handleAddressCorrected}
               />
             )}
             
@@ -722,6 +790,8 @@ export default function ScannerPage() {
                   onAddressDetected={handleAddressDetected}
                   onAddressSearch={handleAddressSearch}
                   initialAddress={address}
+                  onResetDataset={handleReset}
+                  showCorrectionEffect={showCorrectionEffect}
                 />
               </div>
               
@@ -730,6 +800,8 @@ export default function ScannerPage() {
                   address={address}
                   onLoadDataset={handleDatasetLoadById}
                   shouldLoad={showDatasets}
+                  useNormalization={useNormalizedDatasetSearch}
+                  onAddressCorrected={handleAddressCorrected}
                 />
               )}
               
@@ -873,6 +945,8 @@ export default function ScannerPage() {
                   onAddressDetected={handleAddressDetected}
                   onAddressSearch={handleAddressSearch}
                   initialAddress={address}
+                  onResetDataset={handleReset}
+                  showCorrectionEffect={showCorrectionEffect}
                 />
               </div>
             </div>

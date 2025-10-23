@@ -7,7 +7,7 @@ import { useFilteredToast } from '@/hooks/use-filtered-toast';
 import type { Address } from '@/components/GPSAddressForm';
 import { ocrAPI } from '@/services/api';
 import { trackingManager } from '@/services/trackingManager';
-import { expandHouseNumberRange } from '@/utils/addressUtils';
+import { expandHouseNumberRange, validateHouseNumber } from '@/utils/addressUtils';
 import { 
   correctImageOrientationNative,
   rotateImageManually,
@@ -201,6 +201,18 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
         variant: 'destructive',
         title: t('photo.error'),
         description: t('photo.addressRequired'),
+      });
+      return;
+    }
+
+    // Validate house number format
+    const houseNumberError = validateHouseNumber(address.number);
+    if (houseNumberError) {
+      toast({
+        variant: 'destructive',
+        title: 'Ungültige Hausnummer',
+        description: houseNumberError,
+        duration: 8000,
       });
       return;
     }

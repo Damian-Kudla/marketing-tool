@@ -1,6 +1,7 @@
 import type { LogEntry, AuthLogEntry } from './fallbackLogging';
 import { fallbackLogger } from './fallbackLogging';
 import { pushoverService } from './pushover';
+import { LOG_CONFIG } from '../config/logConfig';
 
 interface BatchQueueEntry {
   type: 'user_activity' | 'auth';
@@ -41,7 +42,10 @@ class BatchLogger {
       data: logEntry
     });
 
-    console.log(`[BatchLogger] Added log to queue for user ${logEntry.username} (queue size: ${this.queue.get(key)!.length})`);
+    // Only log if enabled in config (reduces noise)
+    if (LOG_CONFIG.BATCH_LOGGER.logQueueAdd) {
+      console.log(`[BatchLogger] Added log to queue for user ${logEntry.username} (queue size: ${this.queue.get(key)!.length})`);
+    }
   }
 
   addAuthLog(logEntry: AuthLogEntry) {
@@ -56,7 +60,9 @@ class BatchLogger {
       data: logEntry
     });
 
-    console.log(`[BatchLogger] Added auth log to queue (queue size: ${this.queue.get(key)!.length})`);
+    if (LOG_CONFIG.BATCH_LOGGER.logQueueAdd) {
+      console.log(`[BatchLogger] Added auth log to queue (queue size: ${this.queue.get(key)!.length})`);
+    }
   }
 
   async flush() {
@@ -66,7 +72,10 @@ class BatchLogger {
     }
 
     if (this.queue.size === 0) {
-      console.log('[BatchLogger] Queue empty, nothing to flush');
+      // Only log if enabled (reduces noise from empty flushes)
+      if (LOG_CONFIG.BATCH_LOGGER.logEmptyFlush) {
+        console.log('[BatchLogger] Queue empty, nothing to flush');
+      }
       return;
     }
 

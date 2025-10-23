@@ -5,15 +5,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { MapPin, Loader2, Check, Search, Plus, Minus } from 'lucide-react';
+import { MapPin, Loader2, Check, Search, Plus, Minus, Wand2 } from 'lucide-react';
 import { useFilteredToast } from '@/hooks/use-filtered-toast';
 import { geocodeAPI, addressAPI } from '@/services/api';
-import { expandHouseNumberRange } from '@/utils/addressUtils';
+import { expandHouseNumberRange, validateHouseNumber } from '@/utils/addressUtils';
 
 interface GPSAddressFormProps {
   onAddressDetected?: (address: Address) => void;
   onAddressSearch?: (customers: any[]) => void;
   initialAddress?: Address | null;
+  onResetDataset?: () => void; // Callback to reset dataset when filters change
+  showCorrectionEffect?: boolean; // Trigger visual effect when address is corrected
 }
 
 export interface Address {
@@ -25,15 +27,16 @@ export interface Address {
   onlyOdd?: boolean;
 }
 
-export default function GPSAddressForm({ onAddressDetected, onAddressSearch, initialAddress }: GPSAddressFormProps) {
+export default function GPSAddressForm({ onAddressDetected, onAddressSearch, initialAddress, onResetDataset, showCorrectionEffect }: GPSAddressFormProps) {
   const { t } = useTranslation();
   const { toast } = useFilteredToast();
   const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
   const [detected, setDetected] = useState(false);
-  const [houseNumberError, setHouseNumberError] = useState(false);
+  const [houseNumberError, setHouseNumberError] = useState<string | null>(null);
   const [onlyEven, setOnlyEven] = useState(false);
   const [onlyOdd, setOnlyOdd] = useState(false);
+  const [streetCorrected, setStreetCorrected] = useState(false); // Animation state for corrected street
   const [address, setAddress] = useState<Address>(initialAddress || {
     street: '',
     number: '',
@@ -43,6 +46,15 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
 
   // Store previous initialAddress to detect changes
   const prevInitialAddressRef = useRef<Address | null | undefined>(undefined);
+
+  // Trigger visual effect when showCorrectionEffect prop changes to true
+  useEffect(() => {
+    if (showCorrectionEffect) {
+      console.log('[GPSAddressForm] Triggering correction animation');
+      setStreetCorrected(true);
+      setTimeout(() => setStreetCorrected(false), 2000); // Reset after 2 seconds
+    }
+  }, [showCorrectionEffect]);
 
   // Update internal address state when initialAddress prop changes
   // Also reset to empty when initialAddress is null (Reset button clicked)
@@ -78,6 +90,24 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
       });
     }
   }, [initialAddress]); // Only depend on initialAddress, NOT on address!
+
+  // Validate house number whenever it changes
+  useEffect(() => {
+    if (address.number) {
+      const error = validateHouseNumber(address.number);
+      setHouseNumberError(error);
+    } else {
+      setHouseNumberError(null);
+    }
+  }, [address.number]);
+
+  // Reset dataset when filter changes (onlyEven/onlyOdd toggle)
+  useEffect(() => {
+    // Only trigger if filters actually have values (not initial state)
+    if (onlyEven || onlyOdd) {
+      onResetDataset?.();
+    }
+  }, [onlyEven, onlyOdd, onResetDataset]);
 
   // Check if house number is a natural number (positive integer)
   const isNaturalNumber = (value: string): boolean => {
@@ -288,23 +318,19 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
       // Remove duplicates
       allHouseNumbers = Array.from(new Set(allHouseNumbers));
       
-      let allCustomers: any[] = [];
+      // ✅ FIX: Send all house numbers as comma-separated string in ONE API call
+      // instead of looping and making separate calls for each number
+      const searchParams: Partial<Address> = {};
+      if (address.street?.trim()) searchParams.street = address.street;
+      searchParams.number = allHouseNumbers.join(','); // All numbers at once
+      if (address.postal?.trim()) searchParams.postal = address.postal;
+      if (address.city?.trim()) searchParams.city = address.city;
       
-      // Search for each house number
-      for (const houseNumber of allHouseNumbers) {
-        const searchParams: Partial<Address> = {};
-        if (address.street?.trim()) searchParams.street = address.street;
-        searchParams.number = houseNumber;
-        if (address.postal?.trim()) searchParams.postal = address.postal;
-        if (address.city?.trim()) searchParams.city = address.city;
-        
-        const customers = await addressAPI.searchAddress(searchParams);
-        allCustomers = [...allCustomers, ...customers];
-      }
+      const customers = await addressAPI.searchAddress(searchParams);
       
-      // Remove duplicates based on customer ID
+      // Remove duplicates based on customer ID (in case backend returns duplicates)
       const uniqueCustomers = Array.from(
-        new Map(allCustomers.map(c => [c.id || c.name, c])).values()
+        new Map(customers.map((c: any) => [c.id || c.name, c])).values()
       );
       
       if (uniqueCustomers.length === 0) {
@@ -339,7 +365,7 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
   // Check if house number contains dash
   const hasDashInNumber = address.number && address.number.includes('-');
   const hasAddressData = address.postal || address.street;
-  const isSearchDisabled = searching;
+  const isSearchDisabled = searching || !!houseNumberError;
 
   // Reset even/odd filters when dash is removed
   useEffect(() => {
@@ -372,15 +398,33 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-3 gap-4">
-          <div className="col-span-2">
+          <div className="col-span-2 relative">
             <Label htmlFor="street" className="text-sm font-medium">{t('address.street')}</Label>
-            <Input
-              id="street"
-              value={address.street}
-              onChange={(e) => setAddress({ ...address, street: e.target.value })}
-              data-testid="input-street"
-              className="mt-1.5 min-h-11"
-            />
+            <div className="relative">
+              <Input
+                id="street"
+                value={address.street}
+                onChange={(e) => setAddress({ ...address, street: e.target.value })}
+                data-testid="input-street"
+                className={`mt-1.5 min-h-11 transition-all duration-300 ${
+                  streetCorrected 
+                    ? 'ring-2 ring-purple-500 ring-offset-2 bg-purple-50 dark:bg-purple-950/20' 
+                    : ''
+                }`}
+              />
+              {/* Magic wand icon animation when street is corrected */}
+              {streetCorrected && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                  <Wand2 
+                    className="h-5 w-5 text-purple-500 animate-bounce" 
+                    style={{
+                      animation: 'bounce 0.6s ease-in-out 3',
+                      filter: 'drop-shadow(0 0 8px rgba(168, 85, 247, 0.6))'
+                    }}
+                  />
+                </div>
+              )}
+            </div>
           </div>
           <div>
             <Label htmlFor="number" className="text-sm font-medium">{t('address.number')}</Label>
@@ -389,9 +433,15 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
               value={address.number}
               onChange={(e) => setAddress({ ...address, number: e.target.value })}
               data-testid="input-number"
-              className="mt-1.5 min-h-11"
+              className={`mt-1.5 min-h-11 ${houseNumberError ? 'border-red-500' : ''}`}
               placeholder="z.B. 1,2,3 oder 1-5"
             />
+            {/* Error message for invalid house number */}
+            {houseNumberError && (
+              <p className="text-xs text-red-500 mt-1">
+                {houseNumberError}
+              </p>
+            )}
             {/* Plus/Minus buttons directly under house number */}
             {canShowPlusMinus && (
               <div className="flex gap-2 mt-2">

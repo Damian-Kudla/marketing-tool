@@ -32,29 +32,94 @@ export class GoogleSheetsStorage implements IStorage {
   }
 
   /**
+   * Public method to validate house number format
+   * Throws error if house number is invalid
+   */
+  public validateHouseNumber(houseNumber: string): void {
+    this.expandHouseNumberRange(houseNumber);
+  }
+
+    /**
+   * Normalize house number for consistent matching:
+   * - Lowercase
+   * - Remove spaces
+   * - Preserve separators: comma, slash, hyphen
+   */
+  private normalizeHouseNumber(houseNumber: string): string {
+    return houseNumber
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, ''); // Remove all spaces: "20 A" → "20a"
+  }
+
+  /**
    * Expand house number range to individual numbers
    * Examples:
    * - "1-3" → ["1", "2", "3"]
    * - "1,2,3" → ["1", "2", "3"]
-   * - "1,3-5" → ["1", "3", "4", "5"]
-   * - "23/24" → ["23", "24"]  (Slash-Notation from Google)
-   * - "2" → ["2"]
+   * - "20a-c" → ["20a", "20b", "20c"]
+   * - "20/21" → ["20", "21"]
+   * - "20 A" → ["20a"] (normalized)
+   * 
+   * Throws error for invalid formats:
+   * - "20-22a" (ambiguous)
+   * - "20ä-ö" (non-latin letters)
    */
   private expandHouseNumberRange(houseNumber: string): string[] {
     if (!houseNumber) return [];
     
+    // Normalize first (lowercase, remove spaces)
+    const normalized = this.normalizeHouseNumber(houseNumber);
+    
     // Split by comma AND slash (handles "1,2,3" or "23/24" or "1,3-5")
-    const parts = houseNumber.split(/[,\/]/).map(p => p.trim()).filter(p => p.length > 0);
+    const parts = normalized.split(/[,\/]/).map(p => p.trim()).filter(p => p.length > 0);
     
     const expanded: string[] = [];
     
     for (const part of parts) {
-      // Check if this part is a range (contains hyphen)
+      // Check for letter range (e.g., "20a-c")
+      const letterRangePattern = /^(\d+)([a-z])-([a-z])$/;
+      const letterMatch = part.match(letterRangePattern);
+      
+      if (letterMatch) {
+        const number = letterMatch[1];
+        const startLetter = letterMatch[2];
+        const endLetter = letterMatch[3];
+        
+        const startCode = startLetter.charCodeAt(0);
+        const endCode = endLetter.charCodeAt(0);
+        
+        // Validate: start must be <= end
+        if (startCode > endCode) {
+          throw new Error(`Ungültige Hausnummer: "${houseNumber}" - Der Buchstaben-Bereich ist umgekehrt (${startLetter} > ${endLetter})`);
+        }
+        
+        // Validate: max 30 letters
+        const rangeSize = endCode - startCode + 1;
+        if (rangeSize > 30) {
+          throw new Error(`Ungültige Hausnummer: "${houseNumber}" - Der Buchstaben-Bereich ist zu groß (${rangeSize} Buchstaben, max. 30 erlaubt)`);
+        }
+        
+        // Generate letter range
+        for (let code = startCode; code <= endCode; code++) {
+          const letter = String.fromCharCode(code);
+          expanded.push(number + letter);
+        }
+        continue;
+      }
+      
+      // Check for number range (e.g., "20-30")
       if (part.includes('-')) {
         const rangeParts = part.split('-');
+        
         if (rangeParts.length === 2) {
           const start = parseInt(rangeParts[0].trim());
           const end = parseInt(rangeParts[1].trim());
+          
+          // Check for ambiguous format like "20-22a"
+          if (rangeParts[1].match(/[a-z]/)) {
+            throw new Error(`Ungültige Hausnummer: "${houseNumber}" - Mehrdeutige Schreibweise (z.B. "20-22a"). Bitte entweder Zahlen-Bereich "20-22" oder Buchstaben-Bereich "20a-c" verwenden.`);
+          }
           
           if (!isNaN(start) && !isNaN(end) && start <= end) {
             // Limit to max 50 numbers to prevent abuse
@@ -70,18 +135,22 @@ export class GoogleSheetsStorage implements IStorage {
                 expanded.push(i.toString());
               }
             }
-          } else {
-            // Invalid range, treat as literal
-            expanded.push(part);
+            continue;
           }
-        } else {
-          // Multiple hyphens, treat as literal
-          expanded.push(part);
         }
-      } else {
-        // Single number or letter suffix (e.g., "10a")
+        
+        // Multiple hyphens or invalid format, treat as literal
         expanded.push(part);
+        continue;
       }
+      
+      // Check for non-latin letters (ä, ö, ü, etc.)
+      if (/[äöüßÄÖÜ]/.test(part)) {
+        throw new Error(`Ungültige Hausnummer: "${houseNumber}" - Umlaute (ä, ö, ü) sind nicht erlaubt. Bitte nur lateinische Buchstaben (a-z) verwenden.`);
+      }
+      
+      // Single number or letter suffix (e.g., "10a", "20")
+      expanded.push(part);
     }
     
     // Remove duplicates and return

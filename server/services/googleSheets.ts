@@ -2,6 +2,7 @@ import { google } from 'googleapis';
 import crypto from 'crypto';
 import type { AddressDataset, EditableResident } from '../../shared/schema';
 import { checkRateLimit, incrementRateLimit } from '../middleware/rateLimit';
+import { LOG_CONFIG } from '../config/logConfig';
 
 // Helper function to get current time in Berlin timezone (MEZ/MESZ)
 function getBerlinTime(): Date {
@@ -24,23 +25,76 @@ class DatasetCache {
   private syncInterval: NodeJS.Timeout | null = null;
   private sheetsService: AddressDatasetService | null = null;
 
+  // Helper function to normalize house number for consistent matching
+  private normalizeHouseNumber(houseNumber: string): string {
+    return houseNumber
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, ''); // Remove all spaces: "20 A" → "20a"
+  }
+
   // Helper function to expand house number range to individual numbers
-  // Examples: "1-3" → ["1", "2", "3"], "1,2,3" → ["1", "2", "3"], "2" → ["2"]
+  // Examples: "1-3" → ["1", "2", "3"], "1,2,3" → ["1", "2", "3"], "20a-c" → ["20a", "20b", "20c"]
   private expandHouseNumberRange(houseNumber: string): string[] {
     if (!houseNumber) return [];
     
+    // Normalize first (lowercase, remove spaces)
+    const normalized = this.normalizeHouseNumber(houseNumber);
+    
     // Split by comma AND slash (handles "1,2,3" or "23/24" or "1,3-5")
-    const parts = houseNumber.split(/[,\/]/).map(p => p.trim()).filter(p => p.length > 0);
+    const parts = normalized.split(/[,\/]/).map(p => p.trim()).filter(p => p.length > 0);
     
     const expanded: string[] = [];
     
     for (const part of parts) {
+      // Check for letter range (e.g., "20a-c")
+      const letterRangePattern = /^(\d+)([a-z])-([a-z])$/;
+      const letterMatch = part.match(letterRangePattern);
+      
+      if (letterMatch) {
+        const number = letterMatch[1];
+        const startLetter = letterMatch[2];
+        const endLetter = letterMatch[3];
+        
+        const startCode = startLetter.charCodeAt(0);
+        const endCode = endLetter.charCodeAt(0);
+        
+        // Validate: start must be <= end
+        if (startCode > endCode) {
+          console.warn(`[HouseNumber] Invalid letter range: ${part} (reversed), treating as literal`);
+          expanded.push(part);
+          continue;
+        }
+        
+        // Validate: max 30 letters
+        const rangeSize = endCode - startCode + 1;
+        if (rangeSize > 30) {
+          console.warn(`[HouseNumber] Letter range too large: ${part} (${rangeSize} letters), treating as literal`);
+          expanded.push(part);
+          continue;
+        }
+        
+        // Generate letter range
+        for (let code = startCode; code <= endCode; code++) {
+          const letter = String.fromCharCode(code);
+          expanded.push(number + letter);
+        }
+        continue;
+      }
+      
       // Check if this part is a range (contains hyphen)
       if (part.includes('-')) {
         const rangeParts = part.split('-');
         if (rangeParts.length === 2) {
           const start = parseInt(rangeParts[0].trim());
           const end = parseInt(rangeParts[1].trim());
+          
+          // Check for ambiguous format like "20-22a"
+          if (rangeParts[1].match(/[a-z]/)) {
+            console.warn(`[HouseNumber] Ambiguous format: ${part}, treating as literal`);
+            expanded.push(part);
+            continue;
+          }
           
           if (!isNaN(start) && !isNaN(end) && start <= end) {
             // Limit to max 50 numbers to prevent abuse
@@ -56,18 +110,24 @@ class DatasetCache {
                 expanded.push(i.toString());
               }
             }
-          } else {
-            // Invalid range, treat as literal
-            expanded.push(part);
+            continue;
           }
-        } else {
-          // Multiple hyphens, treat as literal
-          expanded.push(part);
         }
-      } else {
-        // Single number or letter suffix (e.g., "10a")
+        
+        // Multiple hyphens or invalid format, treat as literal
         expanded.push(part);
+        continue;
       }
+      
+      // Check for non-latin letters (ä, ö, ü, etc.)
+      if (/[äöüßÄÖÜ]/.test(part)) {
+        console.warn(`[HouseNumber] Non-latin letters in: ${part}, treating as literal`);
+        expanded.push(part);
+        continue;
+      }
+      
+      // Single number or letter suffix (e.g., "10a")
+      expanded.push(part);
     }
     
     // Remove duplicates and return
@@ -241,13 +301,46 @@ class DatasetCache {
   getByAddress(normalizedAddress: string, limit?: number, houseNumber?: string): AddressDataset[] {
     const searchHouseNumbers = houseNumber ? this.expandHouseNumberRange(houseNumber) : [];
 
-    console.log('[DatasetCache.getByAddress] 🔎 Search:', normalizedAddress, houseNumber ? `(#${houseNumber})` : '');
+    // Only log if explicitly enabled in config (reduces noise)
+    if (LOG_CONFIG.CACHE.logDatasetSearch) {
+      console.log('[DatasetCache.getByAddress] 🔎 Search:', normalizedAddress, houseNumber ? `(#${houseNumber})` : '');
+    }
 
     const matchingDatasets = Array.from(this.cache.values())
       .filter(ds => {
         const datasetHouseNumbers = this.expandHouseNumberRange(ds.houseNumber);
         
-        // Use flexible matching if house numbers are provided
+        // IMPORTANT: Try multiple matching strategies
+        // 1. Direct normalized address match (e.g., "Isenburger Kirchweg 6, 51067 Köln, Deutschland")
+        const normalizedMatch = ds.normalizedAddress?.toLowerCase() === normalizedAddress.toLowerCase();
+        
+        // 2. Field-based matching (street + postal + city, for local search without normalization)
+        const datasetComparable = `${ds.street || ''} ${ds.postalCode || ''} ${ds.city || ''}`.trim().toLowerCase();
+        const searchComparable = normalizedAddress.toLowerCase();
+        const fieldMatch = datasetComparable === searchComparable;
+        
+        // If either match type succeeds, check house numbers
+        if (normalizedMatch || fieldMatch) {
+          // If house numbers provided, check for overlap
+          if (searchHouseNumbers.length > 0 && datasetHouseNumbers.length > 0) {
+            // Check for any overlap between house numbers
+            for (const searchNum of searchHouseNumbers) {
+              if (datasetHouseNumbers.includes(searchNum)) {
+                return true;
+              }
+            }
+            for (const datasetNum of datasetHouseNumbers) {
+              if (searchHouseNumbers.includes(datasetNum)) {
+                return true;
+              }
+            }
+            return false; // No overlap
+          }
+          // No house numbers to check, address matches
+          return true;
+        }
+        
+        // Fallback: Use flexible matching with normalized addresses (for normalized search)
         if (searchHouseNumbers.length > 0 && datasetHouseNumbers.length > 0) {
           return this.addressMatches(
             normalizedAddress,
@@ -257,14 +350,16 @@ class DatasetCache {
           );
         }
         
-        // Fallback to exact match if no house numbers provided
+        // Last resort: exact match on normalized address
         return ds.normalizedAddress === normalizedAddress;
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     
     const result = limit ? matchingDatasets.slice(0, limit) : matchingDatasets;
     
-    console.log(`[DatasetCache.getByAddress] ✅ Found ${result.length} dataset(s)`);
+    if (LOG_CONFIG.CACHE.logDatasetSearch) {
+      console.log(`[DatasetCache.getByAddress] ✅ Found ${result.length} dataset(s)`);
+    }
     
     return result;
   }
@@ -306,6 +401,112 @@ class DatasetCache {
 
 // Global cache instance
 const datasetCache = new DatasetCache();
+
+// ============================================================================
+// VALIDATED STREET CACHE - Permanent cache for known valid street names
+// ============================================================================
+class ValidatedStreetCache {
+  // Set für schnelle O(1) Lookups - speichert normalisierte Straßennamen
+  private validatedStreets: Set<string> = new Set();
+  private initialized: boolean = false;
+
+  /**
+   * Normalisiert Straßennamen für Cache-Vergleich:
+   * - Lowercase
+   * - Trimmed
+   * - Straßennamen-Varianten standardisiert (str. → strasse, etc.)
+   */
+  private normalizeStreetName(street: string): string {
+    return street
+      .toLowerCase()
+      .trim()
+      .replace(/ß/g, 'ss')
+      // Standardisiere alle Varianten zu "strasse"
+      .replace(/(str\.|str|straße|strasse)$/i, 'strasse')
+      .replace(/[-\s]/g, ''); // Entferne Leerzeichen und Bindestriche für Matching
+  }
+
+  /**
+   * Lädt alle Straßennamen aus dem "Adressen" Sheet in den Cache
+   * Wird beim Server-Start aufgerufen
+   */
+  async initialize(sheetsService: AddressDatasetService): Promise<void> {
+    if (this.initialized) {
+      console.log('[ValidatedStreetCache] Already initialized, skipping...');
+      return;
+    }
+
+    try {
+      console.log('[ValidatedStreetCache] Initializing street name cache from "Adressen" sheet...');
+      
+      // Alle Datasets laden (enthält alle normalisierten Adressen)
+      const allDatasets = await sheetsService.getAllDatasets();
+      
+      // Straßennamen extrahieren und normalisieren
+      for (const dataset of allDatasets) {
+        if (dataset.street) {
+          const normalized = this.normalizeStreetName(dataset.street);
+          this.validatedStreets.add(normalized);
+        }
+      }
+
+      this.initialized = true;
+      console.log(`[ValidatedStreetCache] ✅ Initialized with ${this.validatedStreets.size} validated street names`);
+      
+      // Log erste 10 Straßen für Debugging
+      const sample = Array.from(this.validatedStreets).slice(0, 10);
+      console.log(`[ValidatedStreetCache] Sample streets:`, sample);
+    } catch (error) {
+      console.error('[ValidatedStreetCache] ❌ Failed to initialize:', error);
+      // Nicht werfen - Cache bleibt leer, API Calls werden weiterhin gemacht
+    }
+  }
+
+  /**
+   * Prüft ob eine Straße bereits validiert wurde (im Cache vorhanden)
+   * @returns true wenn Straße bekannt und validiert ist
+   */
+  isValidated(street: string, postal?: string): boolean {
+    const normalized = this.normalizeStreetName(street);
+    const isValid = this.validatedStreets.has(normalized);
+    
+    if (isValid) {
+      console.log(`[ValidatedStreetCache] ✅ HIT: "${street}" (PLZ: ${postal}) is in cache, skipping API call`);
+    } else {
+      console.log(`[ValidatedStreetCache] ❌ MISS: "${street}" (PLZ: ${postal}) not in cache, will call API`);
+    }
+    
+    return isValid;
+  }
+
+  /**
+   * Fügt eine validierte Straße zum Cache hinzu
+   * Wird nach erfolgreicher Normalisierung aufgerufen
+   */
+  add(street: string): void {
+    const normalized = this.normalizeStreetName(street);
+    const wasNew = !this.validatedStreets.has(normalized);
+    
+    this.validatedStreets.add(normalized);
+    
+    if (wasNew) {
+      console.log(`[ValidatedStreetCache] ➕ Added new street: "${street}" → "${normalized}" (total: ${this.validatedStreets.size})`);
+    }
+  }
+
+  /**
+   * Gibt Statistiken über den Cache zurück
+   */
+  getStats(): { totalStreets: number; initialized: boolean } {
+    return {
+      totalStreets: this.validatedStreets.size,
+      initialized: this.initialized,
+    };
+  }
+}
+
+// Global street cache instance (permanent, never cleared)
+const validatedStreetCache = new ValidatedStreetCache();
 
 let sheetsClient: any = null;
 let sheetsEnabled = false;
@@ -644,12 +845,8 @@ class AddressDatasetService implements AddressSheetsService {
     // Use cache instead of reading from sheets
     const dataset = datasetCache.get(datasetId);
     
-    if (dataset) {
-      console.log(`[getDatasetById] Found dataset ${datasetId} in cache:`, {
-        residentsCount: dataset.editableResidents.length,
-        residents: JSON.stringify(dataset.editableResidents)
-      });
-    } else {
+    // Only log if dataset NOT found (error case)
+    if (!dataset) {
       console.log(`[getDatasetById] Dataset ${datasetId} NOT found in cache`);
     }
     
@@ -940,11 +1137,20 @@ class AddressDatasetService implements AddressSheetsService {
 export const googleSheetsService = new GoogleSheetsService();
 export const addressDatasetService = new AddressDatasetService();
 
-// Initialize cache on startup
+// Initialize caches on startup
 if (sheetsEnabled) {
+  // Initialize dataset cache first
   datasetCache.initialize(addressDatasetService)
     .then(() => console.log('[DatasetCache] Cache initialization complete'))
     .catch((error) => console.error('[DatasetCache] Cache initialization failed:', error));
+  
+  // Initialize validated street cache (loads all street names from "Adressen" sheet)
+  validatedStreetCache.initialize(addressDatasetService)
+    .then(() => {
+      const stats = validatedStreetCache.getStats();
+      console.log(`[ValidatedStreetCache] Initialization complete - ${stats.totalStreets} validated streets loaded`);
+    })
+    .catch((error) => console.error('[ValidatedStreetCache] Initialization failed:', error));
 }
 
 // Category Change Logging Service
@@ -1280,7 +1486,8 @@ class AppointmentService {
     const userAppointments = allAppointments
       .filter(apt => {
         const matches = apt.createdBy === username;
-        if (!matches) {
+        // Only log if explicitly enabled (reduces noise with 40+ appointments)
+        if (!matches && LOG_CONFIG.APPOINTMENTS.logEachFilter) {
           console.log(`[AppointmentService] Filtering out appointment created by: ${apt.createdBy}`);
         }
         return matches;
@@ -1292,7 +1499,9 @@ class AppointmentService {
         return a.appointmentTime.localeCompare(b.appointmentTime);
       });
 
-    console.log(`[AppointmentService] User appointments found: ${userAppointments.length}`);
+    if (LOG_CONFIG.APPOINTMENTS.logSummary) {
+      console.log(`[AppointmentService] User appointments found: ${userAppointments.length}`);
+    }
     return userAppointments;
   }
 
@@ -1492,8 +1701,25 @@ export async function normalizeAddress(
       throw new Error('Postleitzahl muss angegeben werden');
     }
 
+    // STEP 0: Check validated street cache BEFORE making any API calls
+    // If street is in cache, we can skip Nominatim/Google and return immediately
+    if (validatedStreetCache.isValidated(street, postal)) {
+      console.log('[normalizeAddress] ⚡ CACHE HIT - Street is validated, skipping API calls');
+      
+      // Build normalized address directly from input (street already validated)
+      const formattedAddress = `${street} ${postal} ${city || ''}`.trim().toLowerCase();
+      
+      return {
+        formattedAddress,
+        street: street.trim(),
+        number: number.trim(),
+        city: city?.trim() || '',
+        postal: postal.trim(),
+      };
+    }
+
     // STEP 1: Try Nominatim (OpenStreetMap) first - FREE and better for real street addresses!
-    console.log('[normalizeAddress] Step 1: Trying Nominatim (OSM)...');
+    console.log('[normalizeAddress] Step 1: Street not in cache, trying Nominatim (OSM)...');
     const { geocodeWithNominatim } = await import('./nominatim');
     
     try {
@@ -1517,6 +1743,9 @@ export async function normalizeAddress(
         console.log('[normalizeAddress] ✅ SUCCESS with Nominatim!');
         console.log('[normalizeAddress] Normalized:', nominatimResult.formattedAddress);
         
+        // Add validated street to cache for future use
+        validatedStreetCache.add(nominatimResult.street);
+        
         return {
           formattedAddress: nominatimResult.formattedAddress,
           street: nominatimResult.street,
@@ -1528,8 +1757,13 @@ export async function normalizeAddress(
         console.warn('[normalizeAddress] Nominatim returned incomplete data, falling back to Google...');
       }
     } catch (nominatimError: any) {
-      console.warn('[normalizeAddress] Nominatim error:', nominatimError.message);
-      console.warn('[normalizeAddress] Falling back to Google Geocoding...');
+      // Check if queue is too long - this is expected and we just skip to Google
+      if (nominatimError.message === 'QUEUE_TOO_LONG') {
+        console.log('[normalizeAddress] Nominatim queue too long, skipping to Google Geocoding...');
+      } else {
+        console.warn('[normalizeAddress] Nominatim error:', nominatimError.message);
+        console.warn('[normalizeAddress] Falling back to Google Geocoding...');
+      }
     }
 
     // STEP 2: Fallback to Google Geocoding API
@@ -1552,8 +1786,22 @@ export async function normalizeAddress(
       incrementRateLimit(username, 'geocoding');
     }
 
+    // Extract only the FIRST house number for Google (same logic as Nominatim)
+    // Examples: "23/24" → "23", "23,24" → "23", "1-3" → "1"
+    let firstNumberForGoogle = number;
+    if (number.includes('/')) {
+      firstNumberForGoogle = number.split('/')[0].trim();
+      console.log(`[normalizeAddress] Google: Multiple numbers detected (slash), using first: "${number}" → "${firstNumberForGoogle}"`);
+    } else if (number.includes(',')) {
+      firstNumberForGoogle = number.split(',')[0].trim();
+      console.log(`[normalizeAddress] Google: Multiple numbers detected (comma), using first: "${number}" → "${firstNumberForGoogle}"`);
+    } else if (number.includes('-')) {
+      firstNumberForGoogle = number.split('-')[0].trim();
+      console.log(`[normalizeAddress] Google: Range detected (hyphen), using first: "${number}" → "${firstNumberForGoogle}"`);
+    }
+
     // Construct address string for geocoding
-    const addressString = `${street} ${number}, ${postal} ${city || ''}, Deutschland`.trim();
+    const addressString = `${street} ${firstNumberForGoogle}, ${postal} ${city || ''}, Deutschland`.trim();
     const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(addressString)}&key=${apiKey}&language=de`;
     
     console.log('[normalizeAddress] Validating with Google:', addressString);
@@ -1608,7 +1856,14 @@ export async function normalizeAddress(
       // If we have high precision (ROOFTOP or RANGE_INTERPOLATED), always accept it
       if (locationType === 'ROOFTOP' || locationType === 'RANGE_INTERPOLATED') {
         console.log('[normalizeAddress] Accepted: High precision location type');
-        return extractAddressComponents(result, number);
+        const normalized = extractAddressComponents(result, number);
+        
+        // Add validated street to cache for future use
+        if (normalized && normalized.street) {
+          validatedStreetCache.add(normalized.street);
+        }
+        
+        return normalized;
       }
       
       // For lower precision: Check if the formatted address contains the street name
@@ -1620,14 +1875,28 @@ export async function normalizeAddress(
       // (route component already validated above)
       if (formattedLower.includes(streetLower) && formattedLower.includes(postalStr)) {
         console.log('[normalizeAddress] Accepted: Formatted address contains street and postal code');
-        return extractAddressComponents(result, number);
+        const normalized = extractAddressComponents(result, number);
+        
+        // Add validated street to cache for future use
+        if (normalized && normalized.street) {
+          validatedStreetCache.add(normalized.street);
+        }
+        
+        return normalized;
       }
       
       // Fallback: If postal code matches, accept it
       // (route component already validated, so we know it's a real street)
       if (formattedLower.includes(postalStr)) {
         console.log('[normalizeAddress] Accepted: Route component exists and postal code matches');
-        return extractAddressComponents(result, number);
+        const normalized = extractAddressComponents(result, number);
+        
+        // Add validated street to cache for future use
+        if (normalized && normalized.street) {
+          validatedStreetCache.add(normalized.street);
+        }
+        
+        return normalized;
       }
       
       // Reject if we can't verify the address

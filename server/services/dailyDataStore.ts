@@ -149,6 +149,9 @@ class DailyDataStore {
     if (session.idleTime !== undefined) {
       userData.totalIdleTime = session.idleTime;
       userData.activeTime = userData.totalSessionTime - userData.totalIdleTime;
+    } else if (userData.totalSessionTime > 0 && userData.activeTime === 0) {
+      // If no idle time data available, use total session time as active time
+      userData.activeTime = userData.totalSessionTime;
     }
 
     if (session.actions && session.actions.length > 0) {
@@ -174,10 +177,20 @@ class DailyDataStore {
         const count = userData.actionsByType.get(action.action) || 0;
         userData.actionsByType.set(action.action, count + 1);
 
-        // Track status changes (most important KPI!)
-        if (action.residentStatus) {
-          const statusCount = userData.statusChanges.get(action.residentStatus) || 0;
-          userData.statusChanges.set(action.residentStatus, statusCount + 1);
+        // Track STATUS CHANGES with backward compatibility
+        if (action.action === 'status_change' && action.residentStatus) {
+          // NEW LOGS (with previousStatus): Only count actual changes
+          if (action.previousStatus !== undefined) {
+            if (action.previousStatus !== action.residentStatus) {
+              const statusCount = userData.statusChanges.get(action.residentStatus) || 0;
+              userData.statusChanges.set(action.residentStatus, statusCount + 1);
+            }
+          }
+          // OLD LOGS (without previousStatus): Count all status_change actions
+          else {
+            const statusCount = userData.statusChanges.get(action.residentStatus) || 0;
+            userData.statusChanges.set(action.residentStatus, statusCount + 1);
+          }
         }
       });
     }

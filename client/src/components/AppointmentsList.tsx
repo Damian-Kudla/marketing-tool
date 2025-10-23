@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Calendar, Clock, MapPin, Trash2, Plus } from "lucide-react";
+import { Loader2, Calendar, Clock, MapPin, Trash2, Plus, Eye, EyeOff } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useFilteredToast } from "@/hooks/use-filtered-toast";
 import {
@@ -34,14 +34,16 @@ interface AppointmentsListProps {
 
 export function AppointmentsList({ onLoadDataset }: AppointmentsListProps) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showPastAppointments, setShowPastAppointments] = useState(false);
   const [loading, setLoading] = useState(false);
   const { toast } = useFilteredToast();
   const queryClient = useQueryClient();
 
-  const { data: appointments, isLoading } = useQuery<Appointment[]>({
+  const { data: allAppointments, isLoading } = useQuery<Appointment[]>({
     queryKey: ['/api/appointments/upcoming'],
     queryFn: async () => {
-      const response = await fetch('/api/appointments/upcoming', {
+      // Always fetch all appointments (including past)
+      const response = await fetch('/api/appointments/upcoming?includePast=true', {
         credentials: 'include',
         cache: 'no-store' // Prevent browser caching
       });
@@ -126,6 +128,18 @@ export function AppointmentsList({ onLoadDataset }: AppointmentsListProps) {
     }
   };
 
+  // Filter appointments based on showPastAppointments toggle
+  const appointments = allAppointments?.filter((appointment: Appointment) => {
+    if (showPastAppointments) {
+      return true; // Show all appointments
+    }
+    return !isPast(appointment.appointmentDate); // Show only upcoming appointments
+  }) || [];
+
+  // Count past and upcoming appointments from all data
+  const pastCount = allAppointments?.filter((a: Appointment) => isPast(a.appointmentDate)).length || 0;
+  const upcomingCount = allAppointments?.filter((a: Appointment) => !isPast(a.appointmentDate)).length || 0;
+
   return (
     <div className="container mx-auto p-4 max-w-4xl">
       <Card>
@@ -136,12 +150,38 @@ export function AppointmentsList({ onLoadDataset }: AppointmentsListProps) {
                 <Calendar className="h-6 w-6" />
                 Termine
               </CardTitle>
-              <CardDescription>Anstehende Termine</CardDescription>
+              <CardDescription>
+                {showPastAppointments 
+                  ? `${upcomingCount} anstehend, ${pastCount} vergangen`
+                  : `${upcomingCount} anstehende Termine`
+                }
+              </CardDescription>
             </div>
-            <Button onClick={() => setShowCreateDialog(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Neuer Termin
-            </Button>
+            <div className="flex gap-2">
+              {pastCount > 0 && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setShowPastAppointments(!showPastAppointments)}
+                >
+                  {showPastAppointments ? (
+                    <>
+                      <EyeOff className="h-4 w-4 mr-2" />
+                      Vergangene ausblenden
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-4 w-4 mr-2" />
+                      Vergangene anzeigen ({pastCount})
+                    </>
+                  )}
+                </Button>
+              )}
+              <Button onClick={() => setShowCreateDialog(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Neuer Termin
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -222,10 +262,24 @@ export function AppointmentsList({ onLoadDataset }: AppointmentsListProps) {
           )}
 
           {/* Empty state */}
-          {!isLoading && appointments && appointments.length === 0 && (
+          {!isLoading && appointments.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               <Calendar className="h-12 w-12 mx-auto mb-2 opacity-50" />
-              <p>Keine anstehenden Termine</p>
+              <p>
+                {showPastAppointments 
+                  ? 'Keine Termine vorhanden'
+                  : 'Keine anstehenden Termine'
+                }
+              </p>
+              {!showPastAppointments && pastCount > 0 && (
+                <Button 
+                  variant="ghost" 
+                  onClick={() => setShowPastAppointments(true)}
+                  className="mt-2"
+                >
+                  {pastCount} vergangene Termine anzeigen
+                </Button>
+              )}
             </div>
           )}
         </CardContent>

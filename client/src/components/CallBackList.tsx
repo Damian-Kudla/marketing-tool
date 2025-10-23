@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Loader2, MapPin, Clock, ArrowLeftToLine, CalendarIcon, Zap } from "lucide-react";
+import { Loader2, MapPin, Clock, ArrowLeftToLine, CalendarIcon, Zap, ArrowUp, ArrowDown } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useFilteredToast } from "@/hooks/use-filtered-toast";
@@ -22,6 +22,7 @@ interface CallBackItem {
 }
 
 type CallBackPeriod = "today" | "yesterday" | "custom";
+type SortMode = "chronological" | "street";
 
 interface CallBackListProps {
   onLoadDataset?: (datasetId: string) => Promise<void>;
@@ -30,7 +31,8 @@ interface CallBackListProps {
 export function CallBackList({ onLoadDataset }: CallBackListProps) {
   const [period, setPeriod] = useState<CallBackPeriod | null>(null);
   const [customDate, setCustomDate] = useState<Date | undefined>(undefined);
-  const [sortDescending, setSortDescending] = useState(true); // true = neueste oben, false = älteste oben
+  const [sortMode, setSortMode] = useState<SortMode>("chronological");
+  const [sortDescending, setSortDescending] = useState(true); // true = neueste oben (chronological) oder Z-A (street)
   const [, setLocation] = useLocation();
   const { toast } = useFilteredToast();
   const [loading, setLoading] = useState(false);
@@ -86,53 +88,81 @@ export function CallBackList({ onLoadDataset }: CallBackListProps) {
     // Disable System Messages for focused work
     setShowSystemMessages(false);
     
-    // Always start with oldest dataset chronologically (earliest time)
-    // Sort list chronologically ascending (oldest first) for the session
-    const chronologicalList = [...callBacks].sort((a, b) => 
-      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-    );
+    // Get sorted list based on current sort mode
+    const sortedList = getSortedCallBacks(callBacks);
     
-    // Start with first item (oldest)
-    const oldestDataset = chronologicalList[0];
-    await handleAddressClickForQuickStart(oldestDataset.datasetId, oldestDataset.address, chronologicalList);
+    // Start with first item in sorted list
+    const firstDataset = sortedList[0];
+    await handleAddressClickForQuickStart(firstDataset.datasetId, firstDataset.address, sortedList);
   };
 
-  const handleAddressClickForQuickStart = async (datasetId: string, address: string, chronologicalList: CallBackItem[]) => {
-    if (onLoadDataset && period) {
-      // Start Call Back session with chronological list (oldest→newest)
-      // Index 0 = oldest, so "next" goes to newer datasets
-      startCallBackSession(chronologicalList, period, 0);
-      
-      // Load dataset in current view
-      try {
-        setLoading(true);
-        const response = await fetch(`/api/address-datasets/${datasetId}`, {
-          credentials: 'include'
-        });
+  // Helper function to sort callbacks based on current mode
+  const getSortedCallBacks = (items: CallBackItem[]): CallBackItem[] => {
+    const sorted = [...items];
+    
+    if (sortMode === "chronological") {
+      // Sort by time
+      sorted.sort((a, b) => {
+        const timeA = new Date(a.createdAt).getTime();
+        const timeB = new Date(b.createdAt).getTime();
+        return sortDescending ? timeB - timeA : timeA - timeB;
+      });
+    } else if (sortMode === "street") {
+      // Sort by street alphabetically, then by house number
+      sorted.sort((a, b) => {
+        // Extract street and house number from address
+        const extractStreetAndNumber = (address: string) => {
+          const parts = address.split(',')[0].trim(); // Get street part before comma
+          const match = parts.match(/^(.+?)\s+(\d+[a-zA-Z]?)$/);
+          if (match) {
+            return { street: match[1].trim(), number: match[2] };
+          }
+          return { street: parts, number: '' };
+        };
         
-        if (!response.ok) {
-          throw new Error(`Failed to fetch dataset: ${response.status}`);
+        const aData = extractStreetAndNumber(a.address);
+        const bData = extractStreetAndNumber(b.address);
+        
+        // Compare streets
+        const streetCompare = aData.street.localeCompare(bData.street, 'de');
+        if (streetCompare !== 0) {
+          return sortDescending ? -streetCompare : streetCompare;
         }
         
-        const dataset = await response.json();
-        
-        await onLoadDataset(datasetId);
-        
-        toast({
-          title: "Adresse geladen",
-          description: `${address} wurde geöffnet`,
-          category: 'success',
-        });
-      } catch (error) {
-        console.error('Error loading dataset:', error);
-        toast({
-          variant: "destructive",
-          title: "Fehler",
-          description: "Datensatz konnte nicht geladen werden",
-        });
-      } finally {
-        setLoading(false);
-      }
+        // If same street, compare house numbers
+        const aNum = parseInt(aData.number) || 0;
+        const bNum = parseInt(bData.number) || 0;
+        return sortDescending ? bNum - aNum : aNum - bNum;
+      });
+    }
+    
+    return sorted;
+  };
+
+  const toggleSortDirection = () => {
+    setSortDescending(!sortDescending);
+  };
+
+  const changeSortMode = (mode: SortMode) => {
+    if (sortMode === mode) {
+      // If clicking same button, toggle direction
+      toggleSortDirection();
+    } else {
+      // If switching mode, reset to default direction
+      setSortMode(mode);
+      setSortDescending(true); // Default: newest first (chronological) or A-Z (street)
+    }
+  };
+
+  const handleAddressClickForQuickStart = async (datasetId: string, address: string, sortedList: CallBackItem[]) => {
+    if (onLoadDataset && period) {
+      // Start Call Back session with sorted list and current sort direction
+      // Index 0 = first in sorted list, "next" goes through list in order
+      startCallBackSession(sortedList, period, 0, sortDescending);
+      
+      // Use regular handleAddressClick to load the dataset
+      // This ensures consistent behavior
+      await handleAddressClick(datasetId, address);
     } else {
       // Fallback: Navigate to scanner page with the dataset ID
       setLocation(`/scanner?datasetId=${datasetId}`);
@@ -144,24 +174,21 @@ export function CallBackList({ onLoadDataset }: CallBackListProps) {
     }
   };
 
-  const handleAddressClick = async (datasetId: string, address: string, clickedIndex: number, fromCallBack: boolean = true) => {
+  const handleAddressClick = async (datasetId: string, address: string) => {
     if (onLoadDataset && callBacks && period) {
-      // FIX: UNIFIED LOGIC - Always use chronological list (oldest → newest)
-      const chronologicalList = [...callBacks].sort((a, b) => 
-        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-      );
+      // Get sorted list based on current sort mode
+      const sortedList = getSortedCallBacks(callBacks);
       
-      // Find the clicked dataset's index in the chronological list
-      const chronologicalIndex = chronologicalList.findIndex(item => item.datasetId === datasetId);
+      // Find the clicked dataset's index in the sorted list
+      const sortedIndex = sortedList.findIndex(item => item.datasetId === datasetId);
       
-      if (chronologicalIndex === -1) {
-        console.error('[CallBackList] Dataset not found in chronological list');
+      if (sortedIndex === -1) {
+        console.error('[CallBackList] Dataset not found in sorted list');
         return;
       }
       
-      // Start session with chronological list and correct index
-      // Index 0 = oldest, so "Nächster" always goes to newer datasets
-      startCallBackSession(chronologicalList, period, chronologicalIndex);
+      // Start session with sorted list, correct index, and current sort direction
+      startCallBackSession(sortedList, period, sortedIndex, sortDescending);
       
       // Load dataset in current view - mark as loaded from CallBack
       try {
@@ -276,7 +303,7 @@ export function CallBackList({ onLoadDataset }: CallBackListProps) {
               size="lg"
             >
               <Zap className="h-5 w-5 mr-2" />
-              Quick Start - Erste Adresse öffnen
+              Quick Start - Erste Adresse - Chronologisch
             </Button>
           )}
 
@@ -291,38 +318,48 @@ export function CallBackList({ onLoadDataset }: CallBackListProps) {
           {/* Call backs list */}
           {!isLoading && callBacks && callBacks.length > 0 && (
             <>
-              {/* Sort toggle button */}
-              <div className="flex justify-between items-center">
+              {/* Sort mode buttons */}
+              <div className="space-y-2">
                 <span className="text-sm text-muted-foreground">
                   {callBacks.length} Call Back{callBacks.length !== 1 ? 's' : ''}
                 </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSortDescending(!sortDescending)}
-                  className="gap-2"
-                >
-                  <Clock className="h-4 w-4" />
-                  {sortDescending ? "Neueste zuerst" : "Älteste zuerst"}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant={sortMode === "chronological" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => changeSortMode("chronological")}
+                    className="flex-1 gap-2"
+                  >
+                    <Clock className="h-4 w-4" />
+                    Chronologisch
+                    {sortMode === "chronological" && (
+                      sortDescending ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />
+                    )}
+                  </Button>
+                  <Button
+                    variant={sortMode === "street" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => changeSortMode("street")}
+                    className="flex-1 gap-2"
+                  >
+                    <MapPin className="h-4 w-4" />
+                    Nach Straße
+                    {sortMode === "street" && (
+                      sortDescending ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
               </div>
 
               <div className="space-y-2">
-                {/* Sort the displayed list based on toggle */}
-                {[...callBacks]
-                  .sort((a, b) => {
-                    const timeA = new Date(a.createdAt).getTime();
-                    const timeB = new Date(b.createdAt).getTime();
-                    return sortDescending ? timeB - timeA : timeA - timeB;
-                  })
+                {/* Sort the displayed list based on current mode */}
+                {getSortedCallBacks(callBacks)
                   .map((item, displayIndex) => {
-                    // Find original index in unsorted array for session management
-                    const originalIndex = callBacks.findIndex(cb => cb.datasetId === item.datasetId);
                     return (
                       <Card
                         key={item.datasetId}
                         className="cursor-pointer hover:bg-accent transition-colors"
-                        onClick={() => handleAddressClick(item.datasetId, item.address, originalIndex)}
+                        onClick={() => handleAddressClick(item.datasetId, item.address)}
                       >
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between">

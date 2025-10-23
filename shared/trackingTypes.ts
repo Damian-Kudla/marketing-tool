@@ -28,6 +28,7 @@ export interface ActionLog {
   action: 'scan' | 'edit' | 'save' | 'delete' | 'status_change' | 'navigate';
   details?: string;
   residentStatus?: 'interessiert' | 'nicht_interessiert' | 'nicht_angetroffen' | 'termin_vereinbart';
+  previousStatus?: 'interessiert' | 'nicht_interessiert' | 'nicht_angetroffen' | 'termin_vereinbart'; // For tracking actual status changes
 }
 
 export interface DeviceStatus {

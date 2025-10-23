@@ -60,12 +60,20 @@ class NominatimQueue {
   private queue: QueuedRequest<any>[] = [];
   private processing = false;
   private readonly INTERVAL = 1000; // 1 request per second
+  private readonly MAX_QUEUE_LENGTH = 5; // Skip to Google if queue too long
   private lastRequestTime = 0;
 
   /**
    * Add a request to the queue and return a Promise that resolves when the request completes
+   * Throws error if queue is too long to trigger Google Geocoding fallback
    */
   async enqueue<T>(requestFn: () => Promise<T>): Promise<T> {
+    // Check if queue is too long - skip to Google Geocoding for faster response
+    if (this.queue.length >= this.MAX_QUEUE_LENGTH) {
+      console.log(`[Nominatim Queue] ⚠️ Queue too long (${this.queue.length + 1} requests), skipping to Google Geocoding for faster response`);
+      throw new Error('QUEUE_TOO_LONG');
+    }
+    
     return new Promise<T>((resolve, reject) => {
       const queuedRequest: QueuedRequest<T> = {
         execute: requestFn,

@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { sessionStatusManager } from '@/services/sessionStatusManager';
-import { useAuth } from '@/contexts/AuthContext';
-import { useCallBackSession } from '@/contexts/CallBackSessionContext';
 
 /**
  * SessionExpiredBanner - Non-dismissible banner for expired sessions
@@ -12,11 +10,10 @@ import { useCallBackSession } from '@/contexts/CallBackSessionContext';
  * - Cannot be closed
  * - Appears automatically when any 401 error occurs
  * - Forces user to logout and login again
+ * - Does NOT use AuthContext to avoid initialization race conditions
  */
 export function SessionExpiredBanner() {
   const [isExpired, setIsExpired] = useState(false);
-  const { logout } = useAuth();
-  const { clearSession } = useCallBackSession();
 
   useEffect(() => {
     // Subscribe to session status changes

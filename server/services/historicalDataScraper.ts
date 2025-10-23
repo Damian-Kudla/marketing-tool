@@ -225,7 +225,11 @@ function parseLogEntry(row: any[]): ParsedLog | null {
     let type: 'gps' | 'session' | 'device' | 'action' | 'photo' = 'action';
     const action = parsedData.action || '';
     
-    if (action === 'gps_update' || endpoint === '/api/tracking/gps') {
+    // IMPORTANT: Check for status_change FIRST (before endpoint matching)
+    // status_change can come from /api/tracking/session but must be treated as 'action'
+    if (action === 'status_change') {
+      type = 'action';
+    } else if (action === 'gps_update' || endpoint === '/api/tracking/gps') {
       type = 'gps';
     } else if (action === 'session_start' || action === 'session_end' || action === 'idle_detected' || action === 'active_resumed' || action === 'session_update' || endpoint === '/api/tracking/session') {
       type = 'session';
@@ -283,10 +287,28 @@ export async function scrapeDayData(date: string, userId?: string): Promise<Dail
     const allSheets = spreadsheetResponse.data.sheets || [];
     console.log(`[HistoricalDataScraper] Found ${allSheets.length} worksheets`);
 
-    // Filter to user worksheets (format: username_userId) and optionally by specific user
+    // Filter to user TRACKING worksheets (format: username_shortUserId with 8-char hex ID)
+    // Examples: Damian_6b86b273, Daniel_4fc82b26, Ljubo Radulovic_lqj1hc0r5
+    // Exclude: AuthLogs, Log_Änderung_Kategorie, Termine, Adressen, and dataset sheets (just username)
     let targetSheets = allSheets
       .map((sheet: any) => sheet.properties.title as string)
-      .filter((title: string) => title !== 'AuthLogs' && title.includes('_')); // Exclude AuthLogs and other system sheets
+      .filter((title: string) => {
+        // Must contain underscore
+        if (!title.includes('_')) return false;
+        
+        // Exclude known system sheets
+        if (title === 'AuthLogs' || title.startsWith('Log_')) return false;
+        
+        // Extract part after last underscore (should be short user ID)
+        const parts = title.split('_');
+        const lastPart = parts[parts.length - 1];
+        
+        // Short user IDs are typically 8-10 alphanumeric characters
+        // Examples: 6b86b273, 4fc82b26, lqj1hc0r5
+        const isTrackingSheet = lastPart.length >= 8 && lastPart.length <= 10 && /^[a-z0-9]+$/i.test(lastPart);
+        
+        return isTrackingSheet;
+      });
 
     if (userId) {
       // Filter to specific user's worksheet
@@ -300,7 +322,7 @@ export async function scrapeDayData(date: string, userId?: string): Promise<Dail
     }
 
     // Fetch data from all target worksheets
-    console.log(`[HistoricalDataScraper] Fetching data from ${targetSheets.length} worksheets...`);
+    console.log(`[HistoricalDataScraper] Fetching data from ${targetSheets.length} TRACKING worksheets...`);
     
     const fetchPromises = targetSheets.map(async (sheetName) => {
       try {
@@ -487,6 +509,15 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
         }
         data.photoTimestamps.push(timestamp);
       }
+      
+      // Count as 'scan' action (every /api/ocr request = 1 photo uploaded)
+      if (!processedActionTimestamps.has(timestamp)) {
+        processedActionTimestamps.add(timestamp);
+        
+        data.totalActions++;
+        const scanCount = data.actionsByType.get('scan') || 0;
+        data.actionsByType.set('scan', scanCount + 1);
+      }
     }
 
     // GPS Updates
@@ -529,7 +560,7 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
       } else if (action === 'session_end' && sessionStartTime) {
         const duration = timestamp - sessionStartTime;
         data.totalSessionTime += duration;
-        data.activeTime = data.totalSessionTime - data.totalIdleTime;
+        // Don't override activeTime here - it's calculated incrementally and at the end
         sessionStartTime = null;
         lastActiveTime = null;
       } else if (action === 'idle_detected') {
@@ -601,12 +632,19 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
 
     // Actions
     if (log.type === 'action') {
-      const actionType = log.data.action || log.data.type || 'scan';
+      const actionType = log.data.action || log.data.type;
+      
+      // Skip actions without explicit type
+      if (!actionType) {
+        return;
+      }
+      
       const actionLog: ActionLog = {
         timestamp: timestamp,
         action: actionType,
         details: log.data.context ? JSON.stringify(log.data.context) : log.data.details,
         residentStatus: log.data.residentStatus || log.data.status || log.data.context?.status,
+        previousStatus: log.data.previousStatus, // May be undefined for old logs
       };
 
       // Deduplicate actions by timestamp (same logic as dailyDataStore)
@@ -619,20 +657,20 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
         const count = data.actionsByType.get(actionLog.action) || 0;
         data.actionsByType.set(actionLog.action, count + 1);
 
-        // Zähle Status Changes (wichtigster KPI!)
-        // Für bulk_residents_update: Durchlaufe alle Residents im Array
-        if (actionType === 'bulk_residents_update' && log.data.residents && Array.isArray(log.data.residents)) {
-          log.data.residents.forEach((resident: any) => {
-            if (resident.status) {
-              const statusCount = data.statusChanges.get(resident.status) || 0;
-              data.statusChanges.set(resident.status, statusCount + 1);
+        // Track STATUS CHANGES with backward compatibility
+        if (actionLog.action === 'status_change' && actionLog.residentStatus) {
+          // NEW LOGS (with previousStatus): Only count actual changes
+          if (actionLog.previousStatus !== undefined) {
+            if (actionLog.previousStatus !== actionLog.residentStatus) {
+              const statusCount = data.statusChanges.get(actionLog.residentStatus) || 0;
+              data.statusChanges.set(actionLog.residentStatus, statusCount + 1);
             }
-          });
-        }
-        // Für einzelne Updates (resident_update) oder andere Actions mit residentStatus
-        else if (actionLog.residentStatus) {
-          const statusCount = data.statusChanges.get(actionLog.residentStatus) || 0;
-          data.statusChanges.set(actionLog.residentStatus, statusCount + 1);
+          }
+          // OLD LOGS (without previousStatus): Count all status_change actions
+          else {
+            const statusCount = data.statusChanges.get(actionLog.residentStatus) || 0;
+            data.statusChanges.set(actionLog.residentStatus, statusCount + 1);
+          }
         }
       }
 
@@ -676,6 +714,27 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
   if (batteryCount > 0) {
     data.avgBatteryLevel = batterySum / batteryCount;
   }
+
+  // Calculate activeTime if not set
+  if (data.activeTime === 0) {
+    if (data.totalSessionTime > 0) {
+      // Use session time minus idle time
+      data.activeTime = data.totalSessionTime - data.totalIdleTime;
+      console.log(`[HistoricalDataScraper] ⏱️ ActiveTime calculated from session: ${data.activeTime}ms (${(data.activeTime/1000/60).toFixed(1)}min)`);
+    } else if (logs.length > 1) {
+      // Fallback: Calculate from first to last log timestamp (for old logs without session events)
+      const firstLog = logs[0].timestamp.getTime();
+      const lastLog = logs[logs.length - 1].timestamp.getTime();
+      const totalTime = lastLog - firstLog;
+      data.activeTime = totalTime - data.totalIdleTime;
+      data.totalSessionTime = totalTime; // Also set totalSessionTime for consistency
+      console.log(`[HistoricalDataScraper] ⏱️ ActiveTime calculated from log span: ${data.activeTime}ms (${(data.activeTime/1000/60).toFixed(1)}min)`);
+    } else {
+      console.log(`[HistoricalDataScraper] ⚠️ No activeTime data - only ${logs.length} log(s)`);
+    }
+  }
+
+  console.log(`[HistoricalDataScraper] 📊 Final stats: ${data.totalActions} actions, ${Array.from(data.statusChanges.values()).reduce((s,c) => s+c, 0)} status changes, ${(data.activeTime/1000/60).toFixed(1)}min active`);
 
   // Berechne KPIs
   const totalStatusChangesCount = Array.from(data.statusChanges.values()).reduce((sum, count) => sum + count, 0);
