@@ -298,7 +298,7 @@ export function UserButton({ onDatasetLoad }: UserButtonProps) {
 
     {/* Call Back List Dialog */}
     <Dialog open={showCallBacks} onOpenChange={setShowCallBacks}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl max-h-[80vh] overflow-y-auto">
         <CallBackList 
           onLoadDataset={async (datasetId) => {
             await handleLoadDataset(datasetId, true); // Mark as loaded from Call Back
@@ -310,7 +310,7 @@ export function UserButton({ onDatasetLoad }: UserButtonProps) {
 
     {/* Appointments Dialog */}
     <Dialog open={showAppointments} onOpenChange={setShowAppointments}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-4xl max-h-[80vh] overflow-y-auto">
         <AppointmentsList 
           onLoadDataset={async (datasetId) => {
             await handleLoadDataset(datasetId);
