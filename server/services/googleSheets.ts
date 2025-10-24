@@ -1812,20 +1812,55 @@ export async function normalizeAddress(
       const result = data.results[0];
       const addressComponents = result.address_components;
       
-      // FIX 1: Reject partial matches (Google couldn't find the exact address)
-      // This prevents accepting POIs, transit stations, or approximate locations
-      if (result.partial_match === true) {
-        console.warn('[normalizeAddress] Rejected: Partial match - Google could not find exact address');
-        console.warn('[normalizeAddress] Input:', addressString);
-        console.warn('[normalizeAddress] Google returned:', result.formatted_address);
-        console.warn('[normalizeAddress] This might be a POI, transit station, or the address does not exist');
-        return null;
-      }
-      
       // Validate that the result contains a street (route) component
       const hasRoute = addressComponents.some((component: any) => 
         component.types.includes('route')
       );
+      
+      // Validate that the result contains a street number
+      const hasStreetNumber = addressComponents.some((component: any) => 
+        component.types.includes('street_number')
+      );
+      
+      // Check if result is a POI/transit station (not a real street address)
+      const isPOI = result.types?.some((type: string) => 
+        ['point_of_interest', 'transit_station', 'establishment'].includes(type)
+      ) && !result.types?.includes('street_address') && !result.types?.includes('premise');
+      
+      // INTELLIGENT PARTIAL_MATCH VALIDATION:
+      // partial_match can mean different things:
+      // 1. Street name typo correction (mengerlberg → Mengelberg) → ACCEPT ✅
+      // 2. POI/transit station instead of address → REJECT ❌
+      // 3. Missing house number or incomplete address → REJECT ❌
+      if (result.partial_match === true) {
+        console.log('[normalizeAddress] ⚠️ Partial match detected - analyzing...');
+        
+        // REJECT if it's a POI/transit station
+        if (isPOI) {
+          console.warn('[normalizeAddress] ❌ Rejected: Partial match is a POI/transit station');
+          console.warn('[normalizeAddress] Input:', addressString);
+          console.warn('[normalizeAddress] Google returned:', result.formatted_address);
+          console.warn('[normalizeAddress] Types:', result.types?.join(', '));
+          return null;
+        }
+        
+        // REJECT if missing critical components (street or street number)
+        if (!hasRoute || !hasStreetNumber) {
+          console.warn('[normalizeAddress] ❌ Rejected: Partial match missing route or street_number');
+          console.warn('[normalizeAddress] Input:', addressString);
+          console.warn('[normalizeAddress] Google returned:', result.formatted_address);
+          console.warn('[normalizeAddress] Has route:', hasRoute, '| Has street_number:', hasStreetNumber);
+          return null;
+        }
+        
+        // ACCEPT if it's a valid street address (likely just a typo correction)
+        if ((result.types?.includes('street_address') || result.types?.includes('premise')) && 
+            hasRoute && hasStreetNumber) {
+          console.log('[normalizeAddress] ✅ Accepted: Partial match is valid street address (likely typo correction)');
+          console.log('[normalizeAddress] Input:', addressString);
+          console.log('[normalizeAddress] Google corrected to:', result.formatted_address);
+        }
+      }
       
       // FIX 2: Route component is REQUIRED for all addresses
       // This ensures we only accept real streets, not POIs or transit stations
@@ -1837,19 +1872,16 @@ export async function normalizeAddress(
         return null;
       }
       
-      // Validate that the result contains a street number
-      const hasStreetNumber = addressComponents.some((component: any) => 
-        component.types.includes('street_number')
-      );
-      
       // Check location_type for precision
       const locationType = result.geometry?.location_type;
       
-      console.log('[normalizeAddress] Validation result:', {
+      console.log('[normalizeAddress] ✅ Validation passed:', {
         hasRoute,
         hasStreetNumber,
         locationType,
         partialMatch: result.partial_match || false,
+        isPOI,
+        types: result.types?.join(', '),
         formatted: result.formatted_address
       });
       

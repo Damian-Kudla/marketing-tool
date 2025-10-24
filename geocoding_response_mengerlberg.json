@@ -1,0 +1,133 @@
+﻿{
+    "results":  [
+                    {
+                        "address_components":  [
+                                                   {
+                                                       "long_name":  "2",
+                                                       "short_name":  "2",
+                                                       "types":  [
+                                                                     "street_number"
+                                                                 ]
+                                                   },
+                                                   {
+                                                       "long_name":  "Mengelbergstraße",
+                                                       "short_name":  "Mengelbergstraße",
+                                                       "types":  [
+                                                                     "route"
+                                                                 ]
+                                                   },
+                                                   {
+                                                       "long_name":  "Innenstadt",
+                                                       "short_name":  "Innenstadt",
+                                                       "types":  [
+                                                                     "political",
+                                                                     "sublocality",
+                                                                     "sublocality_level_1"
+                                                                 ]
+                                                   },
+                                                   {
+                                                       "long_name":  "Köln",
+                                                       "short_name":  "Köln",
+                                                       "types":  [
+                                                                     "locality",
+                                                                     "political"
+                                                                 ]
+                                                   },
+                                                   {
+                                                       "long_name":  "Kreisfreie Stadt Köln",
+                                                       "short_name":  "Kreisfreie Stadt Köln",
+                                                       "types":  [
+                                                                     "administrative_area_level_3",
+                                                                     "political"
+                                                                 ]
+                                                   },
+                                                   {
+                                                       "long_name":  "Köln",
+                                                       "short_name":  "K",
+                                                       "types":  [
+                                                                     "administrative_area_level_2",
+                                                                     "political"
+                                                                 ]
+                                                   },
+                                                   {
+                                                       "long_name":  "Nordrhein-Westfalen",
+                                                       "short_name":  "NRW",
+                                                       "types":  [
+                                                                     "administrative_area_level_1",
+                                                                     "political"
+                                                                 ]
+                                                   },
+                                                   {
+                                                       "long_name":  "Deutschland",
+                                                       "short_name":  "DE",
+                                                       "types":  [
+                                                                     "country",
+                                                                     "political"
+                                                                 ]
+                                                   },
+                                                   {
+                                                       "long_name":  "50676",
+                                                       "short_name":  "50676",
+                                                       "types":  [
+                                                                     "postal_code"
+                                                                 ]
+                                                   }
+                                               ],
+                        "formatted_address":  "Mengelbergstraße 2, 50676 Köln, Deutschland",
+                        "geometry":  {
+                                         "bounds":  {
+                                                        "northeast":  {
+                                                                          "lat":  50.9302881,
+                                                                          "lng":  6.9550566
+                                                                      },
+                                                        "southwest":  {
+                                                                          "lat":  50.9296665,
+                                                                          "lng":  6.9540171
+                                                                      }
+                                                    },
+                                         "location":  {
+                                                          "lat":  50.92990890000001,
+                                                          "lng":  6.9545394
+                                                      },
+                                         "location_type":  "ROOFTOP",
+                                         "viewport":  {
+                                                          "northeast":  {
+                                                                            "lat":  50.9313649302915,
+                                                                            "lng":  6.955885830291502
+                                                                        },
+                                                          "southwest":  {
+                                                                            "lat":  50.9286669697085,
+                                                                            "lng":  6.953187869708497
+                                                                        }
+                                                      }
+                                     },
+                        "navigation_points":  [
+                                                  {
+                                                      "location":  {
+                                                                       "latitude":  50.9303442,
+                                                                       "longitude":  6.954747999999999
+                                                                   },
+                                                      "restricted_travel_modes":  [
+                                                                                      "WALK"
+                                                                                  ]
+                                                  },
+                                                  {
+                                                      "location":  {
+                                                                       "latitude":  50.930293,
+                                                                       "longitude":  6.9547231
+                                                                   },
+                                                      "restricted_travel_modes":  [
+                                                                                      "DRIVE"
+                                                                                  ]
+                                                  }
+                                              ],
+                        "partial_match":  true,
+                        "place_id":  "ChIJO9JCr1Ikv0cRCZmUAVntcqU",
+                        "types":  [
+                                      "premise",
+                                      "street_address"
+                                  ]
+                    }
+                ],
+    "status":  "OK"
+}
