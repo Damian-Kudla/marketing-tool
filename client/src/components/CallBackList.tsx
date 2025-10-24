@@ -241,7 +241,7 @@ export function CallBackList({ onLoadDataset }: CallBackListProps) {
   };
 
   return (
-    <div className="container mx-auto p-4 max-w-4xl">
+    <div className="w-full">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

@@ -141,7 +141,7 @@ export function AppointmentsList({ onLoadDataset }: AppointmentsListProps) {
   const upcomingCount = allAppointments?.filter((a: Appointment) => !isPast(a.appointmentDate)).length || 0;
 
   return (
-    <div className="container mx-auto p-4 max-w-4xl">
+    <div className="w-full">
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
