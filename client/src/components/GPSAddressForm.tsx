@@ -101,14 +101,6 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
     }
   }, [address.number]);
 
-  // Reset dataset when filter changes (onlyEven/onlyOdd toggle)
-  useEffect(() => {
-    // Only trigger if filters actually have values (not initial state)
-    if (onlyEven || onlyOdd) {
-      onResetDataset?.();
-    }
-  }, [onlyEven, onlyOdd, onResetDataset]);
-
   // Check if house number is a natural number (positive integer)
   const isNaturalNumber = (value: string): boolean => {
     const trimmed = value.trim();
