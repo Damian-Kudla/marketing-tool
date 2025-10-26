@@ -453,6 +453,7 @@ export default function ScannerPage() {
         newProspects: result.newProspects || [],
         allCustomersAtAddress: result.allCustomersAtAddress || [],
         fullVisionResponse: result.fullVisionResponse,
+        relatedHouseNumbers: result.relatedHouseNumbers || [],
       });
       if (imageSrc) {
         setPhotoImageSrc(imageSrc);
@@ -762,6 +763,21 @@ export default function ScannerPage() {
               </div>
             )}
             
+            {/* Related House Numbers Hint */}
+            {ocrResult?.relatedHouseNumbers && ocrResult.relatedHouseNumbers.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
+                <p className="text-sm font-medium text-amber-900 mb-1">
+                  💡 Hinweis: Weitere Hausnummern-Varianten gefunden
+                </p>
+                <p className="text-sm text-amber-800 mb-2">
+                  Zu <strong>{address?.number}</strong> gibt es auch Kundendaten unter: <strong>{ocrResult.relatedHouseNumbers.join(', ')}</strong>
+                </p>
+                <p className="text-xs text-amber-700">
+                  Falls du nicht alle erwarteten Anwohner findest, schau auch bei diesen Hausnummern-Varianten nach.
+                </p>
+              </div>
+            )}
+            
             {/* Results Display without maximize button and without embedded image */}
             <div>
               <ResultsDisplay 
@@ -833,6 +849,21 @@ export default function ScannerPage() {
                 </div>
               )}
             </div>
+            
+            {/* Related House Numbers Hint */}
+            {ocrResult?.relatedHouseNumbers && ocrResult.relatedHouseNumbers.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
+                <p className="text-sm font-medium text-amber-900 mb-1">
+                  💡 Hinweis: Weitere Hausnummern-Varianten gefunden
+                </p>
+                <p className="text-sm text-amber-800 mb-2">
+                  Zu <strong>{address?.number}</strong> gibt es auch Kundendaten unter: <strong>{ocrResult.relatedHouseNumbers.join(', ')}</strong>
+                </p>
+                <p className="text-xs text-amber-700">
+                  Falls du nicht alle erwarteten Anwohner findest, schau auch bei diesen Hausnummern-Varianten nach.
+                </p>
+              </div>
+            )}
             
             {/* Right column: Results lists only (no ImageWithOverlays) */}
             <div className="relative overflow-y-auto">
@@ -1026,6 +1057,20 @@ export default function ScannerPage() {
             >
               <MaximizeButton panel="results" className="absolute top-4 right-4" />
               <div className="pt-8">
+                {/* Related House Numbers Hint */}
+                {ocrResult?.relatedHouseNumbers && ocrResult.relatedHouseNumbers.length > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
+                    <p className="text-sm font-medium text-amber-900 mb-1">
+                      💡 Hinweis: Weitere Hausnummern-Varianten gefunden
+                    </p>
+                    <p className="text-sm text-amber-800 mb-2">
+                      Zu <strong>{address?.number}</strong> gibt es auch Kundendaten unter: <strong>{ocrResult.relatedHouseNumbers.join(', ')}</strong>
+                    </p>
+                    <p className="text-xs text-amber-700">
+                      Falls du nicht alle erwarteten Anwohner findest, schau auch bei diesen Hausnummern-Varianten nach.
+                    </p>
+                  </div>
+                )}
                 <ResultsDisplay 
                   result={ocrResult} 
                   photoImageSrc={photoImageSrc}

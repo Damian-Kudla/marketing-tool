@@ -321,23 +321,41 @@ export async function scrapeDayData(date: string, userId?: string): Promise<Dail
       return [];
     }
 
-    // Fetch data from all target worksheets
-    console.log(`[HistoricalDataScraper] Fetching data from ${targetSheets.length} TRACKING worksheets...`);
+    // Fetch data from all target worksheets using BATCH API (1 request instead of N)
+    console.log(`[HistoricalDataScraper] Fetching data from ${targetSheets.length} TRACKING worksheets using Batch API...`);
     
-    const fetchPromises = targetSheets.map(async (sheetName) => {
-      try {
-        const response = await sheets.spreadsheets.values.get({
-          spreadsheetId: LOG_SHEET_ID,
-          range: `${sheetName}!A:J`, // A:Timestamp, B:UserID, C:Username, D:Endpoint, E:Method, F:Address, G:NewProspects, H:ExistingCustomers, I:UserAgent, J:Data
-        });
-        return response.data.values || [];
-      } catch (error) {
-        console.error(`[HistoricalDataScraper] Error fetching worksheet ${sheetName}:`, error);
-        return [];
-      }
-    });
+    let allSheetData: any[][] = [];
+    
+    try {
+      // Use batchGet to fetch all worksheets in a single API request
+      const batchResponse = await sheets.spreadsheets.values.batchGet({
+        spreadsheetId: LOG_SHEET_ID,
+        ranges: targetSheets.map(sheetName => `${sheetName}!A:J`), // A:Timestamp, B:UserID, C:Username, D:Endpoint, E:Method, F:Address, G:NewProspects, H:ExistingCustomers, I:UserAgent, J:Data
+      });
 
-    const allSheetData = await Promise.all(fetchPromises);
+      // Extract values from batch response
+      allSheetData = (batchResponse.data.valueRanges || []).map(range => range.values || []);
+      
+      console.log(`[HistoricalDataScraper] ✅ Batch API request completed successfully (1 request for ${targetSheets.length} worksheets)`);
+    } catch (error) {
+      console.error(`[HistoricalDataScraper] Error with Batch API, falling back to individual requests:`, error);
+      
+      // Fallback: Individual requests if batch fails
+      const fetchPromises = targetSheets.map(async (sheetName) => {
+        try {
+          const response = await sheets.spreadsheets.values.get({
+            spreadsheetId: LOG_SHEET_ID,
+            range: `${sheetName}!A:J`,
+          });
+          return response.data.values || [];
+        } catch (error) {
+          console.error(`[HistoricalDataScraper] Error fetching worksheet ${sheetName}:`, error);
+          return [];
+        }
+      });
+
+      allSheetData = await Promise.all(fetchPromises);
+    }
     
     // Combine all rows from all sheets (skip header row from each)
     const rows: any[][] = [];

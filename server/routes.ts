@@ -474,12 +474,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Even if no text detected, we still want to show customers at the address
       if (!detections || detections.length === 0) {
         const allCustomersAtAddress = await storage.getCustomersByAddress(address);
+        
+        // Find related house numbers even when no text detected
+        let relatedHouseNumbers: string[] = [];
+        if (address.number) {
+          relatedHouseNumbers = await storage.findRelatedHouseNumbers(address);
+        }
+        
         return res.json({
           residentNames: [],
           fullVisionResponse,
           newProspects: [],
           existingCustomers: [],
           allCustomersAtAddress,
+          relatedHouseNumbers: relatedHouseNumbers.length > 0 ? relatedHouseNumbers : undefined,
         } as OCRResponse);
       }
 
@@ -534,6 +542,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get all customers at this address first
       const allCustomersAtAddress = await storage.getCustomersByAddress(address);
       
+      // Find related house numbers (always, not just when no customers found)
+      let relatedHouseNumbers: string[] = [];
+      if (address.number) {
+        relatedHouseNumbers = await storage.findRelatedHouseNumbers(address);
+      }
+      
       // Search for matching customers (name matching within address-filtered customers)
       const existingCustomers: Customer[] = [];
       const newProspects: string[] = [];
@@ -562,6 +576,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         newProspects,
         existingCustomers,
         allCustomersAtAddress,
+        relatedHouseNumbers: relatedHouseNumbers.length > 0 ? relatedHouseNumbers : undefined,
         // Backend orientation correction disabled - always false
         orientationCorrectionApplied: false,
         backendOrientationInfo: null,
@@ -662,6 +677,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Use the storage method with fuzzy matching
       const matches = await storage.getCustomersByAddress(address);
       
+      // Always find related house numbers (regardless of whether customers were found)
+      let relatedHouseNumbers: string[] = [];
+      if (address.number) {
+        relatedHouseNumbers = await storage.findRelatedHouseNumbers(address);
+      }
+      
       // Log the address search WITH existing customers in the dedicated column
       const addressString = address ? `${address.street} ${address.number}, ${address.city} ${address.postal}`.trim() : undefined;
       await logUserActivityWithRetry(
@@ -671,7 +692,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         matches    // Pass existing customers to log in dedicated column
       );
       
-      res.json(matches);
+      res.json({ 
+        customers: matches,
+        relatedHouseNumbers: relatedHouseNumbers.length > 0 ? relatedHouseNumbers : undefined
+      });
     } catch (error) {
       console.error("Address search error:", error);
       res.status(400).json({ error: "Invalid request" });

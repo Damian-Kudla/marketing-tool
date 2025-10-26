@@ -389,10 +389,10 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
       totalDistance: userData.reduce((sum, u) => sum + u.totalDistance, 0),
     });
 
-    // Cache nach Verwendung löschen (wie gefordert: RAM-Daten nach Verwendung löschen)
+    // Cache nach Verwendung löschen (15 Minuten für bessere Performance)
     setTimeout(() => {
       clearHistoricalCache(date, userId as string | undefined);
-    }, 5000); // 5 Sekunden Verzögerung für eventuelle Follow-up Requests
+    }, 15 * 60 * 1000); // 15 minutes
 
   } catch (error: any) {
     console.error('[Admin API] ❌ Error fetching historical data:', error);
@@ -476,11 +476,11 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
       totalPhotos: photoTimestamps.length
     });
 
-    // Cache nach Verwendung löschen bei historischen Daten
+    // Cache nach Verwendung löschen bei historischen Daten (15 Minuten statt 5 Sekunden)
     if (dateStr !== today) {
       setTimeout(() => {
         clearHistoricalCache(dateStr, userIdStr);
-      }, 5000);
+      }, 15 * 60 * 1000); // 15 minutes
     }
 
   } catch (error: any) {

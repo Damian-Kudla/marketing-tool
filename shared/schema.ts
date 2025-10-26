@@ -76,6 +76,8 @@ export const ocrResponseSchema = z.object({
     postalCode: z.string().nullable().optional(),
     isExisting: z.boolean(),
   })).optional(),
+  // Related house numbers hint
+  relatedHouseNumbers: z.array(z.string()).optional(),
   // Orientation correction fields
   orientationCorrectionApplied: z.boolean().optional(),
   backendOrientationInfo: z.object({

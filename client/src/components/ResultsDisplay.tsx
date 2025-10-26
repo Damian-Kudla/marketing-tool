@@ -78,6 +78,7 @@ export interface OCRResult {
   newProspects: string[];
   allCustomersAtAddress?: Customer[];
   fullVisionResponse?: any;
+  relatedHouseNumbers?: string[];
 }
 
 interface ResultsDisplayProps {

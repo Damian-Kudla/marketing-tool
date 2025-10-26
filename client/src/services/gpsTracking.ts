@@ -5,11 +5,11 @@ class GPSTrackingService {
   private isTracking = false;
   private lastPosition: GPSCoordinates | null = null;
   private trackingInterval: number | null = null;
-  private readonly TRACKING_INTERVAL = 30000; // 30 seconds
+  private readonly TRACKING_INTERVAL = 15000; // 15 seconds
 
   /**
    * Start GPS tracking
-   * Sends coordinates to backend every 30 seconds
+   * Sends coordinates to backend every 15 seconds
    */
   async startTracking(): Promise<void> {
     if (this.isTracking) {
@@ -41,7 +41,7 @@ class GPSTrackingService {
         options
       );
 
-      // Also send position every 30 seconds even if it hasn't changed much
+      // Also send position every 15 seconds even if it hasn't changed much
       this.trackingInterval = window.setInterval(() => {
         this.sendCurrentPosition();
       }, this.TRACKING_INTERVAL);
@@ -141,7 +141,7 @@ class GPSTrackingService {
       }
     } catch (error) {
       console.error('[GPS] Error sending position:', error);
-      // Don't stop tracking on network errors - will retry in 30s
+      // Don't stop tracking on network errors - will retry in 15s
     }
   }
 

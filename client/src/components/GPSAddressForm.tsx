@@ -37,6 +37,7 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
   const [onlyEven, setOnlyEven] = useState(false);
   const [onlyOdd, setOnlyOdd] = useState(false);
   const [streetCorrected, setStreetCorrected] = useState(false); // Animation state for corrected street
+  const [relatedHouseNumbers, setRelatedHouseNumbers] = useState<string[]>([]); // Related house numbers hint
   const [address, setAddress] = useState<Address>(initialAddress || {
     street: '',
     number: '',
@@ -318,12 +319,19 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
       if (address.postal?.trim()) searchParams.postal = address.postal;
       if (address.city?.trim()) searchParams.city = address.city;
       
-      const customers = await addressAPI.searchAddress(searchParams);
+      const response = await addressAPI.searchAddress(searchParams);
+      
+      // Handle new response format with customers and relatedHouseNumbers
+      const customers = response.customers || response || [];
+      const relatedNumbers = response.relatedHouseNumbers || [];
       
       // Remove duplicates based on customer ID (in case backend returns duplicates)
       const uniqueCustomers = Array.from(
         new Map(customers.map((c: any) => [c.id || c.name, c])).values()
       );
+      
+      // Update related house numbers state (always show if available)
+      setRelatedHouseNumbers(relatedNumbers);
       
       if (uniqueCustomers.length === 0) {
         toast({
@@ -423,7 +431,10 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
             <Input
               id="number"
               value={address.number}
-              onChange={(e) => setAddress({ ...address, number: e.target.value })}
+              onChange={(e) => {
+                setAddress({ ...address, number: e.target.value });
+                setRelatedHouseNumbers([]); // Clear hint when user changes house number
+              }}
               data-testid="input-number"
               className={`mt-1.5 min-h-11 ${houseNumberError ? 'border-red-500' : ''}`}
               placeholder="z.B. 1,2,3 oder 1-5"
@@ -511,6 +522,21 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
             className="mt-1.5 min-h-11"
           />
         </div>
+
+        {/* Related house numbers hint */}
+        {relatedHouseNumbers.length > 0 && (
+          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+            <p className="text-sm text-amber-800 dark:text-amber-200 font-medium mb-1">
+              💡 Hinweis: Weitere Hausnummern-Varianten gefunden
+            </p>
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              Zu <strong>{address.number}</strong> gibt es auch Kundendaten unter: <strong>{relatedHouseNumbers.join(', ')}</strong>
+            </p>
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+              Falls du nicht alle erwarteten Anwohner findest, schau auch bei diesen Hausnummern-Varianten nach.
+            </p>
+          </div>
+        )}
 
         {hasAddressData && (
           <Button

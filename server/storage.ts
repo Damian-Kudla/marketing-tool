@@ -467,6 +467,63 @@ export class GoogleSheetsStorage implements IStorage {
   }
 
   /**
+   * Find related house numbers with existing customer data
+   * Returns house numbers that share the base number but have different suffixes
+   * Example: Searching "1" finds "1a", "1b"; Searching "1a" finds "1", "1b"
+   */
+  async findRelatedHouseNumbers(address: Partial<Address>): Promise<string[]> {
+    if (!address.number) return [];
+
+    const customers = await this.fetchCustomersFromSheet();
+    let potentialMatches = customers;
+    
+    // Filter by postal code and street first (same as main search)
+    if (address.postal) {
+      const searchPostal = address.postal.toLowerCase().trim();
+      potentialMatches = potentialMatches.filter(customer => 
+        customer.postalCode?.toLowerCase().trim() === searchPostal
+      );
+    }
+    
+    if (address.street) {
+      const searchStreet = address.street.replace(/['`´!"§$%&/()=?\\}\][{#*~^°]/g, '');
+      potentialMatches = potentialMatches.filter(customer => {
+        if (!customer.street) return false;
+        return this.streetsMatch(searchStreet, customer.street);
+      });
+    }
+
+    // Extract base number from search (e.g., "1a" → "1", "23b" → "23")
+    const searchNumber = address.number.toLowerCase().trim();
+    const baseNumberMatch = searchNumber.match(/^(\d+)/);
+    if (!baseNumberMatch) return [];
+    
+    const baseNumber = baseNumberMatch[1];
+    const searchSuffix = searchNumber.substring(baseNumber.length).trim();
+
+    // Find all house numbers with same base but different suffix
+    const relatedNumbers = new Set<string>();
+    
+    for (const customer of potentialMatches) {
+      if (!customer.houseNumber) continue;
+      
+      const customerNumber = customer.houseNumber.toLowerCase().trim();
+      const customerBaseMatch = customerNumber.match(/^(\d+)/);
+      
+      if (customerBaseMatch && customerBaseMatch[1] === baseNumber) {
+        const customerSuffix = customerNumber.substring(baseNumber.length).trim();
+        
+        // Only add if suffix is different (or one has suffix, other doesn't)
+        if (customerSuffix !== searchSuffix) {
+          relatedNumbers.add(customer.houseNumber);
+        }
+      }
+    }
+
+    return Array.from(relatedNumbers).sort();
+  }
+
+  /**
    * Normalize name for matching by handling German special characters
    * ß → ss, ä → ae, ö → oe, ü → ue
    */

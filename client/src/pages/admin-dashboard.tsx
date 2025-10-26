@@ -1201,9 +1201,9 @@ export default function AdminDashboard() {
       {/* Route Replay Modal/Overlay */}
       {showRouteReplay && (
         <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-background rounded-lg shadow-xl w-full max-w-6xl my-8 flex flex-col">
-            {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b sticky top-0 bg-background z-10">
+          <div className="bg-background rounded-lg shadow-xl w-full max-w-6xl my-8 flex flex-col max-h-[90vh]">
+            {/* Header - removed sticky positioning to prevent z-index issues */}
+            <div className="flex items-center justify-between p-4 border-b bg-background rounded-t-lg">
               <div>
                 <h2 className="text-xl font-bold">Route Wiedergabe</h2>
                 <p className="text-sm text-muted-foreground">
@@ -1236,8 +1236,8 @@ export default function AdminDashboard() {
               </button>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 p-4">
+            {/* Content - with overflow for scrolling inside modal */}
+            <div className="flex-1 p-4 overflow-y-auto">
               {loadingRoute ? (
                 <div className="flex items-center justify-center h-full min-h-[400px]">
                   <div className="text-center">
