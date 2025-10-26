@@ -1,25 +1,25 @@
 {
-  "version": "2.5.4",
-  "buildTime": "2025-10-22T14:12:57.808Z",
-  "buildNumber": "build-1761142377808",
+  "version": "2.6.0",
+  "buildTime": "2025-10-26T23:07:16.012Z",
+  "buildNumber": "build-1761520036012",
   "features": [
-    "Fix: Status-Persistenz in Tabellenansicht (AddressOverview)",
-    "Fix: Etagen-Feld erlaubt jetzt 0 (Erdgeschoss)",
-    "Optimize: Bestandskunden-Normalisierung beim Einlesen",
-    "Optimize: Sonderzeichen-Entfernung bei Straßen-Matching",
-    "Optimize: Automatische Hausnummer-Extraktion aus Straßenfeld"
+    "Feature: Hausnummern-Varianten Hinweise (immer anzeigen, nicht nur bei 0 Ergebnissen)",
+    "Feature: GPS-Tracking Intervall von 30s auf 15s reduziert",
+    "Optimize: Google Sheets Batch API (87.5% weniger API-Requests)",
+    "Optimize: Historischer Daten-Cache von 5s auf 15 Minuten erhöht",
+    "Fix: Route Wiedergabe Modal Z-Index Problem behoben"
   ],
   "technicalDetails": [
-    "Table View Status Persistence Fix",
-    "Floor Field: 0 (Ground Floor) Support",
-    "Customer Data Normalization on Load",
-    "Street Name Special Character Removal",
-    "Automatic House Number Extraction"
+    "Related House Numbers: Always show hints for variants",
+    "GPS Tracking: 15s interval (was 30s)",
+    "Admin Dashboard: Batch API reduces quota usage",
+    "Historical Cache: 15min TTL (was 5s)",
+    "Route Replay: Default zoom 18, duration 30s"
   ],
   "previousFeatures": [
+    "Status-Persistenz in Tabellenansicht (v2.5.4)",
+    "Etagen-Feld: 0 (Erdgeschoss) Support (v2.5.4)",
     "Foto-Tracking mit MD5-Deduplizierung (v2.5.0)",
-    "Kamera-Follow-System (v2.5.0)",
-    "Infinite Loop Fix (v2.4.7)",
-    "Duplikate & Validation (v2.4.6)"
+    "Kamera-Follow-System (v2.5.0)"
   ]
 }

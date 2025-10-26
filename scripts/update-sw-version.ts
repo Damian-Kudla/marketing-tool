@@ -86,16 +86,37 @@ function updateServiceWorkerVersion() {
     writeFileSync(userButtonPath, userButtonContent, 'utf-8');
     console.log(`✅ Updated UserButton.tsx fallback version to ${version}`);
 
-    // Create version.json for version checking
+    // Update version.json while preserving features
     const versionJsonPath = join(process.cwd(), 'client', 'public', 'version.json');
+    let existingVersionJson: any = {};
+    
+    try {
+      const existingContent = readFileSync(versionJsonPath, 'utf-8');
+      existingVersionJson = JSON.parse(existingContent);
+    } catch (error) {
+      console.log('⚠️ No existing version.json found, creating new one');
+    }
+    
     const versionJson = {
       version: version,
       buildTime: new Date().toISOString(),
-      buildNumber: process.env.BUILD_NUMBER || 'local'
+      buildNumber: `build-${Date.now()}`,
+      // Preserve existing features if they exist
+      features: existingVersionJson.features || [],
+      technicalDetails: existingVersionJson.technicalDetails || [],
+      previousFeatures: existingVersionJson.previousFeatures || []
     };
     
     writeFileSync(versionJsonPath, JSON.stringify(versionJson, null, 2), 'utf-8');
-    console.log(`✅ Created version.json with version ${version}`);
+    console.log(`✅ Updated version.json to version ${version} (features preserved)`);
+
+    console.log('\n🎉 All version updates completed successfully!\n');
+    console.log(`📌 Version: ${version}`);
+    console.log(`📌 Updated files:`);
+    console.log(`   - client/public/sw.js (cache names + VERSION constant)`);
+    console.log(`   - client/index.html (meta tag)`);
+    console.log(`   - client/src/components/UserButton.tsx (fallback version)`);
+    console.log(`   - client/public/version.json (version + build info)`);
 
     return version;
   } catch (error) {
@@ -105,7 +126,9 @@ function updateServiceWorkerVersion() {
 }
 
 // Run if called directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Check if this module is being run directly (not imported)
+const isMainModule = process.argv[1] && process.argv[1].includes('update-sw-version');
+if (isMainModule) {
   updateServiceWorkerVersion();
 }
 
