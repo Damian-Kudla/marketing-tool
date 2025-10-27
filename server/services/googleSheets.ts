@@ -1160,10 +1160,15 @@ class CategoryChangeLoggingService {
 
   // Get Sheets client dynamically to avoid initialization issues
   private get sheetsAPI() {
-    const auth = new google.auth.GoogleAuth({
-      credentials: JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON || process.env.GOOGLE_SHEETS_KEY || '{}'),
+    const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON || process.env.GOOGLE_SHEETS_KEY || '{}');
+    
+    // Use JWT constructor directly instead of deprecated GoogleAuth with credentials option
+    const auth = new google.auth.JWT({
+      email: credentials.client_email,
+      key: credentials.private_key,
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
     });
+    
     return google.sheets({ version: 'v4', auth });
   }
 
