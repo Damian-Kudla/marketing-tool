@@ -156,13 +156,39 @@ export function CallBackList({ onLoadDataset }: CallBackListProps) {
 
   const handleAddressClickForQuickStart = async (datasetId: string, address: string, sortedList: CallBackItem[]) => {
     if (onLoadDataset && period) {
-      // Start Call Back session with sorted list and current sort direction
-      // Index 0 = first in sorted list, "next" goes through list in order
+      // Start Call Back session with sorted list at index 0 (first item)
       startCallBackSession(sortedList, period, 0, sortDescending);
       
-      // Use regular handleAddressClick to load the dataset
-      // This ensures consistent behavior
-      await handleAddressClick(datasetId, address);
+      // Load the first dataset
+      try {
+        setLoading(true);
+        // Verify dataset exists before loading
+        const response = await fetch(`/api/address-datasets/${datasetId}`, {
+          credentials: 'include'
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch dataset: ${response.status}`);
+        }
+        
+        const dataset = await response.json();
+        
+        await onLoadDataset(datasetId);
+        
+        toast({
+          title: "Adresse geladen",
+          description: `${address} wurde geöffnet`,
+        });
+      } catch (error) {
+        console.error('Error loading dataset:', error);
+        toast({
+          variant: "destructive",
+          title: "Fehler",
+          description: "Datensatz konnte nicht geladen werden",
+        });
+      } finally {
+        setLoading(false);
+      }
     } else {
       // Fallback: Navigate to scanner page with the dataset ID
       setLocation(`/scanner?datasetId=${datasetId}`);
@@ -303,7 +329,7 @@ export function CallBackList({ onLoadDataset }: CallBackListProps) {
               size="lg"
             >
               <Zap className="h-5 w-5 mr-2" />
-              Quick Start - Erste Adresse - Chronologisch
+              Quick Start - Erste Adresse {sortMode === "chronological" ? "(Chronologisch)" : "(Nach Straße)"}
             </Button>
           )}
 

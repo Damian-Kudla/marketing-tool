@@ -93,16 +93,24 @@ class SessionStatusManager {
   }
 
   /**
-   * Reset session status (after successful re-login)
+   * Reset session status (after successful re-login or explicit logout)
    */
   reset() {
     console.log('[SessionStatus] 🔄 Resetting session status');
+    console.log('[SessionStatus] 🔍 Current state - isExpired:', this._isSessionExpired, 'hasShownBanner:', this.hasShownBanner);
+    console.log('[SessionStatus] 🔍 Number of listeners:', this.listeners.size);
+    
     this._isSessionExpired = false;
     this.hasShownBanner = false;
     
     // Notify all listeners that session is no longer expired
     console.log('[SessionStatus] 📢 Notifying', this.listeners.size, 'listeners that session is OK');
-    this.listeners.forEach(listener => listener(false));
+    let listenerIndex = 0;
+    this.listeners.forEach((listener) => {
+      listenerIndex++;
+      console.log('[SessionStatus] 📤 Notifying listener', listenerIndex);
+      listener(false);
+    });
     console.log('[SessionStatus] ✅ Session status reset complete');
   }
 

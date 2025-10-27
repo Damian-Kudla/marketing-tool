@@ -68,6 +68,7 @@ export default function ScannerPage() {
   // Dataset creation confirmation removed - now creates automatically
   const [showAddressOverview, setShowAddressOverview] = useState(false);
   const [showCallBackModeBanner, setShowCallBackModeBanner] = useState(false);
+  const [bannerShownForSession, setBannerShownForSession] = useState(false); // Track if banner was shown for this CallBack session
   const [resetKey, setResetKey] = useState(0); // Key to force PhotoCapture remount on reset
   
   // State for dataset creation lock (prevent race conditions)
@@ -166,11 +167,16 @@ export default function ScannerPage() {
       // Clear CallBack session if NOT loaded from CallBack (e.g., from history)
       if (!fromCallBack) {
         clearSession();
+        setBannerShownForSession(false); // Reset banner tracking
       }
       
-      // Show Call Back Mode banner if loaded from Call Back List and mode is not active
-      if (fromCallBack && !callBackMode) {
+      // Show Call Back Mode banner ONLY if:
+      // 1. Loaded from Call Back List
+      // 2. Call Back mode is not active
+      // 3. Banner hasn't been shown yet in this session
+      if (fromCallBack && !callBackMode && !bannerShownForSession) {
         setShowCallBackModeBanner(true);
+        setBannerShownForSession(true);
       }
       
       // Validate dataset structure
@@ -530,16 +536,16 @@ export default function ScannerPage() {
   const handleNextCallBack = async () => {
     const nextDatasetId = moveToNext();
     if (nextDatasetId) {
-      setLoadedFromCallBack(false); // Don't show banner again on "Nächster" click
-      await handleDatasetLoadById(nextDatasetId);
+      // Keep loadedFromCallBack true to maintain navigation buttons
+      await handleDatasetLoadById(nextDatasetId, true); // Pass true to indicate it's from CallBack
     }
   };
 
   const handlePreviousCallBack = async () => {
     const prevDatasetId = moveToPrevious();
     if (prevDatasetId) {
-      setLoadedFromCallBack(false); // Don't show banner again on "Vorheriger" click
-      await handleDatasetLoadById(prevDatasetId);
+      // Keep loadedFromCallBack true to maintain navigation buttons
+      await handleDatasetLoadById(prevDatasetId, true); // Pass true to indicate it's from CallBack
     }
   };
 

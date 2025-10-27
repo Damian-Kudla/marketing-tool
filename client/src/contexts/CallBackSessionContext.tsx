@@ -32,10 +32,10 @@ export function CallBackSessionProvider({ children }: { children: ReactNode }) {
   };
 
   const moveToNext = (): string | null => {
-    // "Nächster" always means moving UP in the visual list (towards index 0)
-    // This represents "next address to process" (from bottom to top)
+    // UX decision: "Nächster" should move UP in the visual list (towards lower index)
+    // so decrement the index when the user clicks "Nächster".
     const nextIndex = currentCallBackIndex - 1;
-    
+
     if (nextIndex >= 0) {
       setCurrentCallBackIndex(nextIndex);
       return currentCallBackList[nextIndex].datasetId;
@@ -44,10 +44,9 @@ export function CallBackSessionProvider({ children }: { children: ReactNode }) {
   };
 
   const moveToPrevious = (): string | null => {
-    // "Vorheriger" always means moving DOWN in the visual list (towards higher index)
-    // This represents "go back to previous address" (from top to bottom)
+    // "Vorheriger" moves DOWN in the visual list (towards higher index)
     const prevIndex = currentCallBackIndex + 1;
-    
+
     if (prevIndex < currentCallBackList.length) {
       setCurrentCallBackIndex(prevIndex);
       return currentCallBackList[prevIndex].datasetId;
@@ -56,12 +55,12 @@ export function CallBackSessionProvider({ children }: { children: ReactNode }) {
   };
 
   const hasNext = (): boolean => {
-    // Can move to "next" if there's an item above (lower index)
+    // There's a "next" (upwards) element when current index is greater than 0
     return currentCallBackIndex > 0;
   };
 
   const hasPrevious = (): boolean => {
-    // Can move to "previous" if there's an item below (higher index)
+    // There's a "previous" (downwards) element when current index is less than last
     return currentCallBackIndex < currentCallBackList.length - 1;
   };
 

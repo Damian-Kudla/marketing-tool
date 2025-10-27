@@ -16,16 +16,29 @@ export function SessionExpiredBanner() {
   const [isExpired, setIsExpired] = useState(false);
 
   useEffect(() => {
+    console.log('[SessionExpiredBanner] 🎬 Component mounted, subscribing to session status');
+    
     // Subscribe to session status changes
     const unsubscribe = sessionStatusManager.subscribe((expired) => {
+      console.log('[SessionExpiredBanner] 📨 Received status update:', expired);
       setIsExpired(expired);
     });
 
-    return unsubscribe;
+    return () => {
+      console.log('[SessionExpiredBanner] 🧹 Component unmounting, unsubscribing');
+      unsubscribe();
+    };
   }, []);
 
+  console.log('[SessionExpiredBanner] 🔍 Render - isExpired:', isExpired);
+
   // Don't render if session is not expired
-  if (!isExpired) return null;
+  if (!isExpired) {
+    console.log('[SessionExpiredBanner] ✅ Session OK - not rendering banner');
+    return null;
+  }
+
+  console.log('[SessionExpiredBanner] 🚨 Session expired - rendering banner');
 
   return (
     <div
