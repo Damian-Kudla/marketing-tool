@@ -11,7 +11,7 @@ import { AddressOverview } from '@/components/AddressOverview';
 import { MaximizeButton } from '@/components/MaximizeButton';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { RotateCcw, ArrowRight, ArrowLeft, X, Info } from 'lucide-react';
+import { RotateCcw, ArrowRight, ArrowLeft, X, Info, Navigation } from 'lucide-react';
 import { ocrAPI, datasetAPI } from '@/services/api';
 import { useFilteredToast } from '@/hooks/use-filtered-toast';
 import { useViewMode } from '@/contexts/ViewModeContext';
@@ -475,6 +475,39 @@ export default function ScannerPage() {
     setUseNormalizedDatasetSearch(false); // Use local search (no API) for +/- buttons
   }, []);
 
+  const handleOpenNavigation = useCallback(() => {
+    if (!address) {
+      toast({
+        variant: "destructive",
+        title: "Keine Adresse",
+        description: "Es ist keine Adresse geladen",
+      });
+      return;
+    }
+
+    // Create address string for navigation
+    const addressString = `${address.street} ${address.number}, ${address.postal} ${address.city}`;
+    
+    // Try Apple Maps first (iOS), then fallback to Google Maps
+    const appleMapsUrl = `maps://maps.apple.com/?address=${encodeURIComponent(addressString)}`;
+    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressString)}`;
+    
+    // Detect iOS
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    
+    if (isIOS) {
+      // Try Apple Maps first
+      window.location.href = appleMapsUrl;
+      // Fallback to Google Maps after a short delay if Apple Maps didn't open
+      setTimeout(() => {
+        window.open(googleMapsUrl, '_blank');
+      }, 500);
+    } else {
+      // For Android and desktop, use Google Maps
+      window.open(googleMapsUrl, '_blank');
+    }
+  }, [address, toast]);
+
   const handleAddressSearch = useCallback((customers: any[]) => {
     console.log('Address search result:', customers);
     
@@ -594,10 +627,22 @@ export default function ScannerPage() {
                   </span>
                 </div>
                 {address && (
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-md">
-                    <span className="text-sm font-medium">
-                      {address.street} {address.number}, {address.postal} {address.city}
-                    </span>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-md">
+                      <span className="text-sm font-medium">
+                        {address.street} {address.number}, {address.postal} {address.city}
+                      </span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleOpenNavigation}
+                      className="gap-2"
+                      title="Navigation öffnen"
+                    >
+                      <Navigation className="h-4 w-4" />
+                      <span className="hidden sm:inline">Navigation</span>
+                    </Button>
                   </div>
                 )}
               </div>
@@ -699,14 +744,26 @@ export default function ScannerPage() {
                 </span>
               </div>
               {address && (
-                <ClickableAddressHeader 
-                  address={address} 
-                  residents={editableResidents} 
-                  canEdit={canEdit}
-                  datasetCreatedAt={datasetCreatedAt}
-                  onResidentsUpdate={handleResidentUpdate}
-                  currentDatasetId={currentDatasetId}
-                />
+                <>
+                  <ClickableAddressHeader 
+                    address={address} 
+                    residents={editableResidents} 
+                    canEdit={canEdit}
+                    datasetCreatedAt={datasetCreatedAt}
+                    onResidentsUpdate={handleResidentUpdate}
+                    currentDatasetId={currentDatasetId}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleOpenNavigation}
+                    className="gap-2"
+                    title="Navigation öffnen"
+                  >
+                    <Navigation className="h-4 w-4" />
+                    <span className="hidden sm:inline">Navigation</span>
+                  </Button>
+                </>
               )}
             </div>
             <div className="flex items-center gap-3 flex-shrink-0">
