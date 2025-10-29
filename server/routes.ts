@@ -692,6 +692,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         matches    // Pass existing customers to log in dedicated column
       );
       
+      // Track action in daily data store for live dashboard
+      if (req.userId && req.username) {
+        dailyDataStore.addAction(req.userId, req.username, 'search_address');
+      }
+      
       res.json({ 
         customers: matches,
         relatedHouseNumbers: relatedHouseNumbers.length > 0 ? relatedHouseNumbers : undefined

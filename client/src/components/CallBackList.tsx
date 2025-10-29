@@ -88,12 +88,19 @@ export function CallBackList({ onLoadDataset }: CallBackListProps) {
     // Disable System Messages for focused work
     setShowSystemMessages(false);
     
-    // Get sorted list based on current sort mode
-    const sortedList = getSortedCallBacks(callBacks);
+    // ALWAYS navigate chronologically from OLDEST to NEWEST
+    // To make "Nächster" go from old→new and match visual navigation (up=Nächster),
+    // we reverse the list so NEWEST is at index 0 and OLDEST is at last index
+    const chronologicalList = [...callBacks].sort((a, b) => {
+      const timeA = new Date(a.createdAt).getTime();
+      const timeB = new Date(b.createdAt).getTime();
+      return timeB - timeA; // Descending: newest first (at index 0)
+    });
     
-    // Start with first item in sorted list
-    const firstDataset = sortedList[0];
-    await handleAddressClickForQuickStart(firstDataset.datasetId, firstDataset.address, sortedList);
+    // Start with LAST item in list (oldest dataset at highest index)
+    const startIndex = chronologicalList.length - 1;
+    const firstDataset = chronologicalList[startIndex];
+    await handleAddressClickForQuickStart(firstDataset.datasetId, firstDataset.address, chronologicalList, startIndex);
   };
 
   // Helper function to sort callbacks based on current mode
@@ -154,10 +161,12 @@ export function CallBackList({ onLoadDataset }: CallBackListProps) {
     }
   };
 
-  const handleAddressClickForQuickStart = async (datasetId: string, address: string, sortedList: CallBackItem[]) => {
+  const handleAddressClickForQuickStart = async (datasetId: string, address: string, chronologicalList: CallBackItem[], startIndex: number) => {
     if (onLoadDataset && period) {
-      // Start Call Back session with sorted list at index 0 (first item)
-      startCallBackSession(sortedList, period, 0, sortDescending);
+      // Start Call Back session with chronologically sorted list (newest first)
+      // Start at highest index (oldest dataset)
+      // Navigation: "Nächster" = index-1 (towards newer), always visual up
+      startCallBackSession(chronologicalList, period, startIndex, true);
       
       // Load the first dataset
       try {
@@ -177,7 +186,7 @@ export function CallBackList({ onLoadDataset }: CallBackListProps) {
         
         toast({
           title: "Adresse geladen",
-          description: `${address} wurde geöffnet`,
+          description: `${address} wurde geöffnet (Ältester Datensatz)`,
         });
       } catch (error) {
         console.error('Error loading dataset:', error);
@@ -202,7 +211,7 @@ export function CallBackList({ onLoadDataset }: CallBackListProps) {
 
   const handleAddressClick = async (datasetId: string, address: string) => {
     if (onLoadDataset && callBacks && period) {
-      // Get sorted list based on current sort mode
+      // Get sorted list based on current sort mode (visual order)
       const sortedList = getSortedCallBacks(callBacks);
       
       // Find the clicked dataset's index in the sorted list
@@ -213,8 +222,10 @@ export function CallBackList({ onLoadDataset }: CallBackListProps) {
         return;
       }
       
-      // Start session with sorted list, correct index, and current sort direction
-      startCallBackSession(sortedList, period, sortedIndex, sortDescending);
+      // Start session with sorted list in visual order
+      // Always use isDescending=true because navigation is always visual:
+      // "Nächster" = up in list (index-1), "Vorheriger" = down in list (index+1)
+      startCallBackSession(sortedList, period, sortedIndex, true);
       
       // Load dataset in current view - mark as loaded from CallBack
       try {
@@ -329,7 +340,7 @@ export function CallBackList({ onLoadDataset }: CallBackListProps) {
               size="lg"
             >
               <Zap className="h-5 w-5 mr-2" />
-              Quick Start - Erste Adresse {sortMode === "chronological" ? "(Chronologisch)" : "(Nach Straße)"}
+              Quick Start - Vom Ältesten zum Neuesten
             </Button>
           )}
 

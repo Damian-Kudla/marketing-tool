@@ -22,6 +22,23 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
+    // ✅ HMR-Safe: During hot module replacement, context might be temporarily undefined
+    // Log warning but don't throw to prevent crashes during development
+    if (import.meta.env.DEV) {
+      console.warn('[AuthContext] ⚠️ useAuth called outside AuthProvider (possibly HMR). Returning default context.');
+      // Return safe default context to prevent crashes during HMR
+      return {
+        isAuthenticated: false,
+        userId: null,
+        username: null,
+        isAdmin: false,
+        login: () => { console.warn('[AuthContext] Login called on default context'); },
+        logout: () => { console.warn('[AuthContext] Logout called on default context'); },
+        checkAuth: async () => { console.warn('[AuthContext] CheckAuth called on default context'); },
+        isLoading: true,
+      };
+    }
+    // In production, throw error as before
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;

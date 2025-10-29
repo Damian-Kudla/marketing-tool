@@ -205,6 +205,52 @@ class DailyDataStore {
   }
 
   /**
+   * Add a single action directly (for API endpoints not tracked via /api/tracking/session)
+   * This ensures actions like dataset_create, bulk_residents_update, etc. are counted
+   */
+  addAction(userId: string, username: string, actionType: string, residentStatus?: string, previousStatus?: string): void {
+    const userData = this.getUserData(userId, username);
+    
+    const timestamp = Date.now();
+    
+    // Check if we've already processed this action timestamp
+    let processedTimestamps = this.processedActionTimestamps.get(userId);
+    if (!processedTimestamps) {
+      processedTimestamps = new Set<number>();
+      this.processedActionTimestamps.set(userId, processedTimestamps);
+    }
+    
+    // Skip if already processed (avoid duplicates)
+    if (processedTimestamps.has(timestamp)) {
+      return;
+    }
+    
+    // Mark as processed
+    processedTimestamps.add(timestamp);
+    
+    // Increment total actions
+    userData.totalActions++;
+    
+    // Count by type
+    const count = userData.actionsByType.get(actionType) || 0;
+    userData.actionsByType.set(actionType, count + 1);
+    
+    // Track STATUS CHANGES
+    if (actionType === 'status_change' && residentStatus) {
+      // Only count actual changes if previousStatus is provided
+      if (previousStatus !== undefined && previousStatus !== residentStatus) {
+        const statusCount = userData.statusChanges.get(residentStatus) || 0;
+        userData.statusChanges.set(residentStatus, statusCount + 1);
+      }
+      // Count all if previousStatus not provided (backward compatibility)
+      else if (previousStatus === undefined) {
+        const statusCount = userData.statusChanges.get(residentStatus) || 0;
+        userData.statusChanges.set(residentStatus, statusCount + 1);
+      }
+    }
+  }
+
+  /**
    * Update device status
    */
   updateDevice(userId: string, username: string, device: DeviceStatus): void {
@@ -411,10 +457,11 @@ class DailyDataStore {
 
       userData.conversionRates = conversionRates;
 
-      console.log(`[DailyStore] Calculated final statuses and conversions for ${username}:`, {
-        finalStatuses: Array.from(finalStatuses.entries()),
-        conversionRates
-      });
+      // Only log if there are interesting conversion rates
+      const hasConversions = Object.values(conversionRates).some(rate => rate > 0);
+      if (hasConversions || finalStatuses.size > 3) {
+        console.log(`[DailyStore] ${username}: ${finalStatuses.size} status types, conversions:`, conversionRates);
+      }
     } catch (error) {
       console.error('[DailyStore] Error calculating final statuses and conversions:', error);
     }

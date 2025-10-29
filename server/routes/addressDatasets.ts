@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { addressDatasetService, normalizeAddress } from '../services/googleSheets';
 import { logUserActivityWithRetry } from '../services/enhancedLogging';
 import { storage } from '../storage';
+import { dailyDataStore } from '../services/dailyDataStore';
 
 // ==================== LOCK MECHANISM FOR RACE CONDITION PREVENTION ====================
 // In-memory lock map to prevent concurrent dataset creation for the same address
@@ -335,7 +336,7 @@ Bitte überprüfe die Eingabe oder verwende eine andere Schreibweise.`,
           fixedCustomers: [], // Will be populated from customer database
         });
 
-        // Log dataset creation activity
+        // Log activity to Google Sheets
         try {
           await logUserActivityWithRetry(
             req,
@@ -354,6 +355,12 @@ Bitte überprüfe die Eingabe oder verwende eine andere Schreibweise.`,
           );
         } catch (logError) {
           console.error('[POST /api/address-datasets] Failed to log activity:', logError);
+        }
+
+        // Track action in daily data store for live dashboard
+        const userId = (req as any).userId;
+        if (userId && username) {
+          dailyDataStore.addAction(userId, username, 'dataset_create');
         }
 
         return dataset;
@@ -666,6 +673,12 @@ router.put('/bulk-residents', async (req, res) => {
       );
     } catch (logError) {
       console.error('[PUT /api/address-datasets/bulk-residents] Failed to log activity:', logError);
+    }
+
+    // Track action in daily data store for live dashboard
+    const userId = (req as any).userId;
+    if (userId && username) {
+      dailyDataStore.addAction(userId, username, 'bulk_residents_update');
     }
 
     res.json({ success: true });

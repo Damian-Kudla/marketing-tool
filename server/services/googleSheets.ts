@@ -954,15 +954,16 @@ class AddressDatasetService implements AddressSheetsService {
     const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
 
-    console.log('[getUserDatasetsByDate] Searching cache for:', { username, date, dayStart, dayEnd });
-
     // Filter from cache
     const datasets = datasetCache.getAll().filter(dataset => {
       const createdAt = new Date(dataset.createdAt);
       return dataset.createdBy === username && createdAt >= dayStart && createdAt < dayEnd;
     });
 
-    console.log(`[getUserDatasetsByDate] Found ${datasets.length} datasets in cache`);
+    // Only log if no datasets found (potential issue) or many datasets (interesting)
+    if (datasets.length === 0 || datasets.length > 50) {
+      console.log(`[getUserDatasetsByDate] ${username}: ${datasets.length} datasets`);
+    }
     return datasets.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 

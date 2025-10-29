@@ -21,19 +21,19 @@ export function CallBackSessionProvider({ children }: { children: ReactNode }) {
   const [currentCallBackIndex, setCurrentCallBackIndex] = useState(-1);
   const [callBackPeriod, setCallBackPeriod] = useState<'today' | 'yesterday' | 'custom' | null>(null);
   const [loadedFromCallBack, setLoadedFromCallBack] = useState(false);
-  const [isDescendingOrder, setIsDescendingOrder] = useState(true); // Track if list is in descending order
 
   const startCallBackSession = (list: any[], period: 'today' | 'yesterday' | 'custom', startIndex: number = 0, isDescending: boolean = true) => {
     setCurrentCallBackList(list);
     setCurrentCallBackIndex(startIndex);
     setCallBackPeriod(period);
     setLoadedFromCallBack(true);
-    setIsDescendingOrder(isDescending);
+    // isDescending parameter is kept for backward compatibility but not used anymore
+    // Navigation is always visual: "Nächster" = up (index-1), "Vorheriger" = down (index+1)
   };
 
   const moveToNext = (): string | null => {
-    // UX decision: "Nächster" should move UP in the visual list (towards lower index)
-    // so decrement the index when the user clicks "Nächster".
+    // "Nächster" = move UP in the visual list (towards index 0)
+    // This works for any sort order because the list is already sorted visually
     const nextIndex = currentCallBackIndex - 1;
 
     if (nextIndex >= 0) {
@@ -44,7 +44,8 @@ export function CallBackSessionProvider({ children }: { children: ReactNode }) {
   };
 
   const moveToPrevious = (): string | null => {
-    // "Vorheriger" moves DOWN in the visual list (towards higher index)
+    // "Vorheriger" = move DOWN in the visual list (towards end of list)
+    // This works for any sort order because the list is already sorted visually
     const prevIndex = currentCallBackIndex + 1;
 
     if (prevIndex < currentCallBackList.length) {
@@ -55,12 +56,12 @@ export function CallBackSessionProvider({ children }: { children: ReactNode }) {
   };
 
   const hasNext = (): boolean => {
-    // There's a "next" (upwards) element when current index is greater than 0
+    // Has "next" (upwards) element when not at top of list
     return currentCallBackIndex > 0;
   };
 
   const hasPrevious = (): boolean => {
-    // There's a "previous" (downwards) element when current index is less than last
+    // Has "previous" (downwards) element when not at bottom of list
     return currentCallBackIndex < currentCallBackList.length - 1;
   };
 
@@ -69,7 +70,6 @@ export function CallBackSessionProvider({ children }: { children: ReactNode }) {
     setCurrentCallBackIndex(-1);
     setCallBackPeriod(null);
     setLoadedFromCallBack(false);
-    setIsDescendingOrder(true);
   };
 
   return (

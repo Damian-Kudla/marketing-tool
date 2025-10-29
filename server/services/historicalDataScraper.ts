@@ -237,6 +237,24 @@ function parseLogEntry(row: any[]): ParsedLog | null {
       type = 'device';
     } else if (endpoint === '/api/ocr' || endpoint === '/api/ocr-correct') {
       type = 'photo';
+    } else if (endpoint === '/api/address-datasets' || endpoint === '/api/search-address' || 
+               endpoint?.startsWith('/api/address-datasets/') || endpoint?.startsWith('/api/datasets/')) {
+      // Recognize API actions from endpoints even if not sent via /api/tracking/session
+      type = 'action';
+      // Infer action type from endpoint and method if not present in data
+      if (!action) {
+        if (endpoint === '/api/address-datasets' && method === 'POST') {
+          parsedData.action = 'dataset_create';
+        } else if (endpoint?.includes('/bulk-residents') && method === 'PUT') {
+          parsedData.action = 'bulk_residents_update';
+        } else if (endpoint === '/api/search-address' && method === 'POST') {
+          parsedData.action = 'search_address';
+        } else if (method === 'PUT') {
+          parsedData.action = 'edit';
+        } else if (method === 'DELETE') {
+          parsedData.action = 'delete';
+        }
+      }
     }
 
     return {
