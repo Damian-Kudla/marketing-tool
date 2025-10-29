@@ -23,7 +23,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Download, RefreshCw, Users, Activity, MapPin, Calendar, Route } from 'lucide-react';
+import { Download, RefreshCw, Users, Activity, MapPin, Calendar, Route, LogOut } from 'lucide-react';
 import RouteReplayMap from '../components/RouteReplayMap';
 
 // Fix Leaflet default icon issue with Vite
@@ -131,7 +131,7 @@ function MapBounds({ users }: { users: DashboardUser[] }) {
 }
 
 export default function AdminDashboard() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, logout } = useAuth();
   const [mode, setMode] = useState<'live' | 'historical'>('live');
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -409,14 +409,25 @@ export default function AdminDashboard() {
             Mitarbeiter-Tracking und Aktivitätsanalyse
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => mode === 'live' ? fetchLiveData() : fetchHistoricalData(selectedDate)}
-          disabled={loading}
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => mode === 'live' ? fetchLiveData() : fetchHistoricalData(selectedDate)}
+            disabled={loading}
+            title="Aktualisieren"
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
+          <Button
+            variant="outline"
+            onClick={logout}
+            className="gap-2"
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
+          </Button>
+        </div>
       </div>
 
       {/* Mode Tabs */}
