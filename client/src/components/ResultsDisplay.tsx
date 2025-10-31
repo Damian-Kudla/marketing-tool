@@ -1204,11 +1204,12 @@ export default function ResultsDisplay({
               {address && address.street && address.number && address.postal && canEdit && (
                 <Button
                   onClick={handleCreateResidentWithoutPhoto}
+                  disabled={isCreatingDataset}
                   className="gap-2"
                   data-testid="button-create-resident-no-photo"
                 >
                   <UserPlus className="h-4 w-4" />
-                  {t('resident.create', 'Anwohner anlegen')}
+                  {isCreatingDataset ? t('dataset.creating', 'Erstelle Datensatz...') : t('resident.create', 'Anwohner anlegen')}
                 </Button>
               )}
             </div>
@@ -1741,11 +1742,12 @@ export default function ResultsDisplay({
               </p>
               <Button
                 onClick={handleCreateResidentWithoutPhoto}
+                disabled={isCreatingDataset}
                 className="gap-2"
                 data-testid="button-create-resident-dataset-empty"
               >
                 <UserPlus className="h-4 w-4" />
-                {t('resident.create', 'Anwohner anlegen')}
+                {isCreatingDataset ? t('dataset.creating', 'Erstelle Datensatz...') : t('resident.create', 'Anwohner anlegen')}
               </Button>
             </div>
           )}

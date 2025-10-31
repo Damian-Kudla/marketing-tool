@@ -15,7 +15,7 @@ interface CreationLock {
 }
 
 const creationLocks = new Map<string, CreationLock>();
-const LOCK_TIMEOUT_MS = 10000; // 10 seconds
+const LOCK_TIMEOUT_MS = 30000; // 30 seconds (increased from 10s to handle slow Google Sheets API calls)
 
 // Cleanup expired locks (ran periodically)
 setInterval(() => {
@@ -321,80 +321,77 @@ Bitte überprüfe die Eingabe oder verwende eine andere Schreibweise.`,
     // Create the dataset using NORMALIZED address components
     // This ensures all datasets use Google's standardized address format
     
-    // ==================== SET LOCK: Register creation promise ====================
-    const creationPromise = (async () => {
-      try {
-        const dataset = await addressDatasetService.createAddressDataset({
-          normalizedAddress: normalized.formattedAddress,
-          street: normalized.street,      // Use normalized street (e.g., "Schnellweider Straße")
-          houseNumber: normalized.number, // Use normalized house number
-          city: normalized.city,          // Use normalized city
-          postalCode: normalized.postal,  // Use normalized postal code
-          createdBy: username,
-          rawResidentData: data.rawResidentData,
-          editableResidents: data.editableResidents,
-          fixedCustomers: [], // Will be populated from customer database
-        });
-
-        // Log activity to Google Sheets
-        try {
-          await logUserActivityWithRetry(
-            req,
-            normalized.formattedAddress,
-            undefined, // No prospects at creation
-            undefined, // No existing customers at creation
-            { // Data field
-              action: 'dataset_create',
-              datasetId: dataset.id,
-              street: normalized.street,
-              houseNumber: normalized.number,
-              city: normalized.city,
-              postalCode: normalized.postal,
-              residentsCount: dataset.editableResidents.length
-            }
-          );
-        } catch (logError) {
-          console.error('[POST /api/address-datasets] Failed to log activity:', logError);
-        }
-
-        // Track action in daily data store for live dashboard
-        const userId = (req as any).userId;
-        if (userId && username) {
-          dailyDataStore.addAction(userId, username, 'dataset_create');
-        }
-
-        return dataset;
-      } finally {
-        // ALWAYS remove lock when done (success or failure)
-        creationLocks.delete(lockKey);
-        console.log(`[POST /] 🔓 Released lock for ${lockKey}`);
-      }
-    })();
-    
-    // Register the promise in the lock map BEFORE awaiting
+    // ==================== OPTIMIZED: Fast dataset creation without blocking ====================
+    // Set lock to prevent race conditions
+    const lockPromise = Promise.resolve(); // Dummy promise for lock mechanism
     creationLocks.set(lockKey, {
-      promise: creationPromise,
+      promise: lockPromise,
       timestamp: Date.now()
     });
     console.log(`[POST /] 🔒 Set lock for ${lockKey}`);
-    // ==================== END SET LOCK ====================
+    
+    try {
+      // Create dataset synchronously in cache (FAST - no Google Sheets write yet)
+      const dataset = await addressDatasetService.createAddressDataset({
+        normalizedAddress: normalized.formattedAddress,
+        street: normalized.street,      // Use normalized street (e.g., "Schnellweider Straße")
+        houseNumber: normalized.number, // Use normalized house number
+        city: normalized.city,          // Use normalized city
+        postalCode: normalized.postal,  // Use normalized postal code
+        createdBy: username,
+        rawResidentData: data.rawResidentData,
+        editableResidents: data.editableResidents,
+        fixedCustomers: [], // Will be populated from customer database
+      });
 
-    // Await the creation (lock is already registered)
-    const dataset = await creationPromise;
+      // Release lock IMMEDIATELY after cache write (before logging!)
+      creationLocks.delete(lockKey);
+      console.log(`[POST /] 🔓 Released lock for ${lockKey} (dataset in cache)`);
 
-    // New datasets are always editable by the creator
-    res.json({
-      ...dataset,
-      canEdit: true,
-      // Return normalized address so frontend can update its state
-      // Keep original house number from user input (may contain ranges like "1-3" or "1,2,3")
-      normalizedAddress: {
-        street: normalized.street,
-        number: data.address.number, // Use original user input, not normalized single number
-        city: normalized.city,
-        postal: normalized.postal,
+      // Log activity to Google Sheets ASYNCHRONOUSLY (don't wait for it)
+      logUserActivityWithRetry(
+        req,
+        normalized.formattedAddress,
+        undefined, // No prospects at creation
+        undefined, // No existing customers at creation
+        { // Data field
+          action: 'dataset_create',
+          datasetId: dataset.id,
+          street: normalized.street,
+          houseNumber: normalized.number,
+          city: normalized.city,
+          postalCode: normalized.postal,
+          residentsCount: dataset.editableResidents.length
+        }
+      ).catch(logError => {
+        console.error('[POST /api/address-datasets] Failed to log activity:', logError);
+      });
+
+      // Track action in daily data store for live dashboard
+      const userId = (req as any).userId;
+      if (userId && username) {
+        dailyDataStore.addAction(userId, username, 'dataset_create');
       }
-    });
+
+      // Return dataset immediately (Google Sheets write happens in background)
+      res.json({
+        ...dataset,
+        canEdit: true,
+        // Return normalized address so frontend can update its state
+        // Keep original house number from user input (may contain ranges like "1-3" or "1,2,3")
+        normalizedAddress: {
+          street: normalized.street,
+          number: data.address.number, // Use original user input, not normalized single number
+          city: normalized.city,
+          postal: normalized.postal,
+        }
+      });
+    } catch (error) {
+      // Release lock on error
+      creationLocks.delete(lockKey);
+      console.log(`[POST /] 🔓 Released lock for ${lockKey} (error)`);
+      throw error;
+    }
   } catch (error) {
     console.error('Error creating address dataset:', error);
     if (error instanceof z.ZodError) {
