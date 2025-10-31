@@ -387,9 +387,10 @@ Bitte überprüfe die Eingabe oder verwende eine andere Schreibweise.`,
       ...dataset,
       canEdit: true,
       // Return normalized address so frontend can update its state
+      // Keep original house number from user input (may contain ranges like "1-3" or "1,2,3")
       normalizedAddress: {
         street: normalized.street,
-        number: normalized.number,
+        number: data.address.number, // Use original user input, not normalized single number
         city: normalized.city,
         postal: normalized.postal,
       }

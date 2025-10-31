@@ -22,9 +22,8 @@ interface RateLimitEntry {
 }
 
 const rateLimitMap = new Map<string, RateLimitEntry>();
-const MAX_ATTEMPTS = 5;
-const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
-const BLOCK_DURATION = 15 * 60 * 1000; // 15 minutes
+const MAX_ATTEMPTS = 10;
+const RATE_LIMIT_WINDOW = 1 * 60 * 1000; // 1 minute
 
 function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: number } {
   const now = new Date();
@@ -39,16 +38,10 @@ function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: number } {
     return { allowed: true };
   }
 
-  // Check if still blocked
-  if (entry.blockedUntil && now < entry.blockedUntil) {
-    const retryAfter = Math.ceil((entry.blockedUntil.getTime() - now.getTime()) / 1000);
-    return { allowed: false, retryAfter };
-  }
-
   // Check if rate limit window has expired
   const windowExpired = now.getTime() - entry.firstAttempt.getTime() > RATE_LIMIT_WINDOW;
   if (windowExpired) {
-    // Reset the counter
+    // Reset the counter after window expires
     rateLimitMap.set(ip, {
       attempts: 1,
       firstAttempt: now
@@ -56,16 +49,16 @@ function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: number } {
     return { allowed: true };
   }
 
-  // Increment attempts
-  entry.attempts++;
-
-  if (entry.attempts > MAX_ATTEMPTS) {
-    // Block this IP
-    entry.blockedUntil = new Date(now.getTime() + BLOCK_DURATION);
-    const retryAfter = Math.ceil(BLOCK_DURATION / 1000);
+  // Check if max attempts reached within current window
+  if (entry.attempts >= MAX_ATTEMPTS) {
+    // Calculate remaining time in current window
+    const timeRemaining = RATE_LIMIT_WINDOW - (now.getTime() - entry.firstAttempt.getTime());
+    const retryAfter = Math.ceil(timeRemaining / 1000);
     return { allowed: false, retryAfter };
   }
 
+  // Increment attempts within current window
+  entry.attempts++;
   return { allowed: true };
 }
 
