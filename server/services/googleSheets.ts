@@ -406,8 +406,9 @@ const datasetCache = new DatasetCache();
 // VALIDATED STREET CACHE - Permanent cache for known valid street names
 // ============================================================================
 class ValidatedStreetCache {
-  // Set für schnelle O(1) Lookups - speichert normalisierte Straßennamen
-  private validatedStreets: Set<string> = new Set();
+  // Map für schnelle O(1) Lookups - speichert validierte Adressen mit Stadt
+  // Key: "normalizedStreet|postal|normalizedCity" → Value: { street, city }
+  private validatedAddresses: Map<string, { street: string; city: string }> = new Map();
   private initialized: boolean = false;
 
   /**
@@ -427,6 +428,26 @@ class ValidatedStreetCache {
   }
 
   /**
+   * Normalisiert Stadtnamen für Cache-Vergleich
+   */
+  private normalizeCityName(city: string): string {
+    return city
+      .toLowerCase()
+      .trim()
+      .replace(/ß/g, 'ss')
+      .replace(/[-\s]/g, '');
+  }
+
+  /**
+   * Erstellt Cache-Key aus Straße, PLZ und Stadt
+   */
+  private getCacheKey(street: string, postal: string, city: string): string {
+    const normalizedStreet = this.normalizeStreetName(street);
+    const normalizedCity = this.normalizeCityName(city);
+    return `${normalizedStreet}|${postal}|${normalizedCity}`;
+  }
+
+  /**
    * Lädt alle Straßennamen aus dem "Adressen" Sheet in den Cache
    * Wird beim Server-Start aufgerufen
    */
@@ -437,25 +458,28 @@ class ValidatedStreetCache {
     }
 
     try {
-      console.log('[ValidatedStreetCache] Initializing street name cache from "Adressen" sheet...');
+      console.log('[ValidatedStreetCache] Initializing address cache from "Adressen" sheet...');
       
       // Alle Datasets laden (enthält alle normalisierten Adressen)
       const allDatasets = await sheetsService.getAllDatasets();
       
-      // Straßennamen extrahieren und normalisieren
+      // Adressen extrahieren und normalisieren
       for (const dataset of allDatasets) {
-        if (dataset.street) {
-          const normalized = this.normalizeStreetName(dataset.street);
-          this.validatedStreets.add(normalized);
+        if (dataset.street && dataset.postalCode && dataset.city) {
+          const cacheKey = this.getCacheKey(dataset.street, dataset.postalCode, dataset.city);
+          this.validatedAddresses.set(cacheKey, {
+            street: dataset.street,
+            city: dataset.city,
+          });
         }
       }
 
       this.initialized = true;
-      console.log(`[ValidatedStreetCache] ✅ Initialized with ${this.validatedStreets.size} validated street names`);
+      console.log(`[ValidatedStreetCache] ✅ Initialized with ${this.validatedAddresses.size} validated addresses`);
       
-      // Log erste 10 Straßen für Debugging
-      const sample = Array.from(this.validatedStreets).slice(0, 10);
-      console.log(`[ValidatedStreetCache] Sample streets:`, sample);
+      // Log erste 5 Adressen für Debugging
+      const sample = Array.from(this.validatedAddresses.entries()).slice(0, 5);
+      console.log(`[ValidatedStreetCache] Sample addresses:`, sample.map(([key, val]) => `${key} → ${val.street}, ${val.city}`));
     } catch (error) {
       console.error('[ValidatedStreetCache] ❌ Failed to initialize:', error);
       // Nicht werfen - Cache bleibt leer, API Calls werden weiterhin gemacht
@@ -463,43 +487,43 @@ class ValidatedStreetCache {
   }
 
   /**
-   * Prüft ob eine Straße bereits validiert wurde (im Cache vorhanden)
-   * @returns true wenn Straße bekannt und validiert ist
+   * Prüft ob eine Adresse bereits validiert wurde (im Cache vorhanden)
+   * @returns Validierte Adresse wenn bekannt, sonst null
    */
-  isValidated(street: string, postal?: string): boolean {
-    const normalized = this.normalizeStreetName(street);
-    const isValid = this.validatedStreets.has(normalized);
+  getValidated(street: string, postal: string, city: string): { street: string; city: string } | null {
+    const cacheKey = this.getCacheKey(street, postal, city);
+    const cached = this.validatedAddresses.get(cacheKey);
     
-    if (isValid) {
-      console.log(`[ValidatedStreetCache] ✅ HIT: "${street}" (PLZ: ${postal}) is in cache, skipping API call`);
+    if (cached) {
+      console.log(`[ValidatedStreetCache] ✅ HIT: "${street}" (PLZ: ${postal}, Stadt: ${city}) → "${cached.street}", "${cached.city}"`);
     } else {
-      console.log(`[ValidatedStreetCache] ❌ MISS: "${street}" (PLZ: ${postal}) not in cache, will call API`);
+      console.log(`[ValidatedStreetCache] ❌ MISS: "${street}" (PLZ: ${postal}, Stadt: ${city}) not in cache, will call API`);
     }
     
-    return isValid;
+    return cached || null;
   }
 
   /**
-   * Fügt eine validierte Straße zum Cache hinzu
+   * Fügt eine validierte Adresse zum Cache hinzu
    * Wird nach erfolgreicher Normalisierung aufgerufen
    */
-  add(street: string): void {
-    const normalized = this.normalizeStreetName(street);
-    const wasNew = !this.validatedStreets.has(normalized);
+  add(street: string, postal: string, city: string): void {
+    const cacheKey = this.getCacheKey(street, postal, city);
+    const wasNew = !this.validatedAddresses.has(cacheKey);
     
-    this.validatedStreets.add(normalized);
+    this.validatedAddresses.set(cacheKey, { street, city });
     
     if (wasNew) {
-      console.log(`[ValidatedStreetCache] ➕ Added new street: "${street}" → "${normalized}" (total: ${this.validatedStreets.size})`);
+      console.log(`[ValidatedStreetCache] ➕ Added new address: "${street}", ${postal}, "${city}" (total: ${this.validatedAddresses.size})`);
     }
   }
 
   /**
    * Gibt Statistiken über den Cache zurück
    */
-  getStats(): { totalStreets: number; initialized: boolean } {
+  getStats(): { totalAddresses: number; initialized: boolean } {
     return {
-      totalStreets: this.validatedStreets.size,
+      totalAddresses: this.validatedAddresses.size,
       initialized: this.initialized,
     };
   }
@@ -1149,7 +1173,7 @@ if (sheetsEnabled) {
   validatedStreetCache.initialize(addressDatasetService)
     .then(() => {
       const stats = validatedStreetCache.getStats();
-      console.log(`[ValidatedStreetCache] Initialization complete - ${stats.totalStreets} validated streets loaded`);
+      console.log(`[ValidatedStreetCache] Initialization complete - ${stats.totalAddresses} validated addresses loaded`);
     })
     .catch((error) => console.error('[ValidatedStreetCache] Initialization failed:', error));
 }
@@ -1707,21 +1731,24 @@ export async function normalizeAddress(
       throw new Error('Postleitzahl muss angegeben werden');
     }
 
-    // STEP 0: Check validated street cache BEFORE making any API calls
-    // If street is in cache, we can skip Nominatim/Google and return immediately
-    if (validatedStreetCache.isValidated(street, postal)) {
-      console.log('[normalizeAddress] ⚡ CACHE HIT - Street is validated, skipping API calls');
-      
-      // Build normalized address directly from input (street already validated)
-      const formattedAddress = `${street} ${postal} ${city || ''}`.trim().toLowerCase();
-      
-      return {
-        formattedAddress,
-        street: street.trim(),
-        number: number.trim(),
-        city: city?.trim() || '',
-        postal: postal.trim(),
-      };
+    // STEP 0: Check validated address cache BEFORE making any API calls
+    // If address (street + postal + city) is in cache, we can skip Nominatim/Google
+    if (city && city.trim()) {
+      const cached = validatedStreetCache.getValidated(street, postal, city);
+      if (cached) {
+        console.log('[normalizeAddress] ⚡ CACHE HIT - Address is validated, skipping API calls');
+        
+        // Build normalized address using cached validated data
+        const formattedAddress = `${cached.street} ${postal} ${cached.city}`.trim().toLowerCase();
+        
+        return {
+          formattedAddress,
+          street: cached.street,
+          number: number.trim(),
+          city: cached.city,
+          postal: postal.trim(),
+        };
+      }
     }
 
     // STEP 1: Try Nominatim (OpenStreetMap) first - FREE and better for real street addresses!
@@ -1749,8 +1776,8 @@ export async function normalizeAddress(
         console.log('[normalizeAddress] ✅ SUCCESS with Nominatim!');
         console.log('[normalizeAddress] Normalized:', nominatimResult.formattedAddress);
         
-        // Add validated street to cache for future use
-        validatedStreetCache.add(nominatimResult.street);
+        // Add validated address to cache for future use (street + postal + city)
+        validatedStreetCache.add(nominatimResult.street, nominatimResult.postal, nominatimResult.city);
         
         return {
           formattedAddress: nominatimResult.formattedAddress,
@@ -1896,9 +1923,9 @@ export async function normalizeAddress(
         console.log('[normalizeAddress] Accepted: High precision location type');
         const normalized = extractAddressComponents(result, number);
         
-        // Add validated street to cache for future use
-        if (normalized && normalized.street) {
-          validatedStreetCache.add(normalized.street);
+        // Add validated address to cache for future use (street + postal + city)
+        if (normalized && normalized.street && normalized.postal && normalized.city) {
+          validatedStreetCache.add(normalized.street, normalized.postal, normalized.city);
         }
         
         return normalized;
@@ -1915,9 +1942,9 @@ export async function normalizeAddress(
         console.log('[normalizeAddress] Accepted: Formatted address contains street and postal code');
         const normalized = extractAddressComponents(result, number);
         
-        // Add validated street to cache for future use
-        if (normalized && normalized.street) {
-          validatedStreetCache.add(normalized.street);
+        // Add validated address to cache for future use (street + postal + city)
+        if (normalized && normalized.street && normalized.postal && normalized.city) {
+          validatedStreetCache.add(normalized.street, normalized.postal, normalized.city);
         }
         
         return normalized;
@@ -1929,9 +1956,9 @@ export async function normalizeAddress(
         console.log('[normalizeAddress] Accepted: Route component exists and postal code matches');
         const normalized = extractAddressComponents(result, number);
         
-        // Add validated street to cache for future use
-        if (normalized && normalized.street) {
-          validatedStreetCache.add(normalized.street);
+        // Add validated address to cache for future use (street + postal + city)
+        if (normalized && normalized.street && normalized.postal && normalized.city) {
+          validatedStreetCache.add(normalized.street, normalized.postal, normalized.city);
         }
         
         return normalized;

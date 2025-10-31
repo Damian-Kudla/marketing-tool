@@ -419,7 +419,18 @@ router.get('/search-local', async (req, res) => {
       });
     }
     
-    // Now validate the full address (postal is guaranteed to be valid)
+    // Check if house number is provided (required for local search)
+    const number = req.query.number as string;
+    if (!number || !number.trim()) {
+      // Return empty result if house number is not provided yet
+      // This is expected when user is still typing the address
+      return res.json({
+        datasets: [],
+        recentDatasetExists: false,
+      });
+    }
+    
+    // Now validate the full address (both postal and number are guaranteed to be valid)
     const address = addressSchema.parse(req.query);
     const username = (req as any).username;
     

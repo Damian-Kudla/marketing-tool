@@ -93,6 +93,7 @@ interface ResultsDisplayProps {
   onDatasetCreatedAtChange?: (createdAt: string | null) => void; // Callback when dataset creation date changes
   initialResidents?: EditableResident[]; // Initial residents when loading an existing dataset
   hideImageOverlays?: boolean; // Hide ImageWithOverlays component (for Grid-View where it's shown in left column)
+  onRequestDatasetCreation?: () => Promise<string | null>; // Callback to request dataset creation (from parent)
 }
 
 export default function ResultsDisplay({ 
@@ -106,7 +107,8 @@ export default function ResultsDisplay({
   onDatasetIdChange,
   onDatasetCreatedAtChange,
   initialResidents = [],
-  hideImageOverlays = false
+  hideImageOverlays = false,
+  onRequestDatasetCreation
 }: ResultsDisplayProps) {
   const { t } = useTranslation();
   const { toast } = useFilteredToast();
@@ -317,7 +319,9 @@ export default function ResultsDisplay({
     
     // If no dataset exists yet, request dataset creation first
     if (!currentDatasetId) {
-      const createdDatasetId = await handleRequestDatasetCreation();
+      // Use parent's dataset creation function if provided (prevents duplicate requests)
+      const createDataset = onRequestDatasetCreation || handleRequestDatasetCreation;
+      const createdDatasetId = await createDataset();
       if (!createdDatasetId) {
         // User cancelled or creation failed
         return;
@@ -1371,7 +1375,7 @@ export default function ResultsDisplay({
             editableResidents={editableResidents}
             onResidentsUpdated={(updatedResidents) => setEditableResidents(updatedResidents)}
             currentDatasetId={currentDatasetId}
-            onRequestDatasetCreation={handleRequestDatasetCreation}
+            onRequestDatasetCreation={onRequestDatasetCreation || handleRequestDatasetCreation}
           />
         </div>
       )}

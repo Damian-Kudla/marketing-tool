@@ -417,9 +417,28 @@ export default function ScannerPage() {
     } catch (error: any) {
       console.error('[handleRequestDatasetCreation] Error creating dataset:', error);
       
-      // Check if it's a 409 conflict (dataset already exists)
+      // Check if it's a 409 conflict
       if (error?.response?.status === 409) {
         const errorData = error.response?.data || {};
+        const errorType = errorData.error;
+        
+        // SPECIAL CASE: Race condition lock - another request is already creating the dataset
+        // This is expected behavior, not an error! Just silently wait and retry after a moment
+        if (errorType === 'Dataset creation already in progress') {
+          console.log('[handleRequestDatasetCreation] ⏳ Race condition detected - another request is creating the dataset, will retry...');
+          
+          // Release lock and retry after a short delay (backend lock timeout is 10s)
+          setIsCreatingDataset(false);
+          
+          // Retry after 500ms (give the first request time to complete)
+          setTimeout(() => {
+            console.log('[handleRequestDatasetCreation] 🔄 Retrying dataset creation after race condition...');
+            handleRequestDatasetCreation().then(resolve);
+          }, 500);
+          return; // Don't show error toast or resolve yet
+        }
+        
+        // NORMAL CASE: Dataset already exists (created earlier, within 30 days)
         const errorMessage = errorData.message || 'Ein Datensatz für diese Adresse existiert bereits heute.';
         const isOwnDataset = errorData.isOwnDataset;
         
@@ -855,6 +874,7 @@ export default function ScannerPage() {
                 onResidentsUpdated={setEditableResidents}
                 initialResidents={editableResidents}
                 hideImageOverlays={true}
+                onRequestDatasetCreation={handleRequestDatasetCreation}
               />
             </div>
           </div>
@@ -943,6 +963,7 @@ export default function ScannerPage() {
                 onResidentsUpdated={setEditableResidents}
                 initialResidents={editableResidents}
                 hideImageOverlays={true}
+                onRequestDatasetCreation={handleRequestDatasetCreation}
               />
             </div>
           </div>
@@ -1146,6 +1167,7 @@ export default function ScannerPage() {
                   onResidentsUpdated={setEditableResidents}
                   initialResidents={editableResidents}
                   hideImageOverlays={true}
+                  onRequestDatasetCreation={handleRequestDatasetCreation}
                 />
               </div>
             </div>

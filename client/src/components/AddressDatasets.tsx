@@ -35,13 +35,24 @@ export function AddressDatasets({ address, onLoadDataset, shouldLoad, useNormali
     ? `${address.street || ''} ${address.number || ''} ${address.postal || ''} ${address.city || ''}`.toLowerCase().trim()
     : null;
 
+  // Check if address is complete enough for search
+  // For local search: require postal (5 digits) AND house number
+  // For normalized search: same requirements (API will validate further)
+  const isAddressComplete = address && 
+    address.postal && 
+    /^\d{5}$/.test(address.postal) && 
+    address.number && 
+    address.number.trim().length > 0;
+
   // Load datasets when address changes (automatically on every address change)
   useEffect(() => {
-    if (shouldLoad && normalizedAddress) {
+    if (shouldLoad && normalizedAddress && isAddressComplete) {
       console.log(`[AddressDatasets] Address changed, loading datasets (${useNormalization ? 'normalized' : 'local'} search) for:`, normalizedAddress);
       loadDatasets();
+    } else if (shouldLoad && normalizedAddress && !isAddressComplete) {
+      console.log('[AddressDatasets] Address incomplete (missing postal or number), skipping dataset search');
     }
-  }, [shouldLoad, normalizedAddress, useNormalization]);
+  }, [shouldLoad, normalizedAddress, useNormalization, isAddressComplete]);
 
   // Clear datasets when address is cleared
   useEffect(() => {
