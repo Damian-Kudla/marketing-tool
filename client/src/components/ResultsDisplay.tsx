@@ -1455,6 +1455,7 @@ export default function ResultsDisplay({
                 const houseNumber = 'houseNumber' in customer ? customer.houseNumber : undefined;
                 const street = 'street' in customer ? customer.street : undefined;
                 const postalCode = 'postalCode' in customer ? customer.postalCode : undefined;
+                const contractType = ('contractType' in customer ? customer.contractType : undefined) as string | undefined;
                 
                 return (
                   <div
@@ -1475,6 +1476,15 @@ export default function ResultsDisplay({
                         {multipleHouseNumbers && houseNumber && (
                           <Badge variant="secondary" className="text-xs font-normal shrink-0">
                             Nr. {houseNumber}
+                          </Badge>
+                        )}
+                        {/* Show contract type (Strom/Gas) if available */}
+                        {contractType && (contractType === 'Strom' || contractType === 'Gas') && (
+                          <Badge 
+                            variant={contractType === 'Strom' ? 'default' : 'outline'} 
+                            className="text-xs font-normal shrink-0"
+                          >
+                            {contractType}
                           </Badge>
                         )}
                       </div>

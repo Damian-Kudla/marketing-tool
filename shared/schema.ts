@@ -24,6 +24,7 @@ export const customers = pgTable("customers", {
   houseNumber: text("house_number"),
   postalCode: text("postal_code"),
   isExisting: boolean("is_existing").notNull().default(true),
+  contractType: text("contract_type"), // "Strom", "Gas", or null (backwards compatible)
 });
 
 export const insertCustomerSchema = createInsertSchema(customers).omit({

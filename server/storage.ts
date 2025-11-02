@@ -337,7 +337,7 @@ export class GoogleSheetsStorage implements IStorage {
       
       const response = await this.sheetsClient.spreadsheets.values.get({
         spreadsheetId: this.SPREADSHEET_ID,
-        range: `${this.SHEET_NAME}!A2:D`, // Skip header row, columns: Name, Straße, Hausnummer, Postleitzahl
+        range: `${this.SHEET_NAME}!A2:E`, // Skip header row, columns: Name, Straße, Hausnummer, Postleitzahl, Vertragsart
       });
 
       const fetchTime = Date.now() - startTime;
@@ -362,6 +362,11 @@ export class GoogleSheetsStorage implements IStorage {
           continue;
         }
 
+        // Parse contract type from column E (Strom/Gas)
+        const contractType = row[4] ? row[4].trim() : null;
+        // Validate: only allow "Strom" or "Gas", otherwise null
+        const validContractType = contractType === 'Strom' || contractType === 'Gas' ? contractType : null;
+
         customers.push({
           id: randomUUID(),
           name: row[0] || '',
@@ -369,6 +374,7 @@ export class GoogleSheetsStorage implements IStorage {
           houseNumber: cleaned.houseNumber,
           postalCode: row[3] || null,
           isExisting: true, // All customers in the sheet are existing
+          contractType: validContractType as string | null, // "Strom", "Gas", or null (backwards compatible)
         });
       }
 
