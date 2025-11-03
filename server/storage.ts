@@ -585,6 +585,7 @@ export class GoogleSheetsStorage implements IStorage {
         houseNumber: insertCustomer.houseNumber || null,
         postalCode: insertCustomer.postalCode || null,
         isExisting: insertCustomer.isExisting ?? true,
+        contractType: null, // New customers don't have a contract type yet
       };
       return customer;
     }
@@ -616,6 +617,7 @@ export class GoogleSheetsStorage implements IStorage {
         houseNumber: insertCustomer.houseNumber || null,
         postalCode: insertCustomer.postalCode || null,
         isExisting: insertCustomer.isExisting ?? true,
+        contractType: null, // New customers don't have a contract type yet
       };
 
       return customer;
