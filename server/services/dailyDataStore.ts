@@ -112,6 +112,17 @@ class DailyDataStore {
   addGPS(userId: string, username: string, gps: GPSCoordinates): void {
     const userData = this.getUserData(userId, username);
     
+    // BUGFIX: Validate GPS timestamp is from today
+    // Reject GPS points from previous days (delayed sync)
+    const gpsDate = new Date(gps.timestamp);
+    const gpsDateStr = gpsDate.toISOString().split('T')[0];
+    const today = this.getCurrentDate();
+    
+    if (gpsDateStr !== today) {
+      console.warn(`[DailyStore] Rejected GPS from wrong date: ${gpsDateStr} (today: ${today}), user: ${username}`);
+      return; // Skip GPS points from other days
+    }
+    
     // Add GPS point
     userData.gpsPoints.push(gps);
 
@@ -141,6 +152,18 @@ class DailyDataStore {
    */
   updateSession(userId: string, username: string, session: Partial<SessionData>): void {
     const userData = this.getUserData(userId, username);
+    
+    // BUGFIX: Validate session data is from today
+    // Check if session has a valid timestamp to determine date
+    const sessionTimestamp = session.lastActivity || Date.now();
+    const sessionDate = new Date(sessionTimestamp);
+    const sessionDateStr = sessionDate.toISOString().split('T')[0];
+    const today = this.getCurrentDate();
+    
+    if (sessionDateStr !== today) {
+      console.warn(`[DailyStore] Rejected session update from wrong date: ${sessionDateStr} (today: ${today}), user: ${username}`);
+      return; // Skip session data from other days
+    }
 
     if (session.sessionDuration !== undefined) {
       userData.totalSessionTime = session.sessionDuration;
@@ -163,6 +186,15 @@ class DailyDataStore {
       }
 
       session.actions.forEach((action: ActionLog) => {
+        // BUGFIX: Validate action timestamp is from today
+        const actionDate = new Date(action.timestamp);
+        const actionDateStr = actionDate.toISOString().split('T')[0];
+        
+        if (actionDateStr !== today) {
+          console.warn(`[DailyStore] Rejected action from wrong date: ${actionDateStr} (today: ${today}), user: ${username}, action: ${action.action}`);
+          return; // Skip actions from other days
+        }
+        
         // Skip if we've already processed this action
         if (processedTimestamps!.has(action.timestamp)) {
           return;

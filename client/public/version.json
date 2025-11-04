@@ -1,7 +1,7 @@
 {
-  "version": "2.6.5",
-  "buildTime": "2025-10-31T15:23:01.531Z",
-  "buildNumber": "build-1761924181532",
+  "version": "2.6.6",
+  "buildTime": "2025-11-02T01:29:58.751Z",
+  "buildNumber": "build-1762046998751",
   "features": [
     "Feature: Hausnummern-Varianten Hinweise (immer anzeigen, nicht nur bei 0 Ergebnissen)",
     "Feature: GPS-Tracking Intervall von 30s auf 15s reduziert",
