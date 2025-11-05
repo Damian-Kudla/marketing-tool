@@ -23,6 +23,7 @@ interface GPSPoint {
   longitude: number;
   accuracy: number;
   timestamp: number;
+  source?: 'native' | 'followmee';
 }
 
 interface RouteReplayMapProps {
@@ -128,13 +129,16 @@ const createPhotoFlashMarker = () => {
   });
 };
 
-// Small clickable marker for GPS points
-const createGPSPointMarker = () => {
+// Small clickable marker for GPS points with source-based coloring
+const createGPSPointMarker = (source?: 'native' | 'followmee') => {
+  // Native: Blue (#3b82f6), FollowMee: Purple (#a855f7)
+  const color = source === 'followmee' ? '#a855f7' : '#3b82f6';
+
   return L.divIcon({
     className: 'custom-marker',
     html: `
       <div style="
-        background-color: #3b82f6;
+        background-color: ${color};
         width: 8px;
         height: 8px;
         border-radius: 50%;
@@ -156,8 +160,8 @@ const getGoogleMapsUrl = (lat: number, lng: number): string => {
 };
 
 // Component to follow current position with intelligent panning
-function CameraFollow({ currentPosition, zoom, isPlaying }: { 
-  currentPosition: GPSPoint | null; 
+function CameraFollow({ currentPosition, zoom, isPlaying }: {
+  currentPosition: GPSPoint | null;
   zoom: number;
   isPlaying: boolean;
 }) {
@@ -342,8 +346,42 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
   // Route up to current position
   const animatedRoute = sortedPoints.slice(0, currentIndex + 1);
 
-  // Full route polyline (all GPS points)
-  const fullRouteCoords = sortedPoints.map(p => [p.latitude, p.longitude] as [number, number]);
+  // Create polyline segments grouped by source for multi-colored route
+  const createRouteSegments = (points: GPSPoint[]) => {
+    const segments: { points: [number, number][]; source: 'native' | 'followmee' | 'unknown' }[] = [];
+
+    if (points.length < 2) return segments;
+
+    let currentSegment: [number, number][] = [[points[0].latitude, points[0].longitude]];
+    let currentSource = points[0].source || 'native';
+
+    for (let i = 1; i < points.length; i++) {
+      const point = points[i];
+      const pointSource = point.source || 'native';
+
+      if (pointSource === currentSource) {
+        // Continue current segment
+        currentSegment.push([point.latitude, point.longitude]);
+      } else {
+        // Source changed, save current segment and start new one
+        if (currentSegment.length > 1) {
+          segments.push({ points: currentSegment, source: currentSource });
+        }
+        currentSegment = [[points[i-1].latitude, points[i-1].longitude], [point.latitude, point.longitude]];
+        currentSource = pointSource;
+      }
+    }
+
+    // Add final segment
+    if (currentSegment.length > 1) {
+      segments.push({ points: currentSegment, source: currentSource });
+    }
+
+    return segments;
+  };
+
+  const fullRouteSegments = createRouteSegments(sortedPoints);
+  const animatedRouteSegments = createRouteSegments(animatedRoute);
 
   // Manual scrubbing: Update position based on slider
   const handleScrub = (index: number) => {
@@ -566,6 +604,21 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
               </p>
             </div>
           </div>
+
+          {/* GPS Source Legend */}
+          <div className="mt-4 pt-4 border-t">
+            <p className="text-sm text-muted-foreground mb-2">GPS-Quellen:</p>
+            <div className="flex gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-[#3b82f6] border-2 border-white shadow"></div>
+                <span>Native App</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-[#a855f7] border-2 border-white shadow"></div>
+                <span>FollowMee</span>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -588,32 +641,40 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
               <InitialBounds points={sortedPoints} />
               
               {/* Camera follows current position with intelligent panning */}
-              <CameraFollow 
-                currentPosition={currentPosition} 
-                zoom={zoomLevel} 
+              <CameraFollow
+                currentPosition={currentPosition}
+                zoom={zoomLevel}
                 isPlaying={isPlaying}
               />
 
-              {/* Full Route (grayed out) */}
-              {showFullRoute && (
-                <Polyline
-                  positions={fullRouteCoords}
-                  color="#9ca3af"
-                  weight={3}
-                  opacity={0.5}
-                  dashArray="5, 5"
-                />
-              )}
+              {/* Full Route (grayed out) - Multi-colored by source */}
+              {showFullRoute && fullRouteSegments.map((segment, idx) => {
+                const color = segment.source === 'followmee' ? '#9ca3af' : '#9ca3af'; // All gray for full route
+                return (
+                  <Polyline
+                    key={`full-segment-${idx}`}
+                    positions={segment.points}
+                    color={color}
+                    weight={3}
+                    opacity={0.5}
+                    dashArray="5, 5"
+                  />
+                );
+              })}
 
-              {/* Animated Route (colored) */}
-              {animatedRoute.length > 1 && (
-                <Polyline
-                  positions={animatedRoute.map(p => [p.latitude, p.longitude])}
-                  color="#3b82f6"
-                  weight={4}
-                  opacity={0.8}
-                />
-              )}
+              {/* Animated Route (colored by source) */}
+              {animatedRouteSegments.map((segment, idx) => {
+                const color = segment.source === 'followmee' ? '#a855f7' : '#3b82f6'; // Purple for FollowMee, Blue for Native
+                return (
+                  <Polyline
+                    key={`animated-segment-${idx}`}
+                    positions={segment.points}
+                    color={color}
+                    weight={4}
+                    opacity={0.8}
+                  />
+                );
+              })}
 
               {/* Start Marker */}
               {sortedPoints.length > 0 && (
@@ -694,7 +755,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
                   <Marker
                     key={`gps-point-${index}`}
                     position={[point.latitude, point.longitude]}
-                    icon={createGPSPointMarker()}
+                    icon={createGPSPointMarker(point.source)}
                     eventHandlers={{
                       click: () => {
                         window.open(getGoogleMapsUrl(point.latitude, point.longitude), '_blank');
@@ -708,6 +769,11 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
                         <p className="text-xs mt-1">
                           {point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}
                         </p>
+                        {point.source && (
+                          <p className="text-xs mt-1 text-muted-foreground">
+                            Quelle: {point.source === 'followmee' ? 'FollowMee' : 'Native App'}
+                          </p>
+                        )}
                         <button
                           onClick={() => window.open(getGoogleMapsUrl(point.latitude, point.longitude), '_blank')}
                           className="mt-2 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 w-full"

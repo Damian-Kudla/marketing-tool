@@ -566,11 +566,22 @@ try {
   console.warn('Google Sheets functionality disabled');
 }
 
+export interface UserData {
+  userId: string;
+  username: string;
+  password: string;
+  postalCodes: string[];
+  isAdmin: boolean;
+  followMeeDeviceId?: string;
+}
+
 export interface SheetsService {
   getValidPasswords(): Promise<string[]>;
   getPasswordUserMap(): Promise<Map<string, string>>;
   getUserByPassword(password: string): Promise<string | null>;
   isUserAdmin(password: string): Promise<boolean>;
+  getAllUsers(): Promise<UserData[]>;
+  refreshUserCache(): Promise<void>;
 }
 
 export interface AddressSheetsService {
@@ -590,10 +601,118 @@ export interface UserCredentials {
   username: string;
 }
 
+// RAM Cache for User Auth Data
+class UserAuthCache {
+  private usersCache: UserData[] = [];
+  private syncInterval: NodeJS.Timeout | null = null;
+  private readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+  private sheetsService: GoogleSheetsService | null = null;
+
+  // Initialize cache with GoogleSheetsService reference
+  async initialize(service: GoogleSheetsService) {
+    this.sheetsService = service;
+    console.log('[UserAuthCache] Initializing user auth cache...');
+
+    try {
+      await this.loadUsersFromSheets();
+      console.log(`[UserAuthCache] Loaded ${this.usersCache.length} users into RAM cache`);
+
+      // Start background sync every 5 minutes
+      this.startBackgroundSync();
+    } catch (error) {
+      console.error('[UserAuthCache] Failed to initialize cache:', error);
+      throw error;
+    }
+  }
+
+  // Start background job to sync user data every 5 minutes
+  private startBackgroundSync() {
+    if (this.syncInterval) {
+      clearInterval(this.syncInterval);
+    }
+
+    this.syncInterval = setInterval(async () => {
+      await this.loadUsersFromSheets();
+    }, this.CACHE_TTL);
+
+    console.log('[UserAuthCache] Background sync started (every 5 minutes)');
+  }
+
+  // Load user data from Google Sheets
+  private async loadUsersFromSheets(): Promise<void> {
+    if (!this.sheetsService) {
+      console.error('[UserAuthCache] No sheets service available');
+      return;
+    }
+
+    try {
+      console.log('[UserAuthCache] Syncing user data from Google Sheets...');
+      const users = await this.sheetsService.loadAllUsersFromSheets();
+      this.usersCache = users;
+      console.log(`[UserAuthCache] Synced ${this.usersCache.length} users (${users.filter(u => u.followMeeDeviceId).length} with FollowMee devices)`);
+    } catch (error) {
+      console.error('[UserAuthCache] Failed to sync user data:', error);
+      // Keep existing cache on error
+    }
+  }
+
+  // Get user by password from cache
+  getUserByPassword(password: string): UserData | undefined {
+    return this.usersCache.find(u => u.password === password.trim());
+  }
+
+  // Get user by username from cache
+  getUserByUsername(username: string): UserData | undefined {
+    return this.usersCache.find(u => u.username === username);
+  }
+
+  // Get all users from cache
+  getAllUsers(): UserData[] {
+    return [...this.usersCache];
+  }
+
+  // Check if user is admin from cache
+  isUserAdmin(password: string): boolean {
+    const user = this.getUserByPassword(password);
+    return user?.isAdmin || false;
+  }
+
+  // Get user postal codes from cache
+  getUserPostalCodes(username: string): string[] {
+    const user = this.getUserByUsername(username);
+    return user?.postalCodes || [];
+  }
+
+  // Get password-user map from cache
+  getPasswordUserMap(): Map<string, string> {
+    const map = new Map<string, string>();
+    for (const user of this.usersCache) {
+      map.set(user.password, user.username);
+    }
+    return map;
+  }
+
+  // Force immediate refresh of user data (for admin operations)
+  async forceRefresh(): Promise<void> {
+    console.log('[UserAuthCache] Force refresh requested');
+    await this.loadUsersFromSheets();
+  }
+
+  // Cleanup
+  destroy() {
+    if (this.syncInterval) {
+      clearInterval(this.syncInterval);
+      this.syncInterval = null;
+    }
+  }
+}
+
+// Global user auth cache instance
+const userAuthCache = new UserAuthCache();
+
 class GoogleSheetsService implements SheetsService {
   private readonly SHEET_ID = '1IF9ieZQ_irKs9XU7XZmDuBaT4XqQrtm0EmfKbA3zB4s';
   private readonly WORKSHEET_NAME = 'Zugangsdaten';
-  private readonly RANGE = 'A2:B'; // Both columns A and B starting from row 2
 
   async getValidPasswords(): Promise<string[]> {
     const passwordUserMap = await this.getPasswordUserMap();
@@ -601,73 +720,66 @@ class GoogleSheetsService implements SheetsService {
   }
 
   async getPasswordUserMap(): Promise<Map<string, string>> {
-    if (!sheetsEnabled || !sheetsClient) {
-      console.warn('Google Sheets API not available - authentication will fail');
-      return new Map();
-    }
-
-    try {
-      const response = await sheetsClient.spreadsheets.values.get({
-        spreadsheetId: this.SHEET_ID,
-        range: `${this.WORKSHEET_NAME}!A2:D`, // Extended to column D for admin role
-      });
-
-      const rows = response.data.values || [];
-      const passwordUserMap = new Map<string, string>();
-      
-      // Process each row to extract password and username
-      for (const row of rows) {
-        const password = row[0]?.trim();
-        const username = row[1]?.trim();
-        
-        if (password && username) {
-          passwordUserMap.set(password, username);
-        }
-      }
-
-      console.log(`Loaded ${passwordUserMap.size} valid password-username pairs from Google Sheets`);
-      return passwordUserMap;
-    } catch (error) {
-      console.error('Error fetching password-username data from Google Sheets:', error);
-      throw new Error('Failed to load authentication data');
-    }
+    // Use cache instead of direct API call
+    return userAuthCache.getPasswordUserMap();
   }
 
   async isUserAdmin(password: string): Promise<boolean> {
-    if (!sheetsEnabled || !sheetsClient) {
-      console.warn('Google Sheets API not available');
-      return false;
+    // Use cache instead of direct API call
+    const isAdmin = userAuthCache.isUserAdmin(password);
+    if (isAdmin) {
+      console.log(`[Auth] User with password ${password.substring(0, 3)}... is ADMIN`);
     }
-
-    try {
-      const response = await sheetsClient.spreadsheets.values.get({
-        spreadsheetId: this.SHEET_ID,
-        range: `${this.WORKSHEET_NAME}!A2:D`,
-      });
-
-      const rows = response.data.values || [];
-      
-      // Find the user's row by password
-      for (const row of rows) {
-        const rowPassword = row[0]?.trim();
-        const adminRole = row[3]?.trim().toLowerCase(); // Column D
-        
-        if (rowPassword === password.trim()) {
-          const isAdmin = adminRole === 'admin';
-          console.log(`[Auth] User with password ${password.substring(0, 3)}... is ${isAdmin ? 'ADMIN' : 'REGULAR USER'}`);
-          return isAdmin;
-        }
-      }
-
-      console.log(`[Auth] Password not found in sheet`);
-      return false;
-    } catch (error) {
-      console.error('Error checking admin status:', error);
-      return false;
-    }
+    return isAdmin;
   }
 
   async getUserPostalCodes(username: string): Promise<string[]> {
+    // Use cache instead of direct API call
+    const postalCodes = userAuthCache.getUserPostalCodes(username);
+
+    if (postalCodes.length > 0) {
+      console.log(`[PLZ-Check] User ${username} has postal codes: ${postalCodes.join(', ')}`);
+    } else {
+      console.log(`[PLZ-Check] User ${username} has no postal code restrictions`);
+    }
+
+    return postalCodes;
+  }
+
+  async validatePostalCodeForUser(username: string, postalCode: string): Promise<boolean> {
+    const allowedCodes = await this.getUserPostalCodes(username);
+
+    // No postal codes assigned = no restriction
+    if (allowedCodes.length === 0) {
+      return true;
+    }
+
+    // Check if postal code is in allowed list
+    const normalizedSearch = postalCode.trim();
+    const isAllowed = allowedCodes.includes(normalizedSearch);
+
+    console.log(`[PLZ-Check] Postal code ${normalizedSearch} for user ${username}: ${isAllowed ? 'ALLOWED' : 'DENIED'}`);
+    return isAllowed;
+  }
+
+  async getUserByPassword(password: string): Promise<string | null> {
+    // Use cache instead of direct API call
+    const user = userAuthCache.getUserByPassword(password);
+    return user?.username || null;
+  }
+
+  async getAllUsers(): Promise<UserData[]> {
+    // Use cache instead of direct API call
+    return userAuthCache.getAllUsers();
+  }
+
+  async refreshUserCache(): Promise<void> {
+    // Force immediate refresh of user cache
+    await userAuthCache.forceRefresh();
+  }
+
+  // Internal method: Load all users from Google Sheets (used by cache)
+  async loadAllUsersFromSheets(): Promise<UserData[]> {
     if (!sheetsEnabled || !sheetsClient) {
       console.warn('Google Sheets API not available');
       return [];
@@ -676,55 +788,44 @@ class GoogleSheetsService implements SheetsService {
     try {
       const response = await sheetsClient.spreadsheets.values.get({
         spreadsheetId: this.SHEET_ID,
-        range: `${this.WORKSHEET_NAME}!A2:C`,
+        range: `${this.WORKSHEET_NAME}!A2:E`, // Extended to column E for FollowMee Device ID
       });
 
       const rows = response.data.values || [];
-      
-      // Find the user's row
+      const users: UserData[] = [];
+
       for (const row of rows) {
-        const rowUsername = row[1]?.trim();
+        const password = row[0]?.trim();
+        const username = row[1]?.trim();
         const postalCodesString = row[2]?.trim();
-        
-        if (rowUsername === username && postalCodesString) {
-          // Split by comma and clean up
+        const adminRole = row[3]?.trim().toLowerCase();
+        const followMeeDeviceId = row[4]?.trim();
+
+        if (password && username) {
           const postalCodes = postalCodesString
-            .split(',')
-            .map((code: string) => code.trim())
-            .filter((code: string) => code.length > 0);
-          
-          console.log(`[PLZ-Check] User ${username} has postal codes: ${postalCodes.join(', ')}`);
-          return postalCodes;
+            ? postalCodesString.split(',').map((code: string) => code.trim()).filter((code: string) => code.length > 0)
+            : [];
+
+          // Generate user ID from password hash (stable, only changes if password changes)
+          // This matches the original system in auth.ts
+          const userId = crypto.createHash('sha256').update(password).digest('hex').substring(0, 8);
+
+          users.push({
+            userId: userId,
+            username,
+            password,
+            postalCodes,
+            isAdmin: adminRole === 'admin',
+            followMeeDeviceId: followMeeDeviceId || undefined
+          });
         }
       }
 
-      console.log(`[PLZ-Check] User ${username} has no postal code restrictions`);
-      return []; // No postal codes = no restriction
+      return users;
     } catch (error) {
-      console.error('Error fetching user postal codes:', error);
-      return []; // On error, allow all
+      console.error('Error fetching user data from Google Sheets:', error);
+      return [];
     }
-  }
-
-  async validatePostalCodeForUser(username: string, postalCode: string): Promise<boolean> {
-    const allowedCodes = await this.getUserPostalCodes(username);
-    
-    // No postal codes assigned = no restriction
-    if (allowedCodes.length === 0) {
-      return true;
-    }
-    
-    // Check if postal code is in allowed list
-    const normalizedSearch = postalCode.trim();
-    const isAllowed = allowedCodes.includes(normalizedSearch);
-    
-    console.log(`[PLZ-Check] Postal code ${normalizedSearch} for user ${username}: ${isAllowed ? 'ALLOWED' : 'DENIED'}`);
-    return isAllowed;
-  }
-
-  async getUserByPassword(password: string): Promise<string | null> {
-    const passwordUserMap = await this.getPasswordUserMap();
-    return passwordUserMap.get(password.trim()) || null;
   }
 }
 
@@ -1165,11 +1266,16 @@ export const addressDatasetService = new AddressDatasetService();
 
 // Initialize caches on startup
 if (sheetsEnabled) {
-  // Initialize dataset cache first
+  // Initialize user auth cache (FIRST - required for authentication)
+  userAuthCache.initialize(googleSheetsService)
+    .then(() => console.log('[UserAuthCache] Cache initialization complete'))
+    .catch((error) => console.error('[UserAuthCache] Cache initialization failed:', error));
+
+  // Initialize dataset cache
   datasetCache.initialize(addressDatasetService)
     .then(() => console.log('[DatasetCache] Cache initialization complete'))
     .catch((error) => console.error('[DatasetCache] Cache initialization failed:', error));
-  
+
   // Initialize validated street cache (loads all street names from "Adressen" sheet)
   validatedStreetCache.initialize(addressDatasetService)
     .then(() => {

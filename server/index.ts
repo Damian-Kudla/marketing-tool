@@ -5,6 +5,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { cronJobService } from "./services/cronJobService";
 import { dailyDataStore } from "./services/dailyDataStore";
+import { followMeeSyncScheduler } from "./services/followMeeSyncScheduler";
 import { shouldLogEndpoint } from "./config/logConfig";
 
 // Force Railway rebuild - production path fix
@@ -87,5 +88,13 @@ app.use((req, res, next) => {
     
     // Start cron jobs for failed log retry
     cronJobService.start();
+    
+    // Start FollowMee GPS sync scheduler (every 5 minutes)
+    if (process.env.FOLLOWMEE_API) {
+      log('Starting FollowMee GPS sync scheduler...');
+      followMeeSyncScheduler.start();
+    } else {
+      log('FollowMee API key not configured, skipping GPS sync scheduler');
+    }
   });
 })();

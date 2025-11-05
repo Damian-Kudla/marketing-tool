@@ -1,0 +1,196 @@
+GPS ROUTE DISPLAY - QUICK REFERENCE
+
+1. ROUTE BUTTON & MODAL (admin-dashboard.tsx)
+==================================================
+
+Route Button (Lines 839-848):
+- Appears in user comparison table
+- Calls handleShowRoute(userId, username)
+- Opens modal with RouteReplayMap component
+
+fetchRouteData (Lines 256-281):
+- Calls GET /api/admin/dashboard/route?userId=X&date=YYYY-MM-DD
+- Loads into RouteReplayMap component
+- Handles both live and historical dates
+
+Route Modal (Lines 1212-1280):
+- Shows RouteReplayMap in modal overlay
+- Includes header with username and date
+- Close button to dismiss
+
+
+2. ROUTE REPLAY MAP COMPONENT (RouteReplayMap.tsx)
+===================================================
+
+Props (Lines 28-33):
+- username: string
+- gpsPoints: GPSPoint[] 
+- photoTimestamps?: number[]
+- date: string
+
+GPSPoint Interface (Lines 21-26):
+- latitude, longitude, accuracy, timestamp
+
+Controls:
+- Play/Pause (451-460)
+- Reset (461-464)
+- Speed slider 1-30s (469-480)
+- Zoom control (486-497)
+- Timeline scrubber (528-538)
+- Full route toggle (501-510)
+
+Markers:
+- Start: Green "S" (Lines 62-83)
+- End: Red "E" (Lines 86-107)
+- Current: Blue pulsing (Lines 36-59)
+- Photos: Lightning bolt (Lines 110-129)
+- GPS dots: Every 5th point (Lines 132-149)
+
+Animation (Lines 357-407):
+- Linear interpolation through points
+- requestAnimationFrame for smooth playback
+- Camera follows with intelligent panning
+
+Photo Position (Lines 265-302):
+- Interpolates between surrounding GPS points
+- Calculates position by timestamp ratio
+
+
+3. API ENDPOINT (admin.ts - Lines 421-492)
+===========================================
+
+GET /api/admin/dashboard/route
+
+Query params:
+- userId (required)
+- date (required, YYYY-MM-DD)
+
+Logic:
+- If date === today: Fetch from dailyDataStore (RAM)
+- If date < today: Fetch from Google Sheets via historicalDataScraper
+
+Response:
+{
+  gpsPoints: GPSCoordinates[],
+  photoTimestamps: number[],
+  username: string,
+  date: string,
+  totalPoints: number,
+  totalPhotos: number
+}
+
+
+4. GPS DATA INGESTION (tracking.ts - Lines 13-48)
+==================================================
+
+POST /api/tracking/gps
+
+Body:
+{
+  gps: {latitude, longitude, accuracy, timestamp},
+  timestamp: number
+}
+
+Actions:
+1. Store in dailyDataStore.addGPS()
+2. Log to Google Sheets with action='gps_update'
+
+Address format: "GPS: 51.123456, 10.123456"
+
+
+5. DAILY DATA STORE (dailyDataStore.ts)
+========================================
+
+addGPS (Lines 112-148):
+- Validates GPS is from TODAY
+- Stores in userData.gpsPoints[]
+- Calculates distance using Haversine formula
+- Creates raw log entry
+
+getUserData (Lines 60-107):
+- Creates/retrieves DailyUserData for user
+- Initializes gpsPoints as empty array
+
+
+6. FOLLOWMEE INTEGRATION (followMeeApi.ts)
+===========================================
+
+syncAllUsers (Lines 165-235):
+- Fetches last 1 hour of FollowMee data
+- Groups by device
+- Filters already-processed locations
+- Inserts into Google Sheets chronologically
+
+insertLocationsChronologically (Lines 240-292):
+- Converts FollowMee locations to log rows
+- Includes source='followmee' metadata
+- Stores device ID, accuracy, battery level
+
+FollowMee Log Entry:
+Address: "GPS: lat, lng [FollowMee]"
+UserAgent: "FollowMee GPS Tracker"
+Data: {source, deviceId, accuracy, battery, speedKmh}
+
+
+7. TYPE DEFINITIONS (trackingTypes.ts)
+======================================
+
+GPSCoordinates (Lines 3-12):
+- latitude, longitude, accuracy
+- altitude, altitudeAccuracy, heading, speed
+- timestamp (milliseconds)
+
+DailyUserData (Lines 54-97):
+- gpsPoints: GPSCoordinates[]
+- totalDistance: number (meters)
+- photoTimestamps?: number[]
+- rawLogs: TrackingData[]
+
+
+8. DATA SOURCE DIFFERENCES
+============================
+
+NATIVE GPS:
+- Source: Client geolocation API
+- Storage: dailyDataStore → Google Sheets
+- Log address: "GPS: 51.123, 10.456"
+- Log userAgent: Browser user agent string
+- Log data: {action: "gps_update", latitude, longitude}
+- Date validation: TODAY only
+- No explicit source field
+
+FOLLOWMEE GPS:
+- Source: FollowMee API (external device)
+- Storage: Direct to Google Sheets via sync
+- Log address: "GPS: 51.123, 10.456 [FollowMee]"
+- Log userAgent: "FollowMee GPS Tracker"
+- Log data: {source: "followmee", deviceId, latitude, longitude, battery}
+- Date: Can be historical
+- Explicit source field: "source": "followmee"
+
+
+9. IMPLEMENTATION FOR DUAL-SOURCE SELECTION
+==============================================
+
+Step 1: Add source field to GPSCoordinates
+- Add: source?: 'native' | 'followmee'
+
+Step 2: Mark points when fetching route data
+- Native: Assign source='native'
+- FollowMee: Extract source from JSON data field
+
+Step 3: Update RouteReplayMap component
+- Add prop: gpsSource: 'native' | 'followmee' | 'both'
+- Filter gpsPoints: gpsPoints.filter(p => ...)
+- Color code: Different colors for each source
+
+Step 4: Add UI control in admin-dashboard
+- Radio buttons or dropdown for GPS source
+- Default to 'both'
+- Pass selection to route modal
+
+UI Location:
+- Route modal header (before play controls)
+- Or dashboard before route button
+- Show legend with source colors
+

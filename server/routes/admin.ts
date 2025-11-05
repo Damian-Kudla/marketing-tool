@@ -420,7 +420,7 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
  */
 router.get('/dashboard/route', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { userId, date } = req.query;
+    const { userId, date, source } = req.query;
 
     if (!userId || !date) {
       return res.status(400).json({ error: 'userId and date are required' });
@@ -428,8 +428,9 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
 
     const dateStr = date as string;
     const userIdStr = userId as string;
+    const sourceFilter = source as string | undefined; // 'native', 'followmee', or undefined (both)
 
-    console.log(`[Admin API] Fetching route data for user ${userIdStr} on ${dateStr}`);
+    console.log(`[Admin API] Fetching route data for user ${userIdStr} on ${dateStr} (source: ${sourceFilter || 'all'})`);
 
     // Prüfe ob es heute ist (Live-Daten) oder historische Daten
     const today = new Date().toISOString().split('T')[0];
@@ -448,7 +449,7 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
     } else {
       // Historische Daten aus Google Sheets
       const historicalData = await scrapeDayData(dateStr, userIdStr);
-      
+
       if (historicalData && historicalData.length > 0) {
         const userData = historicalData[0];
         gpsPoints = userData.gpsPoints;
@@ -457,13 +458,20 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
       }
     }
 
+    // Filter GPS points by source if specified
+    if (sourceFilter && (sourceFilter === 'native' || sourceFilter === 'followmee')) {
+      gpsPoints = gpsPoints.filter(point => point.source === sourceFilter);
+      console.log(`[Admin API] Filtered to ${gpsPoints.length} ${sourceFilter} GPS points`);
+    }
+
     if (gpsPoints.length === 0) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: 'No GPS data found for this user on this date',
         gpsPoints: [],
         photoTimestamps: [],
         username: username || 'Unknown',
-        date: dateStr
+        date: dateStr,
+        source: sourceFilter || 'all'
       });
     }
 
@@ -472,6 +480,7 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
       photoTimestamps,
       username,
       date: dateStr,
+      source: sourceFilter || 'all',
       totalPoints: gpsPoints.length,
       totalPhotos: photoTimestamps.length
     });
@@ -700,6 +709,76 @@ router.post('/reset-daily-data', requireAuth, requireAdmin, async (req: Authenti
   } catch (error) {
     console.error('[Admin API] Error resetting data:', error);
     res.status(500).json({ error: 'Failed to reset daily data' });
+  }
+});
+
+/**
+ * GET /api/admin/followmee/status
+ * Get FollowMee sync scheduler status
+ */
+router.get('/followmee/status', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { followMeeSyncScheduler } = await import('../services/followMeeSyncScheduler');
+    const status = followMeeSyncScheduler.getStatus();
+    res.json(status);
+  } catch (error) {
+    console.error('[Admin API] Error fetching FollowMee status:', error);
+    res.status(500).json({ error: 'Failed to fetch FollowMee status' });
+  }
+});
+
+/**
+ * POST /api/admin/followmee/sync
+ * Manually trigger FollowMee GPS sync
+ */
+router.post('/followmee/sync', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    console.log('[Admin API] Manual FollowMee sync requested by', req.username);
+    const { followMeeSyncScheduler } = await import('../services/followMeeSyncScheduler');
+    
+    // Trigger sync without waiting (runs in background)
+    followMeeSyncScheduler.syncNow().catch(err => {
+      console.error('[Admin API] Background sync error:', err);
+    });
+    
+    res.json({ 
+      success: true, 
+      message: 'FollowMee sync started in background',
+      startTime: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('[Admin API] Error triggering FollowMee sync:', error);
+    res.status(500).json({ error: 'Failed to trigger FollowMee sync' });
+  }
+});
+
+/**
+ * POST /api/admin/users/refresh-cache
+ * Force refresh user cache (useful after updating FollowMee Device IDs in Google Sheets)
+ */
+router.post('/users/refresh-cache', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    console.log('[Admin API] User cache refresh requested by', req.username);
+    const { googleSheetsService } = await import('../services/googleSheets');
+    
+    await googleSheetsService.refreshUserCache();
+    const users = await googleSheetsService.getAllUsers();
+    const usersWithDevices = users.filter(u => u.followMeeDeviceId);
+    
+    res.json({ 
+      success: true, 
+      message: 'User cache refreshed successfully',
+      totalUsers: users.length,
+      usersWithFollowMeeDevices: usersWithDevices.length,
+      users: usersWithDevices.map(u => ({
+        username: u.username,
+        userId: u.userId,
+        deviceId: u.followMeeDeviceId
+      }))
+    });
+  } catch (error) {
+    console.error('[Admin API] Error refreshing user cache:', error);
+    res.status(500).json({ error: 'Failed to refresh user cache' });
   }
 });
 

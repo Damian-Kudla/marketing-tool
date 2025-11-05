@@ -22,8 +22,11 @@ router.post('/gps', async (req: AuthenticatedRequest, res: Response) => {
       return res.status(400).json({ error: 'Invalid GPS data' });
     }
 
+    // Mark as native source
+    const gpsWithSource: GPSCoordinates = { ...gps, source: 'native' };
+
     // Store in RAM
-    dailyDataStore.addGPS(req.userId, req.username, gps);
+    dailyDataStore.addGPS(req.userId, req.username, gpsWithSource);
 
     // Log to Google Sheets with GPS data
     await logUserActivityWithRetry(

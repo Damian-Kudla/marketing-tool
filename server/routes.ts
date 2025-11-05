@@ -17,13 +17,13 @@ import {
 } from "@shared/schema";
 import { requireAuth, type AuthenticatedRequest } from "./middleware/auth";
 import { rateLimitMiddleware } from "./middleware/rateLimit";
-import { logUserActivityWithRetry, logAuthAttemptWithRetry } from "./services/enhancedLogging";
+import { logUserActivityWithRetry, logAuthAttemptWithRetry, logCategoryChangeWithRetry } from "./services/enhancedLogging";
 import { dailyDataStore } from "./services/dailyDataStore";
 import { authRouter } from "./routes/auth";
 import addressDatasetsRouter from "./routes/addressDatasets";
 import trackingRouter from "./routes/tracking";
 import adminRouter from "./routes/admin";
-import { addressDatasetService, normalizeAddress, categoryChangeLoggingService, appointmentService } from "./services/googleSheets";
+import { addressDatasetService, normalizeAddress, appointmentService } from "./services/googleSheets";
 import { 
   performOrientationCorrection, 
   checkImageAspectRatio,
@@ -107,7 +107,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         changedBy: username
       });
 
-      await categoryChangeLoggingService.logCategoryChange(
+      // Use batch logger instead of immediate write
+      await logCategoryChangeWithRetry(
         validatedData.datasetId,
         validatedData.residentOriginalName,
         validatedData.residentCurrentName,
@@ -117,7 +118,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         validatedData.addressDatasetSnapshot
       );
 
-      console.log('[API] Category change logged successfully');
+      console.log('[API] Category change added to batch queue');
       res.json({ success: true });
     } catch (error) {
       console.error("[API] Error logging category change:", error);
@@ -576,7 +577,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         newProspects,
         existingCustomers,
         allCustomersAtAddress,
-        relatedHouseNumbers: relatedHouseNumbers.length > 0 ? relatedHouseNumbers : undefined,
+         relatedHouseNumbers: relatedHouseNumbers.length > 0 ? relatedHouseNumbers : undefined,
         // Backend orientation correction disabled - always false
         orientationCorrectionApplied: false,
         backendOrientationInfo: null,

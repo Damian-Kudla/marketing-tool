@@ -149,6 +149,31 @@ export async function logAuthAttemptWithRetry(
   batchLogger.addAuthLog(logEntry);
 }
 
+// Enhanced log category change with batch processing
+export async function logCategoryChangeWithRetry(
+  datasetId: string,
+  residentOriginalName: string,
+  residentCurrentName: string,
+  oldCategory: string,
+  newCategory: string,
+  changedBy: string,
+  addressDatasetSnapshot: string
+): Promise<void> {
+  const logEntry: import('./fallbackLogging').CategoryChangeLogEntry = {
+    timestamp: new Date().toISOString(),
+    datasetId,
+    residentOriginalName,
+    residentCurrentName,
+    oldCategory,
+    newCategory,
+    changedBy,
+    addressDatasetSnapshot
+  };
+
+  // Add to batch queue
+  batchLogger.addCategoryChange(logEntry);
+}
+
 // Cron job to retry failed logs
 export async function retryFailedLogs(): Promise<void> {
   try {

@@ -9,6 +9,7 @@ export interface GPSCoordinates {
   heading?: number;
   speed?: number;
   timestamp: number;
+  source?: 'native' | 'followmee'; // GPS data source
 }
 
 export interface SessionData {

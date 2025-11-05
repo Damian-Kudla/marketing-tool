@@ -7,6 +7,7 @@ export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  followMeeDeviceId: text("followmee_device_id"), // FollowMee device ID for GPS tracking
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({

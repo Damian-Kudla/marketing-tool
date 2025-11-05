@@ -23,7 +23,21 @@ interface AuthLogEntry {
   reason: string;
 }
 
-type AnyLogEntry = LogEntry | AuthLogEntry;
+interface CategoryChangeLogEntry {
+  timestamp: string;
+  datasetId: string;
+  residentOriginalName: string;
+  residentCurrentName: string;
+  oldCategory: string;
+  newCategory: string;
+  changedBy: string;
+  addressDatasetSnapshot: string;
+}
+
+type AnyLogEntry = LogEntry | AuthLogEntry | CategoryChangeLogEntry;
+
+// Export types for use in other modules
+export type { LogEntry, AuthLogEntry, CategoryChangeLogEntry };
 
 class FallbackLogger {
   private logFile = path.join(process.cwd(), 'logs', 'failed-logs.jsonl');
@@ -124,4 +138,3 @@ class FallbackLogger {
 }
 
 export const fallbackLogger = new FallbackLogger();
-export type { LogEntry, AuthLogEntry };

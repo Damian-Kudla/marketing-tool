@@ -11,8 +11,9 @@ interface BatchQueueEntry {
 class BatchLogger {
   private queue: Map<string, BatchQueueEntry[]> = new Map(); // Key: userId or 'auth'
   private flushInterval: NodeJS.Timeout | null = null;
-  private readonly FLUSH_INTERVAL_MS = 30000; // 30 seconds (reduced rate limit pressure)
+  private readonly FLUSH_INTERVAL_MS = 15000; // 15 seconds
   private isProcessing: boolean = false;
+  private isFollowMeeSyncing: boolean = false; // Flag to prevent flush during FollowMee sync
 
   constructor() {
     this.startBatchProcessing();
@@ -71,6 +72,11 @@ class BatchLogger {
       return;
     }
 
+    if (this.isFollowMeeSyncing) {
+      console.log('[BatchLogger] FollowMee sync in progress, skipping flush');
+      return;
+    }
+
     if (this.queue.size === 0) {
       // Only log if enabled (reduces noise from empty flushes)
       if (LOG_CONFIG.BATCH_LOGGER.logEmptyFlush) {
@@ -84,29 +90,17 @@ class BatchLogger {
     try {
       console.log(`[BatchLogger] Flushing ${this.queue.size} user queue(s)...`);
 
-      // RATE LIMIT PROTECTION: Process users sequentially with delay
-      // Google Sheets API allows ~100 requests per 100 seconds per user
-      // With multiple active users, we need to space out requests
-      const entries = Array.from(this.queue.entries());
-      
-      for (let i = 0; i < entries.length; i++) {
-        const [userId, userEntries] = entries[i];
-        
-        if (userEntries.length === 0) continue;
+      // Process each user's queue separately
+      const flushPromises: Promise<void>[] = [];
 
-        try {
-          await this.flushUserQueue(userId, userEntries);
-          
-          // Add delay between users to avoid rate limit (500ms spacing)
-          // This means ~2 users per second, well within API limits
-          if (i < entries.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-        } catch (error) {
-          console.error(`[BatchLogger] Failed to flush queue for ${userId}:`, error);
-          // Continue with next user even if one fails
-        }
+      for (const [userId, entries] of Array.from(this.queue.entries())) {
+        if (entries.length === 0) continue;
+
+        const promise = this.flushUserQueue(userId, entries);
+        flushPromises.push(promise);
       }
+
+      await Promise.allSettled(flushPromises);
 
       console.log('[BatchLogger] Flush complete');
     } catch (error) {
@@ -117,69 +111,41 @@ class BatchLogger {
   }
 
   private async flushUserQueue(userId: string, entries: BatchQueueEntry[]): Promise<void> {
-    const maxRetries = 3;
-    let lastError: any;
+    try {
+      console.log(`[BatchLogger] Flushing ${entries.length} logs for ${userId}...`);
 
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        console.log(`[BatchLogger] Flushing ${entries.length} logs for ${userId}... (attempt ${attempt + 1}/${maxRetries})`);
+      // Google Sheets doesn't support multi-worksheet batch writes in one request
+      // So we need to send each user's logs separately
+      
+      // Import GoogleSheetsLoggingService dynamically to avoid circular dependency
+      const { GoogleSheetsLoggingService } = await import('./googleSheetsLogging');
 
-        // Google Sheets doesn't support multi-worksheet batch writes in one request
-        // So we need to send each user's logs separately
-        
-        // Import GoogleSheetsLoggingService dynamically to avoid circular dependency
-        const { GoogleSheetsLoggingService } = await import('./googleSheetsLogging');
-
-        if (userId === 'auth') {
-          // Flush auth logs
-          await this.flushAuthLogs(entries as { type: 'auth'; data: AuthLogEntry }[]);
-        } else {
-          // Flush user activity logs
-          await this.flushUserActivityLogs(userId, entries as { type: 'user_activity'; data: LogEntry }[]);
-        }
-
-        // Remove successfully flushed entries from queue
-        this.queue.delete(userId);
-
-        console.log(`[BatchLogger] Successfully flushed logs for ${userId}`);
-        return; // Success, exit retry loop
-        
-      } catch (error: any) {
-        lastError = error;
-        
-        // Check if it's a rate limit error (429)
-        const isRateLimitError = error?.code === 429 || 
-                                error?.response?.status === 429 ||
-                                error?.message?.includes('429') ||
-                                error?.message?.includes('Too Many Requests');
-
-        if (isRateLimitError && attempt < maxRetries - 1) {
-          // Exponential backoff: 2s, 4s, 8s
-          const delayMs = Math.pow(2, attempt + 1) * 1000;
-          console.warn(`[BatchLogger] Rate limit hit for ${userId}, retrying in ${delayMs}ms... (attempt ${attempt + 1}/${maxRetries})`);
-          await new Promise(resolve => setTimeout(resolve, delayMs));
-          continue; // Retry
-        }
-
-        // Non-rate-limit error or final retry failed
-        console.error(`[BatchLogger] Failed to flush logs for ${userId}:`, error);
-        break; // Exit retry loop
+      if (userId === 'auth') {
+        // Flush auth logs
+        await this.flushAuthLogs(entries as { type: 'auth'; data: AuthLogEntry }[]);
+      } else {
+        // Flush user activity logs
+        await this.flushUserActivityLogs(userId, entries as { type: 'user_activity'; data: LogEntry }[]);
       }
+
+      // Remove successfully flushed entries from queue
+      this.queue.delete(userId);
+
+      console.log(`[BatchLogger] Successfully flushed logs for ${userId}`);
+    } catch (error) {
+      console.error(`[BatchLogger] Failed to flush logs for ${userId}:`, error);
+
+      // Save failed logs to fallback file
+      for (const entry of entries) {
+        await fallbackLogger.saveFailed(entry.data);
+      }
+
+      // Remove from queue even on failure (already saved to fallback)
+      this.queue.delete(userId);
+
+      // Send alert if fallback storage is being used
+      await pushoverService.sendFallbackStorageAlert(entries.length);
     }
-
-    // All retries failed, save to fallback
-    console.error(`[BatchLogger] All retry attempts failed for ${userId}, saving to fallback`);
-    
-    // Save failed logs to fallback file
-    for (const entry of entries) {
-      await fallbackLogger.saveFailed(entry.data);
-    }
-
-    // Remove from queue even on failure (already saved to fallback)
-    this.queue.delete(userId);
-
-    // Send alert if fallback storage is being used
-    await pushoverService.sendFallbackStorageAlert(entries.length);
   }
 
   private async flushUserActivityLogs(userId: string, entries: { type: 'user_activity'; data: LogEntry }[]) {
@@ -262,6 +228,19 @@ class BatchLogger {
       clearInterval(this.flushInterval);
       this.flushInterval = null;
       console.log('[BatchLogger] Stopped batch processing');
+    }
+  }
+
+  /**
+   * Set FollowMee syncing flag
+   * When true, flush() will be skipped to prevent write conflicts
+   */
+  setFollowMeeSyncing(syncing: boolean) {
+    this.isFollowMeeSyncing = syncing;
+    if (syncing) {
+      console.log('[BatchLogger] FollowMee sync started - batch flushing paused');
+    } else {
+      console.log('[BatchLogger] FollowMee sync ended - batch flushing resumed');
     }
   }
 }

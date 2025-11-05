@@ -563,6 +563,7 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
         longitude: log.data.longitude,
         accuracy: log.data.accuracy || 0,
         timestamp: timestamp,
+        source: log.data.source || 'native', // Extract source from data field (followmee or native)
       };
 
       data.gpsPoints.push(coord);

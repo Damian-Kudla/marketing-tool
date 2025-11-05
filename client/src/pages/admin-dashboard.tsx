@@ -170,6 +170,7 @@ export default function AdminDashboard() {
   const [selectedUsername, setSelectedUsername] = useState<string | null>(null);
   const [routeData, setRouteData] = useState<any>(null);
   const [loadingRoute, setLoadingRoute] = useState(false);
+  const [gpsSource, setGpsSource] = useState<'all' | 'native' | 'followmee'>('all');
 
   // Redirect if not admin
   useEffect(() => {
@@ -254,11 +255,12 @@ export default function AdminDashboard() {
   };
 
   // Fetch route data for selected user
-  const fetchRouteData = async (userId: string, date: string) => {
+  const fetchRouteData = async (userId: string, date: string, source?: 'all' | 'native' | 'followmee') => {
     setLoadingRoute(true);
     try {
+      const sourceParam = source && source !== 'all' ? `&source=${source}` : '';
       const response = await fetch(
-        `/api/admin/dashboard/route?userId=${userId}&date=${date}`,
+        `/api/admin/dashboard/route?userId=${userId}&date=${date}${sourceParam}`,
         {
           credentials: 'include',
         }
@@ -270,7 +272,7 @@ export default function AdminDashboard() {
 
       const result = await response.json();
       setRouteData(result);
-      
+
     } catch (err: any) {
       alert(err.message || 'Failed to fetch route data');
       console.error('Error fetching route data:', err);
@@ -285,7 +287,16 @@ export default function AdminDashboard() {
     setSelectedUserId(userId);
     setSelectedUsername(username);
     setShowRouteReplay(true);
-    fetchRouteData(userId, mode === 'live' ? format(new Date(), 'yyyy-MM-dd') : selectedDate);
+    fetchRouteData(userId, mode === 'live' ? format(new Date(), 'yyyy-MM-dd') : selectedDate, gpsSource);
+  };
+
+  // Handle GPS source change
+  const handleGpsSourceChange = (newSource: 'all' | 'native' | 'followmee') => {
+    setGpsSource(newSource);
+    // Re-fetch route data if modal is open
+    if (showRouteReplay && selectedUserId) {
+      fetchRouteData(selectedUserId, mode === 'live' ? format(new Date(), 'yyyy-MM-dd') : selectedDate, newSource);
+    }
   };
 
   // Initial data fetch
@@ -1214,37 +1225,81 @@ export default function AdminDashboard() {
         <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-background rounded-lg shadow-xl w-full max-w-6xl my-8 flex flex-col max-h-[90vh]">
             {/* Header - removed sticky positioning to prevent z-index issues */}
-            <div className="flex items-center justify-between p-4 border-b bg-background rounded-t-lg">
-              <div>
-                <h2 className="text-xl font-bold">Route Wiedergabe</h2>
-                <p className="text-sm text-muted-foreground">
-                  {selectedUsername} - {mode === 'live' ? format(new Date(), 'dd.MM.yyyy') : format(new Date(selectedDate), 'dd.MM.yyyy')}
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  setShowRouteReplay(false);
-                  setRouteData(null);
-                  setSelectedUserId(null);
-                  setSelectedUsername(null);
-                }}
-                className="p-2 hover:bg-muted rounded-md transition-colors"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+            <div className="p-4 border-b bg-background rounded-t-lg">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-xl font-bold">Route Wiedergabe</h2>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedUsername} - {mode === 'live' ? format(new Date(), 'dd.MM.yyyy') : format(new Date(selectedDate), 'dd.MM.yyyy')}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowRouteReplay(false);
+                    setRouteData(null);
+                    setSelectedUserId(null);
+                    setSelectedUsername(null);
+                  }}
+                  className="p-2 hover:bg-muted rounded-md transition-colors"
                 >
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-              </button>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
+
+              {/* GPS Source Filter */}
+              <div className="flex items-center gap-2">
+                <Label htmlFor="gps-source" className="text-sm font-medium">GPS-Quelle:</Label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleGpsSourceChange('all')}
+                    className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                      gpsSource === 'all'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                    }`}
+                  >
+                    Alle
+                  </button>
+                  <button
+                    onClick={() => handleGpsSourceChange('native')}
+                    className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                      gpsSource === 'native'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                    }`}
+                  >
+                    Native App
+                  </button>
+                  <button
+                    onClick={() => handleGpsSourceChange('followmee')}
+                    className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                      gpsSource === 'followmee'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                    }`}
+                  >
+                    FollowMee
+                  </button>
+                </div>
+                {routeData && (
+                  <span className="text-sm text-muted-foreground ml-2">
+                    ({routeData.totalPoints} Punkte)
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Content - with overflow for scrolling inside modal */}
