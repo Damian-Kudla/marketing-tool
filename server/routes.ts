@@ -23,6 +23,7 @@ import { authRouter } from "./routes/auth";
 import addressDatasetsRouter from "./routes/addressDatasets";
 import trackingRouter from "./routes/tracking";
 import adminRouter from "./routes/admin";
+import externalTrackingRouter from "./routes/externalTracking";
 import { addressDatasetService, normalizeAddress, appointmentService } from "./services/googleSheets";
 import { 
   performOrientationCorrection, 
@@ -90,7 +91,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // Add admin routes (authentication + admin privileges required)
   app.use("/api/admin", adminRouter);
-  
+
+  // Add external tracking routes (NO authentication required - external app)
+  app.use("/api/external-tracking", externalTrackingRouter);
+
   // Category change logging route
     app.post("/api/log-category-change", requireAuth, async (req: AuthenticatedRequest, res) => {
     try {

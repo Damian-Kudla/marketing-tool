@@ -131,8 +131,8 @@ const createPhotoFlashMarker = () => {
 
 // Small clickable marker for GPS points with source-based coloring
 const createGPSPointMarker = (source?: 'native' | 'followmee') => {
-  // Native: Blue (#3b82f6), FollowMee: Purple (#a855f7)
-  const color = source === 'followmee' ? '#a855f7' : '#3b82f6';
+  // Native: Blue (#3b82f6), FollowMee: Black (#000000)
+  const color = source === 'followmee' ? '#000000' : '#3b82f6';
 
   return L.divIcon({
     className: 'custom-marker',
@@ -159,32 +159,166 @@ const getGoogleMapsUrl = (lat: number, lng: number): string => {
   return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
 };
 
-// Component to follow current position with intelligent panning
-function CameraFollow({ currentPosition, zoom, isPlaying }: {
+// Calculate distance between two GPS points in meters
+function calculateDistance(point1: GPSPoint, point2: GPSPoint): number {
+  const R = 6371e3; // Earth's radius in meters
+  const φ1 = (point1.latitude * Math.PI) / 180;
+  const φ2 = (point2.latitude * Math.PI) / 180;
+  const Δφ = ((point2.latitude - point1.latitude) * Math.PI) / 180;
+  const Δλ = ((point2.longitude - point1.longitude) * Math.PI) / 180;
+
+  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c; // Distance in meters
+}
+
+// Interface for stationary period
+interface StationaryPeriod {
+  startIndex: number;
+  endIndex: number;
+  startTime: number;
+  endTime: number;
+  durationMs: number;
+  centerLat: number;
+  centerLng: number;
+}
+
+// Detect stationary periods (20+ minutes within 20m radius)
+function detectStationaryPeriods(points: GPSPoint[]): StationaryPeriod[] {
+  const RADIUS_METERS = 20;
+  const MIN_DURATION_MS = 20 * 60 * 1000; // 20 minutes
+  const stationaryPeriods: StationaryPeriod[] = [];
+
+  if (points.length < 2) return stationaryPeriods;
+
+  let segmentStart = 0;
+
+  for (let i = 1; i < points.length; i++) {
+    const startPoint = points[segmentStart];
+    const currentPoint = points[i];
+    const distance = calculateDistance(startPoint, currentPoint);
+
+    // If we've moved more than RADIUS_METERS, check if previous segment was stationary
+    if (distance > RADIUS_METERS) {
+      const duration = points[i - 1].timestamp - startPoint.timestamp;
+
+      if (duration >= MIN_DURATION_MS) {
+        // Calculate center point (average of all points in segment)
+        let sumLat = 0;
+        let sumLng = 0;
+        const segmentPoints = points.slice(segmentStart, i);
+
+        segmentPoints.forEach(p => {
+          sumLat += p.latitude;
+          sumLng += p.longitude;
+        });
+
+        stationaryPeriods.push({
+          startIndex: segmentStart,
+          endIndex: i - 1,
+          startTime: startPoint.timestamp,
+          endTime: points[i - 1].timestamp,
+          durationMs: duration,
+          centerLat: sumLat / segmentPoints.length,
+          centerLng: sumLng / segmentPoints.length,
+        });
+      }
+
+      segmentStart = i;
+    }
+  }
+
+  // Check last segment
+  const lastSegmentDuration = points[points.length - 1].timestamp - points[segmentStart].timestamp;
+  if (lastSegmentDuration >= MIN_DURATION_MS) {
+    let sumLat = 0;
+    let sumLng = 0;
+    const segmentPoints = points.slice(segmentStart);
+
+    segmentPoints.forEach(p => {
+      sumLat += p.latitude;
+      sumLng += p.longitude;
+    });
+
+    stationaryPeriods.push({
+      startIndex: segmentStart,
+      endIndex: points.length - 1,
+      startTime: points[segmentStart].timestamp,
+      endTime: points[points.length - 1].timestamp,
+      durationMs: lastSegmentDuration,
+      centerLat: sumLat / segmentPoints.length,
+      centerLng: sumLng / segmentPoints.length,
+    });
+  }
+
+  return stationaryPeriods;
+}
+
+// Determine optimal zoom level based on upcoming movement
+function calculateOptimalZoom(upcomingPoints: GPSPoint[]): number {
+  if (upcomingPoints.length < 2) return 18;
+
+  // Calculate total distance in upcoming segment
+  let totalDistance = 0;
+  for (let i = 0; i < upcomingPoints.length - 1; i++) {
+    totalDistance += calculateDistance(upcomingPoints[i], upcomingPoints[i + 1]);
+  }
+
+  const avgDistance = totalDistance / (upcomingPoints.length - 1);
+
+  // Zoom levels based on average distance between points
+  // High zoom for walking/stationary (< 50m between points)
+  if (avgDistance < 50) return 18;
+  // Medium-high zoom for slow movement (50-150m)
+  if (avgDistance < 150) return 17;
+  // Medium zoom for moderate speed (150-300m)
+  if (avgDistance < 300) return 16;
+  // Lower zoom for fast movement (300-600m)
+  if (avgDistance < 600) return 15;
+  // Very low zoom for very fast movement (> 600m)
+  return 14;
+}
+
+// Component to follow current position with intelligent panning and zoom
+function CameraFollow({ currentPosition, currentIndex, allPoints, manualZoom, isPlaying, intelligentZoomEnabled }: {
   currentPosition: GPSPoint | null;
-  zoom: number;
+  currentIndex: number;
+  allPoints: GPSPoint[];
+  manualZoom: number;
   isPlaying: boolean;
+  intelligentZoomEnabled: boolean;
 }) {
   const map = useMap();
   const lastPositionRef = useRef<GPSPoint | null>(null);
+  const lastZoomChangeRef = useRef<number>(0);
+  const currentZoomRef = useRef<number>(manualZoom);
 
   useEffect(() => {
-    // Set zoom level
-    if (map.getZoom() !== zoom) {
-      map.setZoom(zoom, { animate: false });
+    if (!intelligentZoomEnabled) {
+      // Use manual zoom
+      if (map.getZoom() !== manualZoom) {
+        map.setZoom(manualZoom, { animate: false });
+        currentZoomRef.current = manualZoom;
+      }
     }
-  }, [zoom, map]);
+  }, [manualZoom, map, intelligentZoomEnabled]);
 
   useEffect(() => {
     if (!currentPosition) return;
 
     const targetLat = currentPosition.latitude;
     const targetLng = currentPosition.longitude;
+    const now = Date.now();
 
     // Initial centering (first position or when starting playback)
     if (!lastPositionRef.current || !isPlaying) {
-      map.setView([targetLat, targetLng], zoom, { animate: true, duration: 0.5 });
+      const initialZoom = intelligentZoomEnabled ? 18 : manualZoom;
+      map.setView([targetLat, targetLng], initialZoom, { animate: true, duration: 0.5 });
       lastPositionRef.current = currentPosition;
+      currentZoomRef.current = initialZoom;
+      lastZoomChangeRef.current = now;
       return;
     }
 
@@ -193,10 +327,34 @@ function CameraFollow({ currentPosition, zoom, isPlaying }: {
       return;
     }
 
+    // Intelligent zoom calculation (only when enabled and playing)
+    if (intelligentZoomEnabled) {
+      // Check if 3 seconds have passed since last zoom change
+      const timeSinceLastZoomChange = now - lastZoomChangeRef.current;
+
+      if (timeSinceLastZoomChange >= 3000) {
+        // Look ahead at upcoming points (next 10 points or until end)
+        const lookaheadCount = 10;
+        const upcomingPoints = allPoints.slice(currentIndex, Math.min(currentIndex + lookaheadCount, allPoints.length));
+
+        if (upcomingPoints.length >= 2) {
+          const optimalZoom = calculateOptimalZoom(upcomingPoints);
+
+          // Only change zoom if significantly different (at least 1 level)
+          if (Math.abs(currentZoomRef.current - optimalZoom) >= 1) {
+            map.setZoom(optimalZoom, { animate: true });
+            currentZoomRef.current = optimalZoom;
+            lastZoomChangeRef.current = now;
+            console.log(`[IntelligentZoom] Changed zoom to ${optimalZoom} at index ${currentIndex}`);
+          }
+        }
+      }
+    }
+
     // Get current map bounds and size
     const bounds = map.getBounds();
     const mapSize = map.getSize();
-    
+
     // Calculate 30% threshold from edges (in pixels)
     const threshold = 0.3;
     const thresholdX = mapSize.x * threshold;
@@ -222,7 +380,7 @@ function CameraFollow({ currentPosition, zoom, isPlaying }: {
     }
 
     lastPositionRef.current = currentPosition;
-  }, [currentPosition, map, isPlaying, zoom]);
+  }, [currentPosition, currentIndex, allPoints, map, isPlaying, manualZoom, intelligentZoomEnabled]);
 
   return null;
 }
@@ -253,17 +411,25 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showFullRoute, setShowFullRoute] = useState(true);
   const [zoomLevel, setZoomLevel] = useState(18);
-  const [animationSpeed, setAnimationSpeed] = useState(30); // Duration in seconds
+  const [secondsPerHour, setSecondsPerHour] = useState(5); // Seconds to display one hour of data
+  const [intelligentZoomEnabled, setIntelligentZoomEnabled] = useState(true); // Auto-zoom based on speed
   const [activePhotoFlash, setActivePhotoFlash] = useState<number | null>(null);
   const animationRef = useRef<number | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const pausedIndexRef = useRef<number>(0);
 
-  // Animation duration based on speed setting
-  const ANIMATION_DURATION = animationSpeed * 1000; // Convert to ms
-
   // Sort GPS points by timestamp
   const sortedPoints = [...gpsPoints].sort((a, b) => a.timestamp - b.timestamp);
+
+  // Detect stationary periods (20+ min in 20m radius)
+  const stationaryPeriods = detectStationaryPeriods(sortedPoints);
+
+  // Calculate animation duration based on time span of data
+  const timeSpanMs = sortedPoints.length > 0
+    ? sortedPoints[sortedPoints.length - 1].timestamp - sortedPoints[0].timestamp
+    : 0;
+  const timeSpanHours = timeSpanMs / (1000 * 60 * 60); // Convert to hours
+  const ANIMATION_DURATION = timeSpanHours * secondsPerHour * 1000; // Total duration in ms
 
   // Calculate photo positions between GPS points
   const calculatePhotoPosition = (photoTimestamp: number): [number, number] | null => {
@@ -472,16 +638,10 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
   }
 
   return (
-    <div className="space-y-4">
-      {/* Controls */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Route Replay - {username}</CardTitle>
-          <CardDescription>
-            {format(parseISO(date), 'dd.MM.yyyy', { locale: de })} • {sortedPoints.length} GPS-Punkte • Zeitspanne: {formatTimeSpan(timeSpan)}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+    <div className="h-full flex flex-col">
+      {/* Compact Controls */}
+      <div className="shrink-0 px-4 py-2 border-b bg-background">
+        <CardContent className="p-0">
           <div className="flex items-center gap-4 flex-wrap mb-4">
             {/* Animation Controls */}
             <div className="flex gap-2">
@@ -505,20 +665,20 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
             {/* Animation Speed Control */}
             <div className="flex items-center gap-2">
               <Zap className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground whitespace-nowrap">Dauer:</span>
+              <span className="text-sm text-muted-foreground whitespace-nowrap">Geschwindigkeit:</span>
               <input
                 type="range"
                 min="1"
                 max="30"
-                value={animationSpeed}
-                onChange={(e) => setAnimationSpeed(Number(e.target.value))}
+                value={secondsPerHour}
+                onChange={(e) => setSecondsPerHour(Number(e.target.value))}
                 className="w-24"
-                title="Animations-Geschwindigkeit"
+                title="Sekunden pro Stunde"
               />
-              <span className="text-sm font-medium w-12">{animationSpeed}s</span>
+              <span className="text-sm font-medium w-20">{secondsPerHour}s/h</span>
             </div>
 
-            {/* Zoom Control (nur wenn nicht am Abspielen) */}
+            {/* Zoom Control (nur wenn intelligenter Zoom deaktiviert) */}
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground whitespace-nowrap">Zoom:</span>
               <input
@@ -528,14 +688,23 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
                 value={zoomLevel}
                 onChange={(e) => setZoomLevel(Number(e.target.value))}
                 className="w-24"
-                disabled={isPlaying}
-                title={isPlaying ? "Zoom ist während Wiedergabe gesperrt" : "Zoom-Stufe anpassen"}
+                disabled={isPlaying || intelligentZoomEnabled}
+                title={intelligentZoomEnabled ? "Zoom ist bei aktiviertem Auto-Zoom gesperrt" : isPlaying ? "Zoom ist während Wiedergabe gesperrt" : "Zoom-Stufe anpassen"}
               />
               <span className="text-sm font-medium w-8">{zoomLevel}</span>
             </div>
 
-            {/* Show Full Route Toggle */}
-            <div className="flex items-center gap-2 ml-auto">
+            {/* Toggles */}
+            <div className="flex items-center gap-4 ml-auto">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={intelligentZoomEnabled}
+                  onChange={(e) => setIntelligentZoomEnabled(e.target.checked)}
+                  className="rounded"
+                />
+                Auto-Zoom
+              </label>
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
@@ -543,7 +712,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
                   onChange={(e) => setShowFullRoute(e.target.checked)}
                   className="rounded"
                 />
-                Gesamte Route anzeigen
+                Gesamte Route
               </label>
             </div>
           </div>
@@ -560,26 +729,116 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
                 </span>
               )}
             </div>
-            
-            {/* Interactive Timeline Slider */}
+
+            {/* Interactive Timeline Slider with Hour Markers and Stationary Periods */}
             <div className="relative">
+              {/* Stationary period backgrounds */}
+              <div className="absolute w-full h-3 pointer-events-none">
+                {sortedPoints.length > 0 && stationaryPeriods.map((period, idx) => {
+                  const startTime = sortedPoints[0].timestamp;
+                  const endTime = sortedPoints[sortedPoints.length - 1].timestamp;
+                  const totalDuration = endTime - startTime;
+
+                  const startPos = ((period.startTime - startTime) / totalDuration) * 100;
+                  const endPos = ((period.endTime - startTime) / totalDuration) * 100;
+                  const width = endPos - startPos;
+
+                  const durationMinutes = Math.round(period.durationMs / (1000 * 60));
+
+                  return (
+                    <div
+                      key={`stationary-${idx}`}
+                      className="absolute h-full bg-orange-300 opacity-50"
+                      style={{ left: `${startPos}%`, width: `${width}%` }}
+                      title={`Pause: ${durationMinutes} Min`}
+                    />
+                  );
+                })}
+              </div>
+
+              {/* Hour marker ticks */}
+              <div className="absolute w-full h-3 pointer-events-none">
+                {(() => {
+                  const startTime = sortedPoints[0].timestamp;
+                  const endTime = sortedPoints[sortedPoints.length - 1].timestamp;
+                  const totalDuration = endTime - startTime;
+
+                  // Generate hour markers
+                  const hourMarkers: { position: number; time: Date }[] = [];
+                  const startHour = new Date(startTime);
+                  startHour.setMinutes(0, 0, 0); // Round down to hour
+
+                  let currentHour = new Date(startHour);
+                  currentHour.setHours(currentHour.getHours() + 1); // Start from next hour
+
+                  while (currentHour.getTime() <= endTime) {
+                    const position = ((currentHour.getTime() - startTime) / totalDuration) * 100;
+                    hourMarkers.push({ position, time: new Date(currentHour) });
+                    currentHour.setHours(currentHour.getHours() + 1);
+                  }
+
+                  return hourMarkers.map((marker, idx) => (
+                    <div
+                      key={idx}
+                      className="absolute h-full border-l-2 border-gray-400"
+                      style={{ left: `${marker.position}%` }}
+                      title={format(marker.time, 'HH:mm', { locale: de })}
+                    />
+                  ));
+                })()}
+              </div>
+
               <input
                 type="range"
                 min="0"
                 max={sortedPoints.length - 1}
                 value={currentIndex}
                 onChange={(e) => handleScrub(Number(e.target.value))}
-                className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer relative z-10"
                 style={{
                   background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(currentIndex / (sortedPoints.length - 1)) * 100}%, #e5e7eb ${(currentIndex / (sortedPoints.length - 1)) * 100}%, #e5e7eb 100%)`
                 }}
               />
             </div>
 
-            {/* Time markers */}
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>{format(new Date(sortedPoints[0].timestamp), 'HH:mm', { locale: de })}</span>
-              <span>{format(new Date(sortedPoints[sortedPoints.length - 1].timestamp), 'HH:mm', { locale: de })}</span>
+            {/* Hour labels below timeline */}
+            <div className="relative h-4">
+              {(() => {
+                const startTime = sortedPoints[0].timestamp;
+                const endTime = sortedPoints[sortedPoints.length - 1].timestamp;
+                const totalDuration = endTime - startTime;
+
+                // Generate hour markers
+                const hourMarkers: { position: number; time: Date }[] = [];
+
+                // Add start marker
+                hourMarkers.push({ position: 0, time: new Date(startTime) });
+
+                const startHour = new Date(startTime);
+                startHour.setMinutes(0, 0, 0); // Round down to hour
+
+                let currentHour = new Date(startHour);
+                currentHour.setHours(currentHour.getHours() + 1); // Start from next hour
+
+                while (currentHour.getTime() <= endTime) {
+                  const position = ((currentHour.getTime() - startTime) / totalDuration) * 100;
+                  hourMarkers.push({ position, time: new Date(currentHour) });
+                  currentHour.setHours(currentHour.getHours() + 1);
+                }
+
+                // Add end marker
+                hourMarkers.push({ position: 100, time: new Date(endTime) });
+
+                return hourMarkers.map((marker, idx) => (
+                  <span
+                    key={idx}
+                    className="absolute text-xs text-muted-foreground transform -translate-x-1/2"
+                    style={{ left: `${marker.position}%` }}
+                  >
+                    {format(marker.time, 'HH:mm', { locale: de })}
+                  </span>
+                ));
+              })()}
             </div>
           </div>
 
@@ -605,27 +864,54 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
             </div>
           </div>
 
+          {/* Breaks / Stationary Periods */}
+          {stationaryPeriods.length > 0 && (
+            <div className="mt-3 pt-3 border-t">
+              <p className="text-xs font-medium text-muted-foreground mb-2">
+                Pausen (≥20 Min): {stationaryPeriods.length}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {stationaryPeriods.map((period, idx) => {
+                  const durationMinutes = Math.round(period.durationMs / (1000 * 60));
+                  const startTime = format(new Date(period.startTime), 'HH:mm', { locale: de });
+                  const endTime = format(new Date(period.endTime), 'HH:mm', { locale: de });
+
+                  return (
+                    <button
+                      key={`break-${idx}`}
+                      onClick={() => {
+                        handleScrub(period.startIndex);
+                      }}
+                      className="px-2 py-1 text-xs bg-orange-100 hover:bg-orange-200 rounded border border-orange-300 transition-colors"
+                      title={`Zu Pause springen: ${startTime} - ${endTime}`}
+                    >
+                      {startTime} ({durationMinutes} Min)
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* GPS Source Legend */}
-          <div className="mt-4 pt-4 border-t">
-            <p className="text-sm text-muted-foreground mb-2">GPS-Quellen:</p>
-            <div className="flex gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-[#3b82f6] border-2 border-white shadow"></div>
+          <div className="mt-2 pt-2 border-t">
+            <p className="text-xs text-muted-foreground mb-1">GPS-Quellen:</p>
+            <div className="flex gap-3 text-xs">
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full bg-[#3b82f6] border border-white shadow-sm"></div>
                 <span>Native App</span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-[#a855f7] border-2 border-white shadow"></div>
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full bg-[#000000] border border-white shadow-sm"></div>
                 <span>FollowMee</span>
               </div>
             </div>
           </div>
         </CardContent>
-      </Card>
+      </div>
 
-      {/* Map */}
-      <Card>
-        <CardContent className="pt-6">
-          <div style={{ height: '600px', width: '100%' }}>
+      {/* Map - Full Height */}
+      <div className="flex-1 overflow-hidden relative">
             <MapContainer
               center={[sortedPoints[0].latitude, sortedPoints[0].longitude]}
               zoom={zoomLevel}
@@ -643,8 +929,11 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
               {/* Camera follows current position with intelligent panning */}
               <CameraFollow
                 currentPosition={currentPosition}
-                zoom={zoomLevel}
+                currentIndex={currentIndex}
+                allPoints={sortedPoints}
+                manualZoom={zoomLevel}
                 isPlaying={isPlaying}
+                intelligentZoomEnabled={intelligentZoomEnabled}
               />
 
               {/* Full Route (grayed out) - Multi-colored by source */}
@@ -664,7 +953,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
 
               {/* Animated Route (colored by source) */}
               {animatedRouteSegments.map((segment, idx) => {
-                const color = segment.source === 'followmee' ? '#a855f7' : '#3b82f6'; // Purple for FollowMee, Blue for Native
+                const color = segment.source === 'followmee' ? '#000000' : '#3b82f6'; // Black for FollowMee, Blue for Native
                 return (
                   <Polyline
                     key={`animated-segment-${idx}`}
@@ -785,9 +1074,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
                   </Marker>
                 ))}
             </MapContainer>
-          </div>
-        </CardContent>
-      </Card>
+      </div>
     </div>
   );
 }

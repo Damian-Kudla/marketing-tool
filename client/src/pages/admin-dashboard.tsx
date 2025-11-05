@@ -172,6 +172,19 @@ export default function AdminDashboard() {
   const [loadingRoute, setLoadingRoute] = useState(false);
   const [gpsSource, setGpsSource] = useState<'all' | 'native' | 'followmee'>('all');
 
+  // Lock background scroll while the route modal is open
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (!showRouteReplay) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showRouteReplay]);
+
   // Redirect if not admin
   useEffect(() => {
     if (isAdmin === false) {
@@ -649,7 +662,7 @@ export default function AdminDashboard() {
             <Card>
               <CardContent className="pt-6">
                 <p className="text-center text-muted-foreground">
-                  Keine GPS-Daten verfügbar
+                  Keine GPS-Daten verfuegbar
                 </p>
               </CardContent>
             </Card>
@@ -1220,52 +1233,29 @@ export default function AdminDashboard() {
         </Card>
       )}
 
-      {/* Route Replay Modal/Overlay */}
+      {/* Route Replay Modal/Overlay - Fullscreen */}
       {showRouteReplay && (
-        <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-background rounded-lg shadow-xl w-full max-w-6xl my-8 flex flex-col max-h-[90vh]">
-            {/* Header - removed sticky positioning to prevent z-index issues */}
-            <div className="p-4 border-b bg-background rounded-t-lg">
-              <div className="flex items-center justify-between mb-4">
+        <div className="fixed inset-0 z-[9999] bg-background">
+          <div className="flex h-full flex-col">
+            {/* Compact Header */}
+            <div className="flex items-center justify-between px-4 py-2 border-b bg-background">
+              {/* Left: Title and User Info */}
+              <div className="flex items-center gap-4">
                 <div>
-                  <h2 className="text-xl font-bold">Route Wiedergabe</h2>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedUsername} - {mode === 'live' ? format(new Date(), 'dd.MM.yyyy') : format(new Date(selectedDate), 'dd.MM.yyyy')}
+                  <h2 className="text-lg font-bold">Route: {selectedUsername}</h2>
+                  <p className="text-xs text-muted-foreground">
+                    {mode === 'live' ? format(new Date(), 'dd.MM.yyyy') : format(new Date(selectedDate), 'dd.MM.yyyy')}
                   </p>
                 </div>
-                <button
-                  onClick={() => {
-                    setShowRouteReplay(false);
-                    setRouteData(null);
-                    setSelectedUserId(null);
-                    setSelectedUsername(null);
-                  }}
-                  className="p-2 hover:bg-muted rounded-md transition-colors"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                  </svg>
-                </button>
               </div>
 
-              {/* GPS Source Filter */}
+              {/* Center: GPS Source Filter */}
               <div className="flex items-center gap-2">
-                <Label htmlFor="gps-source" className="text-sm font-medium">GPS-Quelle:</Label>
-                <div className="flex gap-2">
+                <Label htmlFor="gps-source" className="text-xs font-medium">GPS-Quelle:</Label>
+                <div className="flex gap-1">
                   <button
                     onClick={() => handleGpsSourceChange('all')}
-                    className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                    className={`px-2 py-1 text-xs rounded-md transition-colors ${
                       gpsSource === 'all'
                         ? 'bg-primary text-primary-foreground'
                         : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
@@ -1275,7 +1265,7 @@ export default function AdminDashboard() {
                   </button>
                   <button
                     onClick={() => handleGpsSourceChange('native')}
-                    className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                    className={`px-2 py-1 text-xs rounded-md transition-colors ${
                       gpsSource === 'native'
                         ? 'bg-primary text-primary-foreground'
                         : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
@@ -1285,7 +1275,7 @@ export default function AdminDashboard() {
                   </button>
                   <button
                     onClick={() => handleGpsSourceChange('followmee')}
-                    className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                    className={`px-2 py-1 text-xs rounded-md transition-colors ${
                       gpsSource === 'followmee'
                         ? 'bg-primary text-primary-foreground'
                         : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
@@ -1295,19 +1285,45 @@ export default function AdminDashboard() {
                   </button>
                 </div>
                 {routeData && (
-                  <span className="text-sm text-muted-foreground ml-2">
+                  <span className="ml-2 text-xs text-muted-foreground">
                     ({routeData.totalPoints} Punkte)
                   </span>
                 )}
               </div>
+
+              {/* Right: Close Button */}
+              <button
+                onClick={() => {
+                  setShowRouteReplay(false);
+                  setRouteData(null);
+                  setSelectedUserId(null);
+                  setSelectedUsername(null);
+                }}
+                className="rounded-md p-2 transition-colors hover:bg-muted"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
             </div>
 
-            {/* Content - with overflow for scrolling inside modal */}
-            <div className="flex-1 p-4 overflow-y-auto">
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto bg-background">
               {loadingRoute ? (
-                <div className="flex items-center justify-center h-full min-h-[400px]">
+                <div className="flex min-h-full items-center justify-center py-16">
                   <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                    <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-primary"></div>
                     <p className="text-muted-foreground">Route wird geladen...</p>
                   </div>
                 </div>
@@ -1319,12 +1335,12 @@ export default function AdminDashboard() {
                   date={mode === 'live' ? new Date().toISOString().split('T')[0] : selectedDate}
                 />
               ) : (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center">
-                    <Route className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-lg font-medium mb-2">Keine GPS-Daten verfügbar</p>
+                <div className="flex min-h-full items-center justify-center py-16">
+                  <div className="px-4 text-center">
+                    <Route className="mx-auto mb-4 h-16 w-16 text-muted-foreground" />
+                    <p className="mb-2 text-lg font-medium">Keine GPS-Daten verfuegbar</p>
                     <p className="text-sm text-muted-foreground">
-                      Für diesen Benutzer wurden an diesem Tag keine GPS-Punkte aufgezeichnet.
+                      Fuer diesen Benutzer wurden an diesem Tag keine GPS-Punkte aufgezeichnet.
                     </p>
                   </div>
                 </div>

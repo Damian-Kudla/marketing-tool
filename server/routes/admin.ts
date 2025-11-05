@@ -112,8 +112,8 @@ function calculatePeakTime(rawLogs: TrackingData[]): string | undefined {
 }
 
 /**
- * Calculate top 3 breaks (largest time gaps between activities)
- * A break is considered significant if it's at least 15 minutes
+ * Calculate all breaks longer than 20 minutes (time gaps between activities)
+ * A break is considered significant if it's at least 20 minutes
  */
 function calculateBreaks(rawLogs: TrackingData[]): Array<{ start: number; end: number; duration: number }> {
   if (rawLogs.length < 2) return [];
@@ -123,11 +123,11 @@ function calculateBreaks(rawLogs: TrackingData[]): Array<{ start: number; end: n
 
   // Calculate all gaps
   const gaps: Array<{ start: number; end: number; duration: number }> = [];
-  
+
   for (let i = 1; i < sortedLogs.length; i++) {
     const gap = sortedLogs[i].timestamp - sortedLogs[i - 1].timestamp;
-    const minBreakDuration = 15 * 60 * 1000; // 15 minutes
-    
+    const minBreakDuration = 20 * 60 * 1000; // 20 minutes
+
     if (gap >= minBreakDuration) {
       gaps.push({
         start: sortedLogs[i - 1].timestamp,
@@ -137,8 +137,8 @@ function calculateBreaks(rawLogs: TrackingData[]): Array<{ start: number; end: n
     }
   }
 
-  // Sort by duration (largest first) and take top 3
-  return gaps.sort((a, b) => b.duration - a.duration).slice(0, 3);
+  // Sort by duration (largest first) - return ALL breaks, not just top 3
+  return gaps.sort((a, b) => b.duration - a.duration);
 }
 
 /**
