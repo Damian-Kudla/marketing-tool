@@ -5,7 +5,6 @@ import { fileURLToPath } from "url";
 import { createServer as createViteServer, createLogger } from "vite";
 import { type Server } from "http";
 import viteConfig from "../vite.config";
-import { nanoid } from "nanoid";
 
 // Fix for production build: import.meta.dirname is undefined in bundled code
 const __filename = fileURLToPath(import.meta.url);
@@ -25,14 +24,15 @@ export function log(message: string, source = "express") {
 }
 
 export async function setupVite(app: Express, server: Server) {
-  const serverOptions = {
-    middlewareMode: true,
-    hmr: { server },
-    allowedHosts: true as const,
-  };
+  const resolvedViteConfig =
+    typeof viteConfig === "function"
+      ? await viteConfig({ mode: app.get("env") ?? "development", command: "serve" })
+      : viteConfig;
+
+  const { server: userServerConfig, ...restViteConfig } = resolvedViteConfig ?? {};
 
   const vite = await createViteServer({
-    ...viteConfig,
+    ...restViteConfig,
     configFile: false,
     customLogger: {
       ...viteLogger,
@@ -41,7 +41,12 @@ export async function setupVite(app: Express, server: Server) {
         process.exit(1);
       },
     },
-    server: serverOptions,
+    server: {
+      ...(userServerConfig ?? {}),
+      middlewareMode: true,
+      hmr: { server },
+      allowedHosts: true as const,
+    },
     appType: "custom",
   });
 
@@ -59,9 +64,12 @@ export async function setupVite(app: Express, server: Server) {
 
       // always reload the index.html file from disk incase it changes
       let template = await fs.promises.readFile(clientTemplate, "utf-8");
+      const cacheBustTag = `${Date.now().toString(36)}${Math.random()
+        .toString(36)
+        .slice(2, 8)}`;
       template = template.replace(
         `src="/src/main.tsx"`,
-        `src="/src/main.tsx?v=${nanoid()}"`,
+        `src="/src/main.tsx?v=${cacheBustTag}"`,
       );
       const page = await vite.transformIndexHtml(url, template);
       res.status(200).set({ "Content-Type": "text/html" }).end(page);

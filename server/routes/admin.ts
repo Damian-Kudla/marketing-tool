@@ -448,60 +448,64 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
     let photoTimestamps: number[] = [];
     let username = '';
 
-    if (dateStr === today) {
-      // Live-Daten aus RAM
-      const userData = dailyDataStore.getUserDailyData(userIdStr);
-      if (userData) {
-        gpsPoints = userData.gpsPoints;
-        username = userData.username;
-        photoTimestamps = userData.photoTimestamps || [];
-      }
-    } else {
-      // Historische Daten aus Google Sheets
-      const historicalData = await scrapeDayData(dateStr, userIdStr);
+    // Finde Username für userId (wird immer benötigt)
+    const { googleSheetsService } = await import('../services/googleSheets');
+    const allUsers = await googleSheetsService.getAllUsers();
+    const user = allUsers.find(u => u.userId === userIdStr);
 
-      if (historicalData && historicalData.length > 0) {
-        const userData = historicalData[0];
-        gpsPoints = userData.gpsPoints;
-        username = userData.username;
-        photoTimestamps = userData.photoTimestamps || [];
+    if (user) {
+      username = user.username;
+    }
+
+    // Lade native/followmee Daten nur wenn nicht ausschließlich external gewünscht
+    if (sourceFilter !== 'external') {
+      if (dateStr === today) {
+        // Live-Daten aus RAM
+        const userData = dailyDataStore.getUserDailyData(userIdStr);
+        if (userData) {
+          gpsPoints = userData.gpsPoints;
+          if (!username) username = userData.username;
+          photoTimestamps = userData.photoTimestamps || [];
+        }
+      } else {
+        // Historische Daten aus Google Sheets
+        const historicalData = await scrapeDayData(dateStr, userIdStr);
+
+        if (historicalData && historicalData.length > 0) {
+          const userData = historicalData[0];
+          gpsPoints = userData.gpsPoints;
+          if (!username) username = userData.username;
+          photoTimestamps = userData.photoTimestamps || [];
+        }
       }
     }
 
     // Lade externe Tracking-Daten, falls gewünscht
-    if (sourceFilter === 'external' || sourceFilter === undefined) {
+    if ((sourceFilter === 'external' || sourceFilter === undefined) && user) {
       const { externalTrackingService } = await import('../services/externalTrackingService');
 
-      // Finde Username für userId
-      const { googleSheetsService } = await import('../services/googleSheets');
-      const allUsers = await googleSheetsService.getAllUsers();
-      const user = allUsers.find(u => u.userId === userIdStr);
+      const externalData = await externalTrackingService.getExternalTrackingDataFromUserLog(
+        user.username,
+        new Date(dateStr)
+      );
 
-      if (user) {
-        username = user.username; // Set username if not already set
-        const externalData = await externalTrackingService.getExternalTrackingDataFromUserLog(
-          user.username,
-          new Date(dateStr)
-        );
+      // Konvertiere externe Daten in GPS-Points mit source: 'external'
+      const externalGpsPoints = externalData.map(point => ({
+        latitude: point.latitude,
+        longitude: point.longitude,
+        accuracy: 10, // Standard-Genauigkeit für externe Daten
+        timestamp: new Date(point.timestamp).getTime(),
+        source: 'external' as const
+      }));
 
-        // Konvertiere externe Daten in GPS-Points mit source: 'external'
-        const externalGpsPoints = externalData.map(point => ({
-          latitude: point.latitude,
-          longitude: point.longitude,
-          accuracy: 10, // Standard-Genauigkeit für externe Daten
-          timestamp: new Date(point.timestamp).getTime(),
-          source: 'external' as const
-        }));
-
-        if (sourceFilter === 'external') {
-          // Nur externe Daten
-          gpsPoints = externalGpsPoints;
-          console.log(`[Admin API] Loaded ${externalGpsPoints.length} external tracking points`);
-        } else {
-          // Alle Daten (native + followmee + external)
-          gpsPoints = [...gpsPoints, ...externalGpsPoints];
-          console.log(`[Admin API] Added ${externalGpsPoints.length} external tracking points to existing ${gpsPoints.length - externalGpsPoints.length} points`);
-        }
+      if (sourceFilter === 'external') {
+        // Nur externe Daten
+        gpsPoints = externalGpsPoints;
+        console.log(`[Admin API] Loaded ${externalGpsPoints.length} external tracking points`);
+      } else {
+        // Alle Daten (native + followmee + external)
+        gpsPoints = [...gpsPoints, ...externalGpsPoints];
+        console.log(`[Admin API] Added ${externalGpsPoints.length} external tracking points to existing ${gpsPoints.length - externalGpsPoints.length} points`);
       }
     }
 
@@ -511,21 +515,12 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
       console.log(`[Admin API] Filtered to ${gpsPoints.length} ${sourceFilter} GPS points`);
     }
 
-    if (gpsPoints.length === 0) {
-      return res.status(404).json({
-        error: 'No GPS data found for this user on this date',
-        gpsPoints: [],
-        photoTimestamps: [],
-        username: username || 'Unknown',
-        date: dateStr,
-        source: sourceFilter || 'all'
-      });
-    }
-
+    // Gebe immer 200 zurück, auch wenn keine Daten gefunden wurden
+    // (verhindert Service Worker Cache-Probleme)
     res.json({
-      gpsPoints,
-      photoTimestamps,
-      username,
+      gpsPoints: gpsPoints || [],
+      photoTimestamps: photoTimestamps || [],
+      username: username || 'Unknown',
       date: dateStr,
       source: sourceFilter || 'all',
       totalPoints: gpsPoints.length,

@@ -388,4 +388,85 @@ export class GoogleSheetsLoggingService {
       throw error;
     }
   }
+
+  /**
+   * Lädt alle Log-Einträge für einen Nutzer an einem bestimmten Datum
+   * Wird verwendet, um externe Tracking-Daten aus den Logs zu extrahieren
+   */
+  static async getUserLogsForDate(username: string, date: Date): Promise<LogEntry[]> {
+    if (!sheetsEnabled || !sheetsClient) {
+      console.warn('[GoogleSheetsLoggingService] Google Sheets API not available');
+      return [];
+    }
+
+    try {
+      // Finde den userId für diesen username
+      const { googleSheetsService } = await import('./googleSheets');
+      const allUsers = await googleSheetsService.getAllUsers();
+      const user = allUsers.find(u => u.username === username);
+
+      if (!user) {
+        console.warn(`[GoogleSheetsLoggingService] No user found with username: ${username}`);
+        return [];
+      }
+
+      const worksheetName = `${username}_${user.userId}`;
+
+      // Prüfe, ob das Worksheet existiert
+      const response = await sheetsClient.spreadsheets.get({
+        spreadsheetId: this.LOG_SHEET_ID,
+      });
+
+      const existingSheets = response.data.sheets || [];
+      const sheetExists = existingSheets.some((sheet: any) =>
+        sheet.properties.title === worksheetName
+      );
+
+      if (!sheetExists) {
+        console.log(`[GoogleSheetsLoggingService] No worksheet found for ${username}`);
+        return [];
+      }
+
+      // Lade alle Daten aus dem Worksheet
+      const dataResponse = await sheetsClient.spreadsheets.values.get({
+        spreadsheetId: this.LOG_SHEET_ID,
+        range: `${worksheetName}!A2:J`, // Skip header row
+      });
+
+      const rows = dataResponse.data.values || [];
+
+      // Filtere nach Datum
+      const targetDate = new Date(date);
+      const dayStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+
+      const logsForDate: LogEntry[] = rows
+        .filter((row: any[]) => {
+          if (!row[0]) return false; // Skip rows without timestamp
+          const timestamp = new Date(row[0]);
+          return timestamp >= dayStart && timestamp < dayEnd;
+        })
+        .map((row: any[]) => ({
+          timestamp: row[0] || '',
+          userId: row[1] || '',
+          username: row[2] || '',
+          endpoint: row[3] || '',
+          method: row[4] || '',
+          address: row[5] || '',
+          newProspects: row[6] ? row[6].split(', ').filter((p: string) => p.length > 0) : [],
+          existingCustomers: row[7] ? row[7].split(', ').map((c: string) => {
+            const match = c.match(/^(.+)\s\((.+)\)$/);
+            return match ? { name: match[1], id: match[2] } : { name: c, id: '' };
+          }) : [],
+          userAgent: row[8] || '',
+          data: row[9] || ''
+        }));
+
+      console.log(`[GoogleSheetsLoggingService] Found ${logsForDate.length} log entries for ${username} on ${date.toISOString().split('T')[0]}`);
+      return logsForDate;
+    } catch (error) {
+      console.error(`[GoogleSheetsLoggingService] Error loading logs for ${username}:`, error);
+      return [];
+    }
+  }
 }
