@@ -573,6 +573,7 @@ export interface UserData {
   postalCodes: string[];
   isAdmin: boolean;
   followMeeDeviceId?: string;
+  trackingNames: string[];
 }
 
 export interface SheetsService {
@@ -581,6 +582,7 @@ export interface SheetsService {
   getUserByPassword(password: string): Promise<string | null>;
   isUserAdmin(password: string): Promise<boolean>;
   getAllUsers(): Promise<UserData[]>;
+  getUserByTrackingName(name: string): Promise<UserData | undefined>;
   refreshUserCache(): Promise<void>;
 }
 
@@ -1403,8 +1405,9 @@ export const categoryChangeLoggingService = new CategoryChangeLoggingService();
 class AppointmentService {
   private appointmentsCache: Map<string, any> = new Map();
   private lastSync: Date | null = null;
+  private cacheInitialized: boolean = false;
+  private cacheLoadPromise: Promise<void> | null = null;
   private readonly SHEET_NAME = "Termine";
-  private readonly SYNC_INTERVAL = 60000; // 60 seconds
   private readonly ADDRESSES_SHEET_ID = '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
 
   // Ensure "Termine" sheet exists with proper headers
@@ -1472,6 +1475,24 @@ class AppointmentService {
     }
   }
 
+  private async ensureCacheLoaded(): Promise<void> {
+    if (this.cacheInitialized) {
+      return;
+    }
+
+    if (!this.cacheLoadPromise) {
+      this.cacheLoadPromise = this.syncFromSheets()
+        .then(() => {
+          this.cacheInitialized = true;
+        })
+        .finally(() => {
+          this.cacheLoadPromise = null;
+        });
+    }
+
+    await this.cacheLoadPromise;
+  }
+
   // Sync appointments from Google Sheets to RAM cache
   async syncFromSheets(): Promise<void> {
     if (!sheetsEnabled || !sheetsClient) {
@@ -1517,6 +1538,7 @@ class AppointmentService {
       }
 
       this.lastSync = new Date();
+      this.cacheInitialized = true;
       console.log(`[AppointmentService] ✓ Synced ${validCount} valid appointments from Sheets`);
       console.log(`[AppointmentService] Cache: ${previousCacheSize} → ${this.appointmentsCache.size} appointments`);
       console.log(`[AppointmentService] === SYNC FROM SHEETS END ===`);
@@ -1540,6 +1562,14 @@ class AppointmentService {
     console.log(`[AppointmentService] Resident: ${residentName}, Date: ${appointmentDate}, Time: ${appointmentTime}`);
     
     try {
+      if (!this.cacheInitialized) {
+        try {
+          await this.ensureCacheLoaded();
+        } catch (error) {
+          console.warn('[AppointmentService] Failed to warm cache before create, continuing with in-memory data:', error);
+        }
+      }
+
       await this.ensureSheetExists();
 
       const id = crypto.randomUUID();
@@ -1605,17 +1635,8 @@ class AppointmentService {
   // Get appointments for a user
   async getUserAppointments(username: string): Promise<any[]> {
     console.log(`[AppointmentService] Getting appointments for user: ${username}`);
-    
-    // Sync if cache is stale
-    const cacheAge = this.lastSync ? Date.now() - this.lastSync.getTime() : Infinity;
-    const needsSync = !this.lastSync || cacheAge > this.SYNC_INTERVAL;
-    
-    console.log(`[AppointmentService] Cache age: ${cacheAge}ms, Needs sync: ${needsSync}`);
-    
-    if (needsSync) {
-      console.log(`[AppointmentService] Cache stale, syncing from sheets...`);
-      await this.syncFromSheets();
-    }
+
+    await this.ensureCacheLoaded();
 
     const allAppointments = Array.from(this.appointmentsCache.values());
     console.log(`[AppointmentService] Total appointments in cache: ${allAppointments.length}`);
@@ -1644,9 +1665,6 @@ class AppointmentService {
 
   // Get upcoming appointments for a user
   async getUpcomingAppointments(username: string): Promise<any[]> {
-    // Always sync fresh data to prevent showing wrong user's appointments
-    await this.syncFromSheets();
-    
     const allAppointments = await this.getUserAppointments(username);
     const today = new Date().toISOString().split('T')[0];
 
@@ -1664,21 +1682,18 @@ class AppointmentService {
     console.log(`[AppointmentService] === DELETE APPOINTMENT START === ID: ${id}`);
 
     try {
-      // First, get the sheet ID
       const sheetId = await this.getSheetId();
       console.log(`[AppointmentService] Sheet ID for "${this.SHEET_NAME}": ${sheetId}`);
 
-      // Get all rows to find the appointment
       const sheets = sheetsClient.spreadsheets;
       const response = await sheets.values.get({
         spreadsheetId: this.ADDRESSES_SHEET_ID,
-        range: `${this.SHEET_NAME}!A:I`, // Get full row to verify data
+        range: `${this.SHEET_NAME}!A:I`,
       });
 
       const rows = response.data.values || [];
       console.log(`[AppointmentService] Total rows in sheet (including header): ${rows.length}`);
-      
-      // Find the row with matching ID (skip header row 0)
+
       const rowIndex = rows.findIndex((row: any, index: number) => {
         const matches = row[0] === id;
         if (index === 0) {
@@ -1693,66 +1708,45 @@ class AppointmentService {
         console.log(`[AppointmentService] ERROR: Appointment ${id} not found in sheet!`);
         console.log(`[AppointmentService] Searched through ${rows.length} rows`);
         console.log(`[AppointmentService] First few IDs in sheet: ${rows.slice(1, 4).map((r: any) => r[0]).join(', ')}`);
-        
-        // Remove from cache anyway
         this.appointmentsCache.delete(id);
         return;
       }
 
-      console.log(`[AppointmentService] Found appointment at rowIndex: ${rowIndex} (0-based)`);
-      console.log(`[AppointmentService] Row content: [${rows[rowIndex].join(', ')}]`);
-
-      // For deletion: rowIndex is 0-based
-      // Row 0 = header
-      // Row 1 = first data row (index 1)
-      // To delete row at index N, we use startIndex: N, endIndex: N+1
-      
       const startIndex = rowIndex;
       const endIndex = rowIndex + 1;
-      
+
       console.log(`[AppointmentService] Deleting with startIndex: ${startIndex}, endIndex: ${endIndex}`);
 
-      // Delete the row
       await sheets.batchUpdate({
         spreadsheetId: this.ADDRESSES_SHEET_ID,
         requestBody: {
           requests: [{
             deleteDimension: {
               range: {
-                sheetId: sheetId,
+                sheetId,
                 dimension: 'ROWS',
-                startIndex: startIndex,
-                endIndex: endIndex,
+                startIndex,
+                endIndex,
               },
             },
           }],
         },
       });
 
-      console.log(`[AppointmentService] ✓ Successfully sent delete request to Google Sheets API`);
-      
-      // Remove from cache
+      console.log(`[AppointmentService] Successfully sent delete request to Google Sheets API`);
+
       this.appointmentsCache.delete(id);
-      console.log(`[AppointmentService] ✓ Removed from cache`);
-      
-      // Force a sync to verify deletion
-      console.log(`[AppointmentService] Forcing cache sync to verify deletion...`);
-      await this.syncFromSheets();
-      
-      if (this.appointmentsCache.has(id)) {
-        console.error(`[AppointmentService] ✗ ERROR: Appointment ${id} still in cache after sync!`);
-      } else {
-        console.log(`[AppointmentService] ✓ Verified: Appointment ${id} successfully deleted`);
+      if (LOG_CONFIG.APPOINTMENTS.logSummary) {
+        console.log(`[AppointmentService] Appointment ${id} removed from in-memory cache`);
       }
-      
+
       console.log(`[AppointmentService] === DELETE APPOINTMENT END ===`);
     } catch (error) {
-      console.error("[AppointmentService] ✗ Error deleting appointment:", error);
+      console.error("[AppointmentService] Error deleting appointment:", error);
       console.log(`[AppointmentService] === DELETE APPOINTMENT FAILED ===`);
       throw error;
     }
   }
-
   // Helper to get sheet ID
   private async getSheetId(): Promise<number> {
     if (!sheetsEnabled || !sheetsClient) {

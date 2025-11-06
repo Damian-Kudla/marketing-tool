@@ -1,15 +1,15 @@
-import type { LogEntry, AuthLogEntry } from './fallbackLogging';
+import type { LogEntry, AuthLogEntry, CategoryChangeLogEntry } from './fallbackLogging';
 import { fallbackLogger } from './fallbackLogging';
 import { pushoverService } from './pushover';
 import { LOG_CONFIG } from '../config/logConfig';
 
 interface BatchQueueEntry {
-  type: 'user_activity' | 'auth';
-  data: LogEntry | AuthLogEntry;
+  type: 'user_activity' | 'auth' | 'category';
+  data: LogEntry | AuthLogEntry | CategoryChangeLogEntry;
 }
 
 class BatchLogger {
-  private queue: Map<string, BatchQueueEntry[]> = new Map(); // Key: userId or 'auth'
+  private queue: Map<string, BatchQueueEntry[]> = new Map(); // Key: userId / 'auth' / category:datasetId
   private flushInterval: NodeJS.Timeout | null = null;
   private readonly FLUSH_INTERVAL_MS = 15000; // 15 seconds
   private isProcessing: boolean = false;
@@ -66,6 +66,23 @@ class BatchLogger {
     }
   }
 
+  addCategoryChange(logEntry: CategoryChangeLogEntry) {
+    const key = `category:${logEntry.datasetId}`;
+
+    if (!this.queue.has(key)) {
+      this.queue.set(key, []);
+    }
+
+    this.queue.get(key)!.push({
+      type: 'category',
+      data: logEntry
+    });
+
+    if (LOG_CONFIG.BATCH_LOGGER.logQueueAdd) {
+      console.log(`[BatchLogger] Added category change log for dataset ${logEntry.datasetId} (queue size: ${this.queue.get(key)!.length})`);
+    }
+  }
+
   async flush() {
     if (this.isProcessing) {
       console.log('[BatchLogger] Already processing, skipping flush');
@@ -110,30 +127,26 @@ class BatchLogger {
     }
   }
 
-  private async flushUserQueue(userId: string, entries: BatchQueueEntry[]): Promise<void> {
+  private async flushUserQueue(queueKey: string, entries: BatchQueueEntry[]): Promise<void> {
     try {
-      console.log(`[BatchLogger] Flushing ${entries.length} logs for ${userId}...`);
+      console.log(`[BatchLogger] Flushing ${entries.length} logs for ${queueKey}...`);
 
-      // Google Sheets doesn't support multi-worksheet batch writes in one request
-      // So we need to send each user's logs separately
-      
-      // Import GoogleSheetsLoggingService dynamically to avoid circular dependency
-      const { GoogleSheetsLoggingService } = await import('./googleSheetsLogging');
+      const firstEntryType = entries[0].type;
 
-      if (userId === 'auth') {
-        // Flush auth logs
+      if (firstEntryType === 'auth') {
         await this.flushAuthLogs(entries as { type: 'auth'; data: AuthLogEntry }[]);
+      } else if (firstEntryType === 'category') {
+        await this.flushCategoryChangeLogs(queueKey, entries as { type: 'category'; data: CategoryChangeLogEntry }[]);
       } else {
-        // Flush user activity logs
-        await this.flushUserActivityLogs(userId, entries as { type: 'user_activity'; data: LogEntry }[]);
+        await this.flushUserActivityLogs(queueKey, entries as { type: 'user_activity'; data: LogEntry }[]);
       }
 
       // Remove successfully flushed entries from queue
-      this.queue.delete(userId);
+      this.queue.delete(queueKey);
 
-      console.log(`[BatchLogger] Successfully flushed logs for ${userId}`);
+      console.log(`[BatchLogger] Successfully flushed logs for ${queueKey}`);
     } catch (error) {
-      console.error(`[BatchLogger] Failed to flush logs for ${userId}:`, error);
+      console.error(`[BatchLogger] Failed to flush logs for ${queueKey}:`, error);
 
       // Save failed logs to fallback file
       for (const entry of entries) {
@@ -141,7 +154,7 @@ class BatchLogger {
       }
 
       // Remove from queue even on failure (already saved to fallback)
-      this.queue.delete(userId);
+      this.queue.delete(queueKey);
 
       // Send alert if fallback storage is being used
       await pushoverService.sendFallbackStorageAlert(entries.length);
@@ -209,6 +222,35 @@ class BatchLogger {
 
     // Batch append all rows to AuthLogs worksheet
     await GoogleSheetsLoggingService.batchAppendToWorksheet('AuthLogs', logRows);
+  }
+
+  private async flushCategoryChangeLogs(
+    queueKey: string,
+    entries: { type: 'category'; data: CategoryChangeLogEntry }[]
+  ) {
+    const { categoryChangeLoggingService } = await import('./googleSheets');
+
+    for (const entry of entries) {
+      const log = entry.data;
+      try {
+        await categoryChangeLoggingService.logCategoryChange(
+          log.datasetId,
+          log.residentOriginalName,
+          log.residentCurrentName,
+          log.oldCategory,
+          log.newCategory,
+          log.changedBy,
+          log.addressDatasetSnapshot
+        );
+      } catch (error) {
+        console.error(`[BatchLogger] Failed to flush category change log for dataset ${log.datasetId}:`, error);
+        throw error;
+      }
+    }
+
+    if (LOG_CONFIG.BATCH_LOGGER.logFlushSuccess) {
+      console.log(`[BatchLogger] Category change logs flushed for ${queueKey}`);
+    }
   }
 
   async forceFlushNow(): Promise<void> {
