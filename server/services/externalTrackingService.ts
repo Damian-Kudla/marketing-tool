@@ -1,11 +1,15 @@
 import { google } from 'googleapis';
 import type { LocationData } from '../../shared/externalTrackingTypes';
+import { googleSheetsService } from './googleSheets';
+import { batchLogger } from './batchLogger';
 
 /**
  * External Tracking Service
  *
- * Verwaltet das Speichern von Location-Daten aus der externen Tracking-App
- * in Google Sheets. Jeder Nutzer erhält ein eigenes Tabellenblatt.
+ * Verwaltet das Speichern von Location-Daten aus der externen Tracking-App.
+ * - Ordnet Tracking-Daten anhand des userName dem entsprechenden Nutzer zu
+ * - Schreibt die Daten in das Nutzer-Log (über batchLogger)
+ * - Fallback: Bei unbekanntem Nutzer wird in Google Sheet geschrieben
  */
 class ExternalTrackingService {
   private readonly SHEET_ID = '1OspTbAfG6TM4SiUIHeRAF_QlODy3oHjubbiUTRGDo3Y';
@@ -143,9 +147,53 @@ class ExternalTrackingService {
   }
 
   /**
-   * Speichert Location-Daten in das entsprechende Nutzer-Sheet
+   * Speichert Location-Daten - entweder in Nutzer-Log oder als Fallback in Google Sheet
    */
   async saveLocationData(locationData: LocationData): Promise<void> {
+    try {
+      // Versuche, den Nutzer anhand des userName zu finden
+      const user = await googleSheetsService.getUserByTrackingName(locationData.userName);
+
+      if (user) {
+        // Nutzer gefunden - schreibe in dessen Log
+        console.log(`[ExternalTrackingService] Found user ${user.username} for tracking name "${locationData.userName}"`);
+
+        // Erstelle Log-Eintrag mit GPS-Daten im data-Feld
+        const logEntry = {
+          timestamp: new Date().toISOString(),
+          userId: user.userId,
+          username: user.username,
+          endpoint: '/api/external-tracking/location',
+          method: 'POST',
+          userAgent: 'External Tracking App',
+          data: {
+            latitude: locationData.latitude,
+            longitude: locationData.longitude,
+            timestamp: locationData.timestamp,
+            source: 'external_app' // Markierung für spätere Auswertung
+          }
+        };
+
+        // Schreibe in Nutzer-Log über batchLogger
+        batchLogger.addUserActivity(logEntry);
+        console.log(`[ExternalTrackingService] Added tracking data to user log for ${user.username}`);
+      } else {
+        // Nutzer nicht gefunden - Fallback: schreibe in Google Sheet
+        console.log(`[ExternalTrackingService] No user found for tracking name "${locationData.userName}" - writing to Google Sheet as fallback`);
+        await this.saveToGoogleSheet(locationData);
+      }
+    } catch (error) {
+      console.error('[ExternalTrackingService] Error saving location data:', error);
+      // Bei Fehler auch Fallback zu Google Sheet
+      console.log('[ExternalTrackingService] Falling back to Google Sheet due to error');
+      await this.saveToGoogleSheet(locationData);
+    }
+  }
+
+  /**
+   * Fallback: Speichert Location-Daten in das entsprechende Google Sheet
+   */
+  private async saveToGoogleSheet(locationData: LocationData): Promise<void> {
     if (!this.sheetsEnabled || !this.sheetsClient) {
       throw new Error('Google Sheets API not available');
     }
@@ -187,10 +235,56 @@ class ExternalTrackingService {
         }
       });
 
-      console.log(`[ExternalTrackingService] Successfully saved location data for user: ${locationData.userName}`);
+      console.log(`[ExternalTrackingService] Successfully saved location data to Google Sheet for: ${locationData.userName}`);
     } catch (error) {
-      console.error('[ExternalTrackingService] Error saving location data:', error);
+      console.error('[ExternalTrackingService] Error saving to Google Sheet:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Lädt externe Tracking-Daten für einen Nutzer aus dessen User-Log
+   * Filtert nur Einträge mit source: 'external_app' im data-Feld
+   */
+  async getExternalTrackingDataFromUserLog(username: string, date: Date): Promise<Array<{
+    timestamp: string;
+    latitude: number;
+    longitude: number;
+  }>> {
+    try {
+      const { GoogleSheetsLoggingService } = await import('./googleSheetsLogging');
+
+      // Lade alle Logs für den User an diesem Tag
+      const userLogs = await GoogleSheetsLoggingService.getUserLogsForDate(username, date);
+
+      // Filtere nur externe Tracking-Daten
+      const externalTrackingLogs = userLogs
+        .filter(log => {
+          try {
+            const data = typeof log.data === 'string' ? JSON.parse(log.data) : log.data;
+            return data && data.source === 'external_app';
+          } catch {
+            return false;
+          }
+        })
+        .map(log => {
+          const data = typeof log.data === 'string' ? JSON.parse(log.data) : log.data;
+          return {
+            timestamp: data.timestamp || log.timestamp,
+            latitude: data.latitude,
+            longitude: data.longitude
+          };
+        })
+        .filter(item =>
+          typeof item.latitude === 'number' &&
+          typeof item.longitude === 'number'
+        );
+
+      console.log(`[ExternalTrackingService] Found ${externalTrackingLogs.length} external tracking logs for ${username} on ${date.toISOString().split('T')[0]}`);
+      return externalTrackingLogs;
+    } catch (error) {
+      console.error('[ExternalTrackingService] Error loading external tracking data from user log:', error);
+      return [];
     }
   }
 

@@ -438,7 +438,7 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
 
     const dateStr = date as string;
     const userIdStr = userId as string;
-    const sourceFilter = source as string | undefined; // 'native', 'followmee', or undefined (both)
+    const sourceFilter = source as string | undefined; // 'native', 'followmee', 'external', or undefined (all)
 
     console.log(`[Admin API] Fetching route data for user ${userIdStr} on ${dateStr} (source: ${sourceFilter || 'all'})`);
 
@@ -468,7 +468,44 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
       }
     }
 
-    // Filter GPS points by source if specified
+    // Lade externe Tracking-Daten, falls gewünscht
+    if (sourceFilter === 'external' || sourceFilter === undefined) {
+      const { externalTrackingService } = await import('../services/externalTrackingService');
+
+      // Finde Username für userId
+      const { googleSheetsService } = await import('../services/googleSheets');
+      const allUsers = await googleSheetsService.getAllUsers();
+      const user = allUsers.find(u => u.userId === userIdStr);
+
+      if (user) {
+        username = user.username; // Set username if not already set
+        const externalData = await externalTrackingService.getExternalTrackingDataFromUserLog(
+          user.username,
+          new Date(dateStr)
+        );
+
+        // Konvertiere externe Daten in GPS-Points mit source: 'external'
+        const externalGpsPoints = externalData.map(point => ({
+          latitude: point.latitude,
+          longitude: point.longitude,
+          accuracy: 10, // Standard-Genauigkeit für externe Daten
+          timestamp: new Date(point.timestamp).getTime(),
+          source: 'external' as const
+        }));
+
+        if (sourceFilter === 'external') {
+          // Nur externe Daten
+          gpsPoints = externalGpsPoints;
+          console.log(`[Admin API] Loaded ${externalGpsPoints.length} external tracking points`);
+        } else {
+          // Alle Daten (native + followmee + external)
+          gpsPoints = [...gpsPoints, ...externalGpsPoints];
+          console.log(`[Admin API] Added ${externalGpsPoints.length} external tracking points to existing ${gpsPoints.length - externalGpsPoints.length} points`);
+        }
+      }
+    }
+
+    // Filter GPS points by source if specified (native oder followmee)
     if (sourceFilter && (sourceFilter === 'native' || sourceFilter === 'followmee')) {
       gpsPoints = gpsPoints.filter(point => point.source === sourceFilter);
       console.log(`[Admin API] Filtered to ${gpsPoints.length} ${sourceFilter} GPS points`);
@@ -770,13 +807,13 @@ router.post('/users/refresh-cache', requireAuth, requireAdmin, async (req: Authe
   try {
     console.log('[Admin API] User cache refresh requested by', req.username);
     const { googleSheetsService } = await import('../services/googleSheets');
-    
+
     await googleSheetsService.refreshUserCache();
     const users = await googleSheetsService.getAllUsers();
     const usersWithDevices = users.filter(u => u.followMeeDeviceId);
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: 'User cache refreshed successfully',
       totalUsers: users.length,
       usersWithFollowMeeDevices: usersWithDevices.length,
@@ -789,6 +826,38 @@ router.post('/users/refresh-cache', requireAuth, requireAdmin, async (req: Authe
   } catch (error) {
     console.error('[Admin API] Error refreshing user cache:', error);
     res.status(500).json({ error: 'Failed to refresh user cache' });
+  }
+});
+
+/**
+ * GET /api/admin/external-tracking/:username/:date
+ * Lädt externe Tracking-Daten für einen Nutzer an einem bestimmten Tag
+ * aus dessen User-Log (Daten, die über /api/external-tracking/location empfangen wurden)
+ */
+router.get('/external-tracking/:username/:date', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { username, date: dateString } = req.params;
+    const date = new Date(dateString);
+
+    if (isNaN(date.getTime())) {
+      return res.status(400).json({ error: 'Invalid date format' });
+    }
+
+    console.log(`[Admin API] External tracking data requested for ${username} on ${dateString}`);
+
+    const { externalTrackingService } = await import('../services/externalTrackingService');
+    const trackingData = await externalTrackingService.getExternalTrackingDataFromUserLog(username, date);
+
+    res.json({
+      success: true,
+      username,
+      date: dateString,
+      count: trackingData.length,
+      data: trackingData
+    });
+  } catch (error) {
+    console.error('[Admin API] Error loading external tracking data:', error);
+    res.status(500).json({ error: 'Failed to load external tracking data' });
   }
 });
 

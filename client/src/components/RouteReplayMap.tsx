@@ -23,7 +23,7 @@ interface GPSPoint {
   longitude: number;
   accuracy: number;
   timestamp: number;
-  source?: 'native' | 'followmee';
+  source?: 'native' | 'followmee' | 'external';
 }
 
 interface RouteReplayMapProps {
@@ -130,9 +130,9 @@ const createPhotoFlashMarker = () => {
 };
 
 // Small clickable marker for GPS points with source-based coloring
-const createGPSPointMarker = (source?: 'native' | 'followmee') => {
-  // Native: Blue (#3b82f6), FollowMee: Black (#000000)
-  const color = source === 'followmee' ? '#000000' : '#3b82f6';
+const createGPSPointMarker = (source?: 'native' | 'followmee' | 'external') => {
+  // Native: Blue (#3b82f6), FollowMee: Black (#000000), External: Red (#ef4444)
+  const color = source === 'followmee' ? '#000000' : source === 'external' ? '#ef4444' : '#3b82f6';
 
   return L.divIcon({
     className: 'custom-marker',
@@ -634,16 +634,16 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
 
   // Create polyline segments grouped by source for multi-colored route
   const createRouteSegments = (points: GPSPoint[]) => {
-    const segments: { points: [number, number][]; source: 'native' | 'followmee' | 'unknown' }[] = [];
+    const segments: { points: [number, number][]; source: 'native' | 'followmee' | 'external' }[] = [];
 
     if (points.length < 2) return segments;
 
     let currentSegment: [number, number][] = [[points[0].latitude, points[0].longitude]];
-    let currentSource = points[0].source || 'native';
+    let currentSource: 'native' | 'followmee' | 'external' = points[0].source || 'native';
 
     for (let i = 1; i < points.length; i++) {
       const point = points[i];
-      const pointSource = point.source || 'native';
+      const pointSource: 'native' | 'followmee' | 'external' = point.source || 'native';
 
       if (pointSource === currentSource) {
         // Continue current segment
@@ -1097,6 +1097,10 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
             <div className="w-3 h-3 rounded-full bg-[#000000] border border-white shadow-sm"></div>
             <span>FollowMee</span>
           </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-[#ef4444] border border-white shadow-sm"></div>
+            <span>Damians Tracking App</span>
+          </div>
         </div>
       </div>
 
@@ -1149,7 +1153,8 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
 
               {/* Animated Route (colored by source) */}
               {animatedRouteSegments.map((segment, idx) => {
-                const color = segment.source === 'followmee' ? '#000000' : '#3b82f6'; // Black for FollowMee, Blue for Native
+                // Black for FollowMee, Red for External, Blue for Native
+                const color = segment.source === 'followmee' ? '#000000' : segment.source === 'external' ? '#ef4444' : '#3b82f6';
                 return (
                   <Polyline
                     key={`animated-segment-${idx}`}
@@ -1256,7 +1261,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
                         </p>
                         {point.source && (
                           <p className="text-xs mt-1 text-muted-foreground">
-                            Quelle: {point.source === 'followmee' ? 'FollowMee' : 'Native App'}
+                            Quelle: {point.source === 'followmee' ? 'FollowMee' : point.source === 'external' ? 'Damians Tracking App' : 'Native App'}
                           </p>
                         )}
                         <button

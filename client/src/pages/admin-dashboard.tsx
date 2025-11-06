@@ -170,7 +170,7 @@ export default function AdminDashboard() {
   const [selectedUsername, setSelectedUsername] = useState<string | null>(null);
   const [routeData, setRouteData] = useState<any>(null);
   const [loadingRoute, setLoadingRoute] = useState(false);
-  const [gpsSource, setGpsSource] = useState<'all' | 'native' | 'followmee'>('all');
+  const [gpsSource, setGpsSource] = useState<'all' | 'native' | 'followmee' | 'external'>('all');
 
   // Lock background scroll while the route modal is open
   useEffect(() => {
@@ -268,7 +268,7 @@ export default function AdminDashboard() {
   };
 
   // Fetch route data for selected user
-  const fetchRouteData = async (userId: string, date: string, source?: 'all' | 'native' | 'followmee') => {
+  const fetchRouteData = async (userId: string, date: string, source?: 'all' | 'native' | 'followmee' | 'external') => {
     setLoadingRoute(true);
     try {
       const sourceParam = source && source !== 'all' ? `&source=${source}` : '';
@@ -304,7 +304,7 @@ export default function AdminDashboard() {
   };
 
   // Handle GPS source change
-  const handleGpsSourceChange = (newSource: 'all' | 'native' | 'followmee') => {
+  const handleGpsSourceChange = (newSource: 'all' | 'native' | 'followmee' | 'external') => {
     setGpsSource(newSource);
     // Re-fetch route data if modal is open
     if (showRouteReplay && selectedUserId) {
@@ -1285,6 +1285,16 @@ export default function AdminDashboard() {
                     }`}
                   >
                     FollowMee
+                  </button>
+                  <button
+                    onClick={() => handleGpsSourceChange('external')}
+                    className={`px-2 py-1 text-xs rounded-md transition-colors ${
+                      gpsSource === 'external'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                    }`}
+                  >
+                    Damians Tracking App
                   </button>
                 </div>
                 {routeData && (

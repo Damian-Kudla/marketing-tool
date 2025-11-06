@@ -573,7 +573,7 @@ export interface UserData {
   postalCodes: string[];
   isAdmin: boolean;
   followMeeDeviceId?: string;
-  trackingNames: string[];
+  trackingNames: string[]; // Column F: Tracking names from external API
 }
 
 export interface SheetsService {
@@ -582,7 +582,7 @@ export interface SheetsService {
   getUserByPassword(password: string): Promise<string | null>;
   isUserAdmin(password: string): Promise<boolean>;
   getAllUsers(): Promise<UserData[]>;
-  getUserByTrackingName(name: string): Promise<UserData | undefined>;
+  getUserByTrackingName(trackingName: string): Promise<UserData | undefined>;
   refreshUserCache(): Promise<void>;
 }
 
@@ -671,6 +671,13 @@ class UserAuthCache {
   // Get all users from cache
   getAllUsers(): UserData[] {
     return [...this.usersCache];
+  }
+
+  // Get user by tracking name from cache
+  getUserByTrackingName(trackingName: string): UserData | undefined {
+    return this.usersCache.find(u =>
+      u.trackingNames.some(name => name.toLowerCase() === trackingName.toLowerCase())
+    );
   }
 
   // Check if user is admin from cache
@@ -775,6 +782,11 @@ class GoogleSheetsService implements SheetsService {
     return userAuthCache.getAllUsers();
   }
 
+  async getUserByTrackingName(trackingName: string): Promise<UserData | undefined> {
+    // Use cache instead of direct API call
+    return userAuthCache.getUserByTrackingName(trackingName);
+  }
+
   async refreshUserCache(): Promise<void> {
     // Force immediate refresh of user cache
     await userAuthCache.forceRefresh();
@@ -790,7 +802,7 @@ class GoogleSheetsService implements SheetsService {
     try {
       const response = await sheetsClient.spreadsheets.values.get({
         spreadsheetId: this.SHEET_ID,
-        range: `${this.WORKSHEET_NAME}!A2:E`, // Extended to column E for FollowMee Device ID
+        range: `${this.WORKSHEET_NAME}!A2:F`, // Extended to column F for tracking names
       });
 
       const rows = response.data.values || [];
@@ -802,10 +814,16 @@ class GoogleSheetsService implements SheetsService {
         const postalCodesString = row[2]?.trim();
         const adminRole = row[3]?.trim().toLowerCase();
         const followMeeDeviceId = row[4]?.trim();
+        const trackingNamesString = row[5]?.trim(); // Column F: tracking names
 
         if (password && username) {
           const postalCodes = postalCodesString
             ? postalCodesString.split(',').map((code: string) => code.trim()).filter((code: string) => code.length > 0)
+            : [];
+
+          // Parse tracking names (comma-separated list)
+          const trackingNames = trackingNamesString
+            ? trackingNamesString.split(',').map((name: string) => name.trim()).filter((name: string) => name.length > 0)
             : [];
 
           // Generate user ID from password hash (stable, only changes if password changes)
@@ -818,7 +836,8 @@ class GoogleSheetsService implements SheetsService {
             password,
             postalCodes,
             isAdmin: adminRole === 'admin',
-            followMeeDeviceId: followMeeDeviceId || undefined
+            followMeeDeviceId: followMeeDeviceId || undefined,
+            trackingNames: trackingNames
           });
         }
       }
