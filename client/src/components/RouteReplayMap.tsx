@@ -9,13 +9,13 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap, ZoomControl } from 'react-leaflet';
 import L from 'leaflet';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Play, Pause, RotateCcw, Zap } from 'lucide-react';
+import { Play, Pause, RotateCcw, Zap, MapPin, ArrowUp } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 
 interface GPSPoint {
@@ -185,78 +185,53 @@ interface StationaryPeriod {
   centerLng: number;
 }
 
-// Detect stationary periods (20+ minutes within 20m radius)
+// Detect inactivity breaks (20+ minutes gaps between tracking points)
+// This matches the break calculation in the admin dashboard
 function detectStationaryPeriods(points: GPSPoint[]): StationaryPeriod[] {
-  const RADIUS_METERS = 20;
-  const MIN_DURATION_MS = 20 * 60 * 1000; // 20 minutes
-  const stationaryPeriods: StationaryPeriod[] = [];
+  const MIN_BREAK_MS = 20 * 60 * 1000; // 20 minutes
+  const breaks: StationaryPeriod[] = [];
 
-  if (points.length < 2) return stationaryPeriods;
+  if (points.length < 2) return breaks;
 
-  let segmentStart = 0;
+  // Filter to only native app points for break detection
+  const nativePoints = points.filter(p => p.source === 'native' || !p.source);
 
-  for (let i = 1; i < points.length; i++) {
-    const startPoint = points[segmentStart];
-    const currentPoint = points[i];
-    const distance = calculateDistance(startPoint, currentPoint);
+  if (nativePoints.length < 2) return breaks;
 
-    // If we've moved more than RADIUS_METERS, check if previous segment was stationary
-    if (distance > RADIUS_METERS) {
-      const duration = points[i - 1].timestamp - startPoint.timestamp;
+  // Find gaps between consecutive native app points
+  for (let i = 1; i < nativePoints.length; i++) {
+    const prevPoint = nativePoints[i - 1];
+    const currentPoint = nativePoints[i];
+    const gap = currentPoint.timestamp - prevPoint.timestamp;
 
-      if (duration >= MIN_DURATION_MS) {
-        // Calculate center point (average of all points in segment)
-        let sumLat = 0;
-        let sumLng = 0;
-        const segmentPoints = points.slice(segmentStart, i);
+    if (gap >= MIN_BREAK_MS) {
+      // Find indices in original sorted array
+      const startIndex = points.indexOf(prevPoint);
+      const endIndex = points.indexOf(currentPoint);
 
-        segmentPoints.forEach(p => {
-          sumLat += p.latitude;
-          sumLng += p.longitude;
-        });
-
-        stationaryPeriods.push({
-          startIndex: segmentStart,
-          endIndex: i - 1,
-          startTime: startPoint.timestamp,
-          endTime: points[i - 1].timestamp,
-          durationMs: duration,
-          centerLat: sumLat / segmentPoints.length,
-          centerLng: sumLng / segmentPoints.length,
-        });
-      }
-
-      segmentStart = i;
+      breaks.push({
+        startIndex: startIndex,
+        endIndex: endIndex,
+        startTime: prevPoint.timestamp,
+        endTime: currentPoint.timestamp,
+        durationMs: gap,
+        centerLat: (prevPoint.latitude + currentPoint.latitude) / 2,
+        centerLng: (prevPoint.longitude + currentPoint.longitude) / 2,
+      });
     }
   }
 
-  // Check last segment
-  const lastSegmentDuration = points[points.length - 1].timestamp - points[segmentStart].timestamp;
-  if (lastSegmentDuration >= MIN_DURATION_MS) {
-    let sumLat = 0;
-    let sumLng = 0;
-    const segmentPoints = points.slice(segmentStart);
-
-    segmentPoints.forEach(p => {
-      sumLat += p.latitude;
-      sumLng += p.longitude;
-    });
-
-    stationaryPeriods.push({
-      startIndex: segmentStart,
-      endIndex: points.length - 1,
-      startTime: points[segmentStart].timestamp,
-      endTime: points[points.length - 1].timestamp,
-      durationMs: lastSegmentDuration,
-      centerLat: sumLat / segmentPoints.length,
-      centerLng: sumLng / segmentPoints.length,
-    });
-  }
-
-  return stationaryPeriods;
+  return breaks;
 }
 
-// Determine optimal zoom level based on upcoming movement
+// Calculate meters per pixel at given zoom level (approximate for latitude ~50°)
+function metersPerPixelAtZoom(zoom: number): number {
+  // At zoom 18, approximately 0.6 meters per pixel at mid-latitudes
+  // Each zoom level halves the scale
+  return 156543.03392 * Math.cos(50 * Math.PI / 180) / Math.pow(2, zoom);
+}
+
+// Determine optimal zoom level based on upcoming movement and 3-second rule with 20% edge threshold
 function calculateOptimalZoom(upcomingPoints: GPSPoint[]): number {
   if (upcomingPoints.length < 2) return 18;
 
@@ -266,19 +241,48 @@ function calculateOptimalZoom(upcomingPoints: GPSPoint[]): number {
     totalDistance += calculateDistance(upcomingPoints[i], upcomingPoints[i + 1]);
   }
 
-  const avgDistance = totalDistance / (upcomingPoints.length - 1);
+  // Calculate average speed (meters per millisecond)
+  const timeSpan = upcomingPoints[upcomingPoints.length - 1].timestamp - upcomingPoints[0].timestamp;
+  const speed = timeSpan > 0 ? totalDistance / timeSpan : 0; // m/ms
 
-  // Zoom levels based on average distance between points
-  // High zoom for walking/stationary (< 50m between points)
-  if (avgDistance < 50) return 18;
-  // Medium-high zoom for slow movement (50-150m)
-  if (avgDistance < 150) return 17;
-  // Medium zoom for moderate speed (150-300m)
-  if (avgDistance < 300) return 16;
-  // Lower zoom for fast movement (300-600m)
-  if (avgDistance < 600) return 15;
-  // Very low zoom for very fast movement (> 600m)
-  return 14;
+  // Distance covered in 3 seconds
+  const distanceIn3Seconds = speed * 3000; // meters
+
+  // Map viewport dimensions (approximate)
+  const viewportWidth = 800; // pixels (approximate)
+  const viewportHeight = 600; // pixels (approximate)
+
+  // 20% threshold from edges means we have 60% safe zone (30% on each side)
+  const safeZoneWidth = viewportWidth * 0.6;
+  const safeZoneHeight = viewportHeight * 0.6;
+
+  // Calculate required zoom level to keep user in safe zone for 3 seconds
+  // We need the smallest dimension to avoid edge approach
+  const requiredMetersPerPixel = distanceIn3Seconds / Math.min(safeZoneWidth, safeZoneHeight) * 2;
+
+  // Find zoom level that provides enough space
+  let optimalZoom = 18;
+  for (let zoom = 18; zoom >= 10; zoom--) {
+    const metersPerPixel = metersPerPixelAtZoom(zoom);
+    if (metersPerPixel >= requiredMetersPerPixel) {
+      optimalZoom = zoom;
+      break;
+    }
+  }
+
+  // Clamp zoom between reasonable values
+  return Math.max(10, Math.min(18, optimalZoom));
+}
+
+// Component to capture map instance
+function MapRefCapture({ mapRef }: { mapRef: React.MutableRefObject<L.Map | null> }) {
+  const map = useMap();
+
+  useEffect(() => {
+    mapRef.current = map;
+  }, [map, mapRef]);
+
+  return null;
 }
 
 // Component to follow current position with intelligent panning and zoom
@@ -313,8 +317,8 @@ function CameraFollow({ currentPosition, currentIndex, allPoints, manualZoom, is
     const now = Date.now();
 
     // Initial centering (first position or when starting playback)
-    if (!lastPositionRef.current || !isPlaying) {
-      const initialZoom = intelligentZoomEnabled ? 18 : manualZoom;
+    if (!lastPositionRef.current) {
+      const initialZoom = intelligentZoomEnabled && isPlaying ? 18 : manualZoom;
       map.setView([targetLat, targetLng], initialZoom, { animate: true, duration: 0.5 });
       lastPositionRef.current = currentPosition;
       currentZoomRef.current = initialZoom;
@@ -322,10 +326,14 @@ function CameraFollow({ currentPosition, currentIndex, allPoints, manualZoom, is
       return;
     }
 
+    // Don't control camera when paused - allow free user control
     if (!isPlaying) {
       lastPositionRef.current = currentPosition;
       return;
     }
+
+    // Re-center and lock camera when starting to play
+    map.setView([targetLat, targetLng], currentZoomRef.current, { animate: true, duration: 0.5 });
 
     // Intelligent zoom calculation (only when enabled and playing)
     if (intelligentZoomEnabled) {
@@ -409,27 +417,137 @@ function InitialBounds({ points }: { points: GPSPoint[] }) {
 export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = [], date }: RouteReplayMapProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentTimestamp, setCurrentTimestamp] = useState(0); // Current GPS timestamp for smooth interpolation
   const [showFullRoute, setShowFullRoute] = useState(true);
   const [zoomLevel, setZoomLevel] = useState(18);
   const [secondsPerHour, setSecondsPerHour] = useState(5); // Seconds to display one hour of data
   const [intelligentZoomEnabled, setIntelligentZoomEnabled] = useState(true); // Auto-zoom based on speed
   const [activePhotoFlash, setActivePhotoFlash] = useState<number | null>(null);
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  
+  // Draggable panel positions
+  const [leftPanelPos, setLeftPanelPos] = useState({ x: 16, y: 96 }); // left-4 top-24 (16px, 96px)
+  const [rightPanelPos, setRightPanelPos] = useState({ x: -16, y: 96 }); // right-4 top-24 (negative for right positioning)
+  const [dragging, setDragging] = useState<'left' | 'right' | null>(null);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  
   const animationRef = useRef<number | null>(null);
   const startTimeRef = useRef<number | null>(null);
   const pausedIndexRef = useRef<number>(0);
+  const pausedTimestampRef = useRef<number>(0);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+
+  // Drag handlers for movable panels
+  const handleMouseDown = (e: React.MouseEvent, panel: 'left' | 'right') => {
+    e.preventDefault();
+    setDragging(panel);
+    setDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!dragging) return;
+
+    const deltaX = e.clientX - dragStart.x;
+    const deltaY = e.clientY - dragStart.y;
+
+    if (dragging === 'left') {
+      setLeftPanelPos(prev => ({
+        x: prev.x + deltaX,
+        y: prev.y + deltaY
+      }));
+    } else if (dragging === 'right') {
+      setRightPanelPos(prev => ({
+        x: prev.x - deltaX, // Subtract for right-positioned elements
+        y: prev.y + deltaY
+      }));
+    }
+
+    setDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleMouseUp = () => {
+    setDragging(null);
+  };
+
+  // Add/remove mouse event listeners for dragging
+  useEffect(() => {
+    if (dragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [dragging, dragStart]);
 
   // Sort GPS points by timestamp
   const sortedPoints = [...gpsPoints].sort((a, b) => a.timestamp - b.timestamp);
 
+  // Initialize current timestamp
+  useEffect(() => {
+    if (sortedPoints.length > 0 && currentTimestamp === 0) {
+      setCurrentTimestamp(sortedPoints[0].timestamp);
+      pausedTimestampRef.current = sortedPoints[0].timestamp;
+    }
+  }, [sortedPoints, currentTimestamp]);
+
   // Detect stationary periods (20+ min in 20m radius)
   const stationaryPeriods = detectStationaryPeriods(sortedPoints);
 
-  // Calculate animation duration based on time span of data
-  const timeSpanMs = sortedPoints.length > 0
-    ? sortedPoints[sortedPoints.length - 1].timestamp - sortedPoints[0].timestamp
-    : 0;
-  const timeSpanHours = timeSpanMs / (1000 * 60 * 60); // Convert to hours
-  const ANIMATION_DURATION = timeSpanHours * secondsPerHour * 1000; // Total duration in ms
+  // Get time range for timeline
+  const startTime = sortedPoints.length > 0 ? sortedPoints[0].timestamp : 0;
+  const endTime = sortedPoints.length > 0 ? sortedPoints[sortedPoints.length - 1].timestamp : 0;
+
+  // Interpolate position between two GPS points based on timestamp
+  const interpolatePosition = (timestamp: number): GPSPoint | null => {
+    if (sortedPoints.length === 0) return null;
+
+    // Clamp timestamp to valid range
+    const clampedTime = Math.max(startTime, Math.min(endTime, timestamp));
+
+    // Find the two points surrounding this timestamp
+    let beforeIdx = 0;
+    let afterIdx = 0;
+
+    for (let i = 0; i < sortedPoints.length; i++) {
+      if (sortedPoints[i].timestamp <= clampedTime) {
+        beforeIdx = i;
+      } else {
+        afterIdx = i;
+        break;
+      }
+    }
+
+    // If we're at or after the last point
+    if (afterIdx === 0 || afterIdx === beforeIdx) {
+      return sortedPoints[beforeIdx];
+    }
+
+    const beforePoint = sortedPoints[beforeIdx];
+    const afterPoint = sortedPoints[afterIdx];
+
+    // Calculate interpolation ratio
+    const timeDiff = afterPoint.timestamp - beforePoint.timestamp;
+    const ratio = timeDiff > 0 ? (clampedTime - beforePoint.timestamp) / timeDiff : 0;
+
+    // Interpolate position
+    return {
+      latitude: beforePoint.latitude + (afterPoint.latitude - beforePoint.latitude) * ratio,
+      longitude: beforePoint.longitude + (afterPoint.longitude - beforePoint.longitude) * ratio,
+      accuracy: beforePoint.accuracy + (afterPoint.accuracy - beforePoint.accuracy) * ratio,
+      timestamp: clampedTime,
+      source: beforePoint.source
+    };
+  };
+
+  // Get current interpolated position
+  const currentPosition = interpolatePosition(currentTimestamp);
+
+  // Note: Animation is now time-based, not duration-based
+  // The animation speed is controlled by secondsPerHour in real-time
 
   // Calculate photo positions between GPS points
   const calculatePhotoPosition = (photoTimestamp: number): [number, number] | null => {
@@ -506,11 +624,13 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     ? sortedPoints[sortedPoints.length - 1].timestamp - sortedPoints[0].timestamp
     : 0;
 
-  // Current position for animation
-  const currentPosition = sortedPoints[currentIndex];
+  // Route up to current timestamp (all points before or at current time)
+  const animatedRoute = sortedPoints.filter(p => p.timestamp <= currentTimestamp);
 
-  // Route up to current position
-  const animatedRoute = sortedPoints.slice(0, currentIndex + 1);
+  // Add interpolated current position to animated route for smooth drawing
+  const animatedRouteWithInterpolation = currentPosition && currentPosition.timestamp > (animatedRoute[animatedRoute.length - 1]?.timestamp || 0)
+    ? [...animatedRoute, currentPosition]
+    : animatedRoute;
 
   // Create polyline segments grouped by source for multi-colored route
   const createRouteSegments = (points: GPSPoint[]) => {
@@ -547,44 +667,75 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
   };
 
   const fullRouteSegments = createRouteSegments(sortedPoints);
-  const animatedRouteSegments = createRouteSegments(animatedRoute);
+  const animatedRouteSegments = createRouteSegments(animatedRouteWithInterpolation);
 
-  // Manual scrubbing: Update position based on slider
-  const handleScrub = (index: number) => {
+  // Manual scrubbing: Update position based on timestamp slider
+  const handleScrub = (timestamp: number) => {
     if (isPlaying) {
       pauseAnimation();
     }
-    setCurrentIndex(index);
-    pausedIndexRef.current = index;
+    setCurrentTimestamp(timestamp);
+    pausedTimestampRef.current = timestamp;
+
+    // Update currentIndex for compatibility
+    const idx = findIndexByTimestamp(timestamp);
+    setCurrentIndex(idx);
+    pausedIndexRef.current = idx;
   };
 
-  // Start animation
+  // Find GPS point index by timestamp
+  const findIndexByTimestamp = (targetTimestamp: number): number => {
+    // Find the first GPS point that is at or after the target timestamp
+    for (let i = 0; i < sortedPoints.length; i++) {
+      if (sortedPoints[i].timestamp >= targetTimestamp) {
+        return i;
+      }
+    }
+    // If no point found, return last index
+    return sortedPoints.length - 1;
+  };
+
+  // Start animation - Time-based with smooth interpolation
   const startAnimation = () => {
     if (sortedPoints.length === 0) return;
 
     setIsPlaying(true);
-    // Start from current position (useful for resume after scrub)
-    const startIndex = currentIndex;
-    const remainingPoints = sortedPoints.length - 1 - startIndex;
-    const remainingProgress = remainingPoints / (sortedPoints.length - 1);
-    
     startTimeRef.current = Date.now();
+
+    // Current GPS timestamp (where we're resuming from)
+    const startGPSTimestamp = currentTimestamp;
 
     const animate = () => {
       if (!startTimeRef.current) return;
 
-      const elapsed = Date.now() - startTimeRef.current;
-      const progress = Math.min(elapsed / (ANIMATION_DURATION * remainingProgress), 1);
-      const newIndex = startIndex + Math.floor(progress * remainingPoints);
+      // Elapsed real time since animation started
+      const elapsedRealTime = Date.now() - startTimeRef.current;
 
+      // Calculate how much GPS time has passed based on animation speed
+      // secondsPerHour defines how many real seconds = 1 GPS hour
+      const realTimePerGPSHour = secondsPerHour * 1000; // milliseconds
+      const gpsTimePerRealTime = (60 * 60 * 1000) / realTimePerGPSHour; // GPS ms per real ms
+      const elapsedGPSTime = elapsedRealTime * gpsTimePerRealTime;
+
+      // Current GPS timestamp in the animation
+      const targetGPSTimestamp = startGPSTimestamp + elapsedGPSTime;
+
+      // Update timestamp for smooth interpolation
+      setCurrentTimestamp(targetGPSTimestamp);
+      pausedTimestampRef.current = targetGPSTimestamp;
+
+      // Update index for compatibility
+      const newIndex = findIndexByTimestamp(targetGPSTimestamp);
       setCurrentIndex(newIndex);
       pausedIndexRef.current = newIndex;
 
-      if (progress < 1) {
-        animationRef.current = requestAnimationFrame(animate);
-      } else {
+      // Check if we've reached the end
+      if (targetGPSTimestamp >= endTime) {
         setIsPlaying(false);
         startTimeRef.current = null;
+        setCurrentTimestamp(endTime);
+      } else {
+        animationRef.current = requestAnimationFrame(animate);
       }
     };
 
@@ -605,8 +756,12 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
   // Reset animation
   const resetAnimation = () => {
     pauseAnimation();
-    setCurrentIndex(0);
-    pausedIndexRef.current = 0;
+    if (sortedPoints.length > 0) {
+      setCurrentTimestamp(startTime);
+      pausedTimestampRef.current = startTime;
+      setCurrentIndex(0);
+      pausedIndexRef.current = 0;
+    }
   };
 
   // Cleanup on unmount
@@ -617,6 +772,17 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
       }
     };
   }, []);
+
+  // Center map on current position
+  const centerOnCurrentPosition = () => {
+    if (mapRef.current && currentPosition) {
+      mapRef.current.setView(
+        [currentPosition.latitude, currentPosition.longitude],
+        mapRef.current.getZoom(),
+        { animate: true, duration: 0.5 }
+      );
+    }
+  };
 
   // Format time span
   const formatTimeSpan = (ms: number): string => {
@@ -638,119 +804,48 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
   }
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Compact Controls */}
-      <div className="shrink-0 px-4 py-2 border-b bg-background">
-        <CardContent className="p-0">
-          <div className="flex items-center gap-4 flex-wrap mb-4">
-            {/* Animation Controls */}
-            <div className="flex gap-2">
-              {!isPlaying ? (
-                <Button onClick={startAnimation} size="sm">
-                  <Play className="h-4 w-4 mr-2" />
-                  Abspielen
-                </Button>
-              ) : (
-                <Button onClick={pauseAnimation} size="sm" variant="secondary">
-                  <Pause className="h-4 w-4 mr-2" />
-                  Pause
-                </Button>
-              )}
-              <Button onClick={resetAnimation} size="sm" variant="outline">
-                <RotateCcw className="h-4 w-4 mr-2" />
-                Zurücksetzen
+    <div ref={containerRef} className="relative w-full h-full">
+      {/* Timeline Bar - Always at top, floating over map */}
+      <div className="absolute top-0 left-0 right-0 z-[1000] px-4 py-3 bg-background/95 backdrop-blur-sm shadow-lg border-b">
+        <div className="flex items-center gap-3">
+          {/* Play/Pause/Reset Controls */}
+          <div className="flex gap-2">
+            {!isPlaying ? (
+              <Button onClick={startAnimation} size="sm" className="h-9">
+                <Play className="h-4 w-4 mr-1" />
+                Abspielen
               </Button>
-            </div>
-
-            {/* Animation Speed Control */}
-            <div className="flex items-center gap-2">
-              <Zap className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground whitespace-nowrap">Geschwindigkeit:</span>
-              <input
-                type="range"
-                min="1"
-                max="30"
-                value={secondsPerHour}
-                onChange={(e) => setSecondsPerHour(Number(e.target.value))}
-                className="w-24"
-                title="Sekunden pro Stunde"
-              />
-              <span className="text-sm font-medium w-20">{secondsPerHour}s/h</span>
-            </div>
-
-            {/* Zoom Control (nur wenn intelligenter Zoom deaktiviert) */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground whitespace-nowrap">Zoom:</span>
-              <input
-                type="range"
-                min="10"
-                max="18"
-                value={zoomLevel}
-                onChange={(e) => setZoomLevel(Number(e.target.value))}
-                className="w-24"
-                disabled={isPlaying || intelligentZoomEnabled}
-                title={intelligentZoomEnabled ? "Zoom ist bei aktiviertem Auto-Zoom gesperrt" : isPlaying ? "Zoom ist während Wiedergabe gesperrt" : "Zoom-Stufe anpassen"}
-              />
-              <span className="text-sm font-medium w-8">{zoomLevel}</span>
-            </div>
-
-            {/* Toggles */}
-            <div className="flex items-center gap-4 ml-auto">
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={intelligentZoomEnabled}
-                  onChange={(e) => setIntelligentZoomEnabled(e.target.checked)}
-                  className="rounded"
-                />
-                Auto-Zoom
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={showFullRoute}
-                  onChange={(e) => setShowFullRoute(e.target.checked)}
-                  className="rounded"
-                />
-                Gesamte Route
-              </label>
-            </div>
+            ) : (
+              <Button onClick={pauseAnimation} size="sm" variant="secondary" className="h-9">
+                <Pause className="h-4 w-4 mr-1" />
+                Pause
+              </Button>
+            )}
+            <Button onClick={resetAnimation} size="sm" variant="outline" className="h-9">
+              <RotateCcw className="h-4 w-4 mr-1" />
+              Zurück
+            </Button>
+            <Button onClick={centerOnCurrentPosition} size="sm" variant="outline" className="h-9" title="Zur aktuellen Position zentrieren">
+              <MapPin className="h-4 w-4" />
+            </Button>
           </div>
 
-          {/* Timeline Scrubber */}
-          <div className="mb-4 space-y-2">
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>
-                Punkt {currentIndex + 1} von {sortedPoints.length}
-              </span>
-              {currentPosition && (
-                <span>
-                  {format(new Date(currentPosition.timestamp), 'HH:mm:ss', { locale: de })}
-                </span>
-              )}
-            </div>
-
-            {/* Interactive Timeline Slider with Hour Markers and Stationary Periods */}
-            <div className="relative">
+          {/* Timeline Slider with Time Labels */}
+          <div className="flex-1 min-w-0">
+            <div className="relative pb-4">
               {/* Stationary period backgrounds */}
               <div className="absolute w-full h-3 pointer-events-none">
                 {sortedPoints.length > 0 && stationaryPeriods.map((period, idx) => {
-                  const startTime = sortedPoints[0].timestamp;
-                  const endTime = sortedPoints[sortedPoints.length - 1].timestamp;
                   const totalDuration = endTime - startTime;
-
                   const startPos = ((period.startTime - startTime) / totalDuration) * 100;
                   const endPos = ((period.endTime - startTime) / totalDuration) * 100;
                   const width = endPos - startPos;
-
-                  const durationMinutes = Math.round(period.durationMs / (1000 * 60));
-
                   return (
                     <div
-                      key={`stationary-${idx}`}
-                      className="absolute h-full bg-orange-300 opacity-50"
+                      key={`break-${idx}`}
+                      className="absolute h-full bg-orange-400 opacity-40 rounded"
                       style={{ left: `${startPos}%`, width: `${width}%` }}
-                      title={`Pause: ${durationMinutes} Min`}
+                      title={`Pause: ${Math.round(period.durationMs / (60000))} Min`}
                     />
                   );
                 })}
@@ -759,20 +854,14 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
               {/* Hour marker ticks */}
               <div className="absolute w-full h-3 pointer-events-none">
                 {(() => {
-                  const startTime = sortedPoints[0].timestamp;
-                  const endTime = sortedPoints[sortedPoints.length - 1].timestamp;
-                  const totalDuration = endTime - startTime;
-
-                  // Generate hour markers
                   const hourMarkers: { position: number; time: Date }[] = [];
                   const startHour = new Date(startTime);
-                  startHour.setMinutes(0, 0, 0); // Round down to hour
-
+                  startHour.setMinutes(0, 0, 0);
                   let currentHour = new Date(startHour);
-                  currentHour.setHours(currentHour.getHours() + 1); // Start from next hour
+                  currentHour.setHours(currentHour.getHours() + 1);
 
                   while (currentHour.getTime() <= endTime) {
-                    const position = ((currentHour.getTime() - startTime) / totalDuration) * 100;
+                    const position = ((currentHour.getTime() - startTime) / (endTime - startTime)) * 100;
                     hourMarkers.push({ position, time: new Date(currentHour) });
                     currentHour.setHours(currentHour.getHours() + 1);
                   }
@@ -780,7 +869,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
                   return hourMarkers.map((marker, idx) => (
                     <div
                       key={idx}
-                      className="absolute h-full border-l-2 border-gray-400"
+                      className="absolute h-full border-l border-gray-400"
                       style={{ left: `${marker.position}%` }}
                       title={format(marker.time, 'HH:mm', { locale: de })}
                     />
@@ -790,139 +879,246 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
 
               <input
                 type="range"
-                min="0"
-                max={sortedPoints.length - 1}
-                value={currentIndex}
+                min={startTime}
+                max={endTime}
+                value={currentTimestamp}
                 onChange={(e) => handleScrub(Number(e.target.value))}
                 className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer relative z-10"
                 style={{
-                  background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(currentIndex / (sortedPoints.length - 1)) * 100}%, #e5e7eb ${(currentIndex / (sortedPoints.length - 1)) * 100}%, #e5e7eb 100%)`
+                  background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${((currentTimestamp - startTime) / (endTime - startTime)) * 100}%, #e5e7eb ${((currentTimestamp - startTime) / (endTime - startTime)) * 100}%, #e5e7eb 100%)`
                 }}
               />
-            </div>
 
-            {/* Hour labels below timeline */}
-            <div className="relative h-4">
-              {(() => {
-                const startTime = sortedPoints[0].timestamp;
-                const endTime = sortedPoints[sortedPoints.length - 1].timestamp;
-                const totalDuration = endTime - startTime;
-
-                // Generate hour markers
-                const hourMarkers: { position: number; time: Date }[] = [];
-
-                // Add start marker
-                hourMarkers.push({ position: 0, time: new Date(startTime) });
-
-                const startHour = new Date(startTime);
-                startHour.setMinutes(0, 0, 0); // Round down to hour
-
-                let currentHour = new Date(startHour);
-                currentHour.setHours(currentHour.getHours() + 1); // Start from next hour
-
-                while (currentHour.getTime() <= endTime) {
-                  const position = ((currentHour.getTime() - startTime) / totalDuration) * 100;
-                  hourMarkers.push({ position, time: new Date(currentHour) });
-                  currentHour.setHours(currentHour.getHours() + 1);
-                }
-
-                // Add end marker
-                hourMarkers.push({ position: 100, time: new Date(endTime) });
-
-                return hourMarkers.map((marker, idx) => (
-                  <span
-                    key={idx}
-                    className="absolute text-xs text-muted-foreground transform -translate-x-1/2"
-                    style={{ left: `${marker.position}%` }}
-                  >
-                    {format(marker.time, 'HH:mm', { locale: de })}
-                  </span>
-                ));
-              })()}
-            </div>
-          </div>
-
-          {/* Stats */}
-          <div className="grid grid-cols-3 gap-4 text-sm">
-            <div>
-              <p className="text-muted-foreground">Start</p>
-              <p className="font-medium">
-                {format(new Date(sortedPoints[0].timestamp), 'HH:mm', { locale: de })}
-              </p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Aktuell</p>
-              <p className="font-medium">
-                {currentPosition ? format(new Date(currentPosition.timestamp), 'HH:mm', { locale: de }) : '-'}
-              </p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Ende</p>
-              <p className="font-medium">
-                {format(new Date(sortedPoints[sortedPoints.length - 1].timestamp), 'HH:mm', { locale: de })}
-              </p>
-            </div>
-          </div>
-
-          {/* Breaks / Stationary Periods */}
-          {stationaryPeriods.length > 0 && (
-            <div className="mt-3 pt-3 border-t">
-              <p className="text-xs font-medium text-muted-foreground mb-2">
-                Pausen (≥20 Min): {stationaryPeriods.length}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {stationaryPeriods.map((period, idx) => {
-                  const durationMinutes = Math.round(period.durationMs / (1000 * 60));
-                  const startTime = format(new Date(period.startTime), 'HH:mm', { locale: de });
-                  const endTime = format(new Date(period.endTime), 'HH:mm', { locale: de });
-
-                  return (
-                    <button
-                      key={`break-${idx}`}
-                      onClick={() => {
-                        handleScrub(period.startIndex);
-                      }}
-                      className="px-2 py-1 text-xs bg-orange-100 hover:bg-orange-200 rounded border border-orange-300 transition-colors"
-                      title={`Zu Pause springen: ${startTime} - ${endTime}`}
-                    >
-                      {startTime} ({durationMinutes} Min)
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* GPS Source Legend */}
-          <div className="mt-2 pt-2 border-t">
-            <p className="text-xs text-muted-foreground mb-1">GPS-Quellen:</p>
-            <div className="flex gap-3 text-xs">
-              <div className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-[#3b82f6] border border-white shadow-sm"></div>
-                <span>Native App</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-[#000000] border border-white shadow-sm"></div>
-                <span>FollowMee</span>
+              {/* Time labels below slider */}
+              <div className="absolute bottom-0 left-0 right-0 flex justify-between text-[10px] text-muted-foreground font-mono">
+                <span>{format(new Date(startTime), 'HH:mm', { locale: de })}</span>
+                <span>{format(new Date(endTime), 'HH:mm', { locale: de })}</span>
               </div>
             </div>
           </div>
-        </CardContent>
+
+          {/* Current time + Speed */}
+          <div className="flex items-center gap-3">
+            {currentPosition && (
+              <span className="text-sm font-bold whitespace-nowrap font-mono tabular-nums">
+                {format(new Date(currentPosition.timestamp), 'HH:mm:ss', { locale: de })}
+              </span>
+            )}
+            <div className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-muted-foreground" />
+              <input
+                type="range"
+                min="1"
+                max="30"
+                value={secondsPerHour}
+                onChange={(e) => setSecondsPerHour(Number(e.target.value))}
+                className="w-20"
+                title="Geschwindigkeit"
+              />
+              <span className="text-xs font-medium w-12 font-mono tabular-nums">{secondsPerHour}s/h</span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Map - Full Height */}
-      <div className="flex-1 overflow-hidden relative">
+      {/* Left Control Panel - Settings & Toggles */}
+      <div 
+        className="absolute z-[1000] bg-background/95 backdrop-blur-sm rounded-lg shadow-xl border select-none"
+        style={{ 
+          left: `${leftPanelPos.x}px`, 
+          top: `${leftPanelPos.y}px`,
+          cursor: dragging === 'left' ? 'grabbing' : 'default'
+        }}
+      >
+        {/* Header with collapse button */}
+        <div 
+          className="flex items-center justify-between px-3 py-2 border-b cursor-grab active:cursor-grabbing"
+          onMouseDown={(e) => handleMouseDown(e, 'left')}
+        >
+          <span className="text-xs font-semibold text-muted-foreground">EINSTELLUNGEN</span>
+          <button
+            onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
+            className="hover:bg-accent rounded p-1"
+            title={leftPanelCollapsed ? "Ausklappen" : "Einklappen"}
+          >
+            {leftPanelCollapsed ? (
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            ) : (
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+              </svg>
+            )}
+          </button>
+        </div>
+
+        {/* Content */}
+        {!leftPanelCollapsed && (
+          <div className="p-4 space-y-3">
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={intelligentZoomEnabled}
+                  onChange={(e) => setIntelligentZoomEnabled(e.target.checked)}
+                  className="rounded"
+                />
+                <span>Auto-Zoom</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showFullRoute}
+                  onChange={(e) => setShowFullRoute(e.target.checked)}
+                  className="rounded"
+                />
+                <span>Gesamte Route</span>
+              </label>
+            </div>
+
+            {/* Manual Zoom (when auto-zoom disabled) */}
+            {!intelligentZoomEnabled && !isPlaying && (
+              <div className="pt-2 border-t space-y-1">
+                <label className="text-xs text-muted-foreground">Zoom-Stufe</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    min="10"
+                    max="18"
+                    value={zoomLevel}
+                    onChange={(e) => setZoomLevel(Number(e.target.value))}
+                    className="flex-1"
+                  />
+                  <span className="text-sm font-medium w-8 font-mono tabular-nums">{zoomLevel}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Right Info Panel - Stats & Breaks */}
+      <div 
+        className="absolute z-[1000] bg-background/95 backdrop-blur-sm rounded-lg shadow-xl border max-w-sm select-none"
+        style={{ 
+          right: `${Math.abs(rightPanelPos.x)}px`, 
+          top: `${rightPanelPos.y}px`,
+          cursor: dragging === 'right' ? 'grabbing' : 'default'
+        }}
+      >
+        {/* Header with collapse button */}
+        <div 
+          className="flex items-center justify-between px-3 py-2 border-b cursor-grab active:cursor-grabbing"
+          onMouseDown={(e) => handleMouseDown(e, 'right')}
+        >
+          <span className="text-xs font-semibold text-muted-foreground">INFO & PAUSEN</span>
+          <button
+            onClick={() => setRightPanelCollapsed(!rightPanelCollapsed)}
+            className="hover:bg-accent rounded p-1"
+            title={rightPanelCollapsed ? "Ausklappen" : "Einklappen"}
+          >
+            {rightPanelCollapsed ? (
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            ) : (
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+              </svg>
+            )}
+          </button>
+        </div>
+
+        {/* Content */}
+        {!rightPanelCollapsed && (
+          <div className="p-4 space-y-3">
+            {/* Stats */}
+            <div className="grid grid-cols-3 gap-3 text-xs">
+              <div>
+                <p className="text-muted-foreground">Start</p>
+                <p className="font-medium font-mono tabular-nums">
+                  {format(new Date(sortedPoints[0].timestamp), 'HH:mm', { locale: de })}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Aktuell</p>
+                <p className="font-medium font-mono tabular-nums">
+                  {currentPosition ? format(new Date(currentPosition.timestamp), 'HH:mm', { locale: de }) : '-'}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Ende</p>
+                <p className="font-medium font-mono tabular-nums">
+                  {format(new Date(sortedPoints[sortedPoints.length - 1].timestamp), 'HH:mm', { locale: de })}
+                </p>
+              </div>
+            </div>
+
+            {/* Breaks */}
+            {stationaryPeriods.length > 0 && (
+              <div className="pt-2 border-t">
+                <p className="text-xs font-medium text-muted-foreground mb-2">
+                  Pausen (≥20 Min): {stationaryPeriods.length}
+                </p>
+                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                  {stationaryPeriods.map((period, idx) => {
+                    const durationMinutes = Math.round(period.durationMs / (1000 * 60));
+                    const startTimeStr = format(new Date(period.startTime), 'HH:mm', { locale: de });
+                    const endTimeStr = format(new Date(period.endTime), 'HH:mm', { locale: de });
+
+                    return (
+                      <button
+                        key={`break-${idx}`}
+                        onClick={() => handleScrub(period.startTime)}
+                        className="px-2 py-1 text-xs bg-orange-100 hover:bg-orange-200 rounded border border-orange-300 transition-colors font-mono tabular-nums"
+                        title={`Zu Pause springen: ${startTimeStr} - ${endTimeStr}`}
+                      >
+                        {startTimeStr} ({durationMinutes} Min)
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Bottom Legend */}
+      <div className="absolute bottom-4 right-4 z-[1000] bg-background/95 backdrop-blur-sm rounded-lg shadow-xl border px-3 py-2">
+        <p className="text-xs text-muted-foreground mb-1">GPS-Quellen:</p>
+        <div className="flex gap-3 text-xs">
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-[#3b82f6] border border-white shadow-sm"></div>
+            <span>Native App</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-[#000000] border border-white shadow-sm"></div>
+            <span>FollowMee</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Map Container - Full screen */}
+      <div className="w-full h-full">
             <MapContainer
               center={[sortedPoints[0].latitude, sortedPoints[0].longitude]}
               zoom={zoomLevel}
               style={{ height: '100%', width: '100%' }}
-              zoomControl={true}
+              zoomControl={false}
             >
               <TileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
-              
+
+              {/* Zoom Control - Bottom Left */}
+              <ZoomControl position="bottomleft" />
+
+              {/* Capture map reference */}
+              <MapRefCapture mapRef={mapRef} />
+
               {/* Initial bounds setup (only on first load) */}
               <InitialBounds points={sortedPoints} />
               

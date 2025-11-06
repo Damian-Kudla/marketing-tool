@@ -220,11 +220,17 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
       const peakTime = calculatePeakTime(userData.rawLogs);
       const breaks = calculateBreaks(userData.rawLogs);
 
+      // Determine if user is currently active (last activity within 15 minutes)
+      const lastActivityTime = userData.rawLogs.length > 0 
+        ? userData.rawLogs[userData.rawLogs.length - 1].timestamp 
+        : 0;
+      const isCurrentlyActive = userData.activeTime > 0 && (Date.now() - lastActivityTime) < 15 * 60 * 1000; // 15 minutes
+
       return {
         userId: userData.userId,
         username: userData.username,
         currentLocation: lastGpsPoint,
-        isActive: userData.activeTime > 0,
+        isActive: isCurrentlyActive,
         lastSeen: userData.rawLogs.length > 0 
           ? userData.rawLogs[userData.rawLogs.length - 1].timestamp 
           : Date.now(),
@@ -348,11 +354,15 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
       const peakTime = calculatePeakTime(user.rawLogs);
       const breaks = calculateBreaks(user.rawLogs);
 
+      // For historical data, always set isActive to false (it's past data)
+      // Historical data is never "active" since it's from a previous day
+      const isActive = false;
+
       return {
         userId: user.userId,
         username: user.username,
         currentLocation: lastGpsPoint,
-        isActive: user.activeTime > 0,
+        isActive: isActive,
         lastSeen: user.rawLogs.length > 0 
           ? user.rawLogs[user.rawLogs.length - 1].timestamp 
           : Date.now(),

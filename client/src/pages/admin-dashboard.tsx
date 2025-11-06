@@ -1235,10 +1235,13 @@ export default function AdminDashboard() {
 
       {/* Route Replay Modal/Overlay - Fullscreen */}
       {showRouteReplay && (
-        <div className="fixed inset-0 z-[9999] bg-background">
-          <div className="flex h-full flex-col">
+        <div
+          className="fixed top-0 left-0 right-0 bottom-0 z-[9999] bg-background overflow-hidden"
+          style={{ margin: 0, padding: 0 }}
+        >
+          <div className="flex h-full w-full flex-col overflow-hidden" style={{ margin: 0, padding: 0 }}>
             {/* Compact Header */}
-            <div className="flex items-center justify-between px-4 py-2 border-b bg-background">
+            <div className="flex items-center justify-between px-4 py-2 border-b bg-background shrink-0 z-[100]">
               {/* Left: Title and User Info */}
               <div className="flex items-center gap-4">
                 <div>
@@ -1318,8 +1321,8 @@ export default function AdminDashboard() {
               </button>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto bg-background">
+            {/* Content - Scrollable */}
+            <div id="route-modal-scroll-container" className="flex-1 overflow-y-auto bg-background">
               {loadingRoute ? (
                 <div className="flex min-h-full items-center justify-center py-16">
                   <div className="text-center">
