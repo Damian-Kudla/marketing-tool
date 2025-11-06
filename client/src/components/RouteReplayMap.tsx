@@ -224,54 +224,99 @@ function detectStationaryPeriods(points: GPSPoint[]): StationaryPeriod[] {
   return breaks;
 }
 
-// Calculate meters per pixel at given zoom level (approximate for latitude ~50°)
-function metersPerPixelAtZoom(zoom: number): number {
-  // At zoom 18, approximately 0.6 meters per pixel at mid-latitudes
-  // Each zoom level halves the scale
-  return 156543.03392 * Math.cos(50 * Math.PI / 180) / Math.pow(2, zoom);
-}
+// Calculate bounds for a set of GPS points
+function calculateBounds(points: GPSPoint[]): { minLat: number; maxLat: number; minLng: number; maxLng: number } | null {
+  if (points.length === 0) return null;
 
-// Determine optimal zoom level based on upcoming movement and 3-second rule with 20% edge threshold
-function calculateOptimalZoom(upcomingPoints: GPSPoint[]): number {
-  if (upcomingPoints.length < 2) return 18;
+  let minLat = points[0].latitude;
+  let maxLat = points[0].latitude;
+  let minLng = points[0].longitude;
+  let maxLng = points[0].longitude;
 
-  // Calculate total distance in upcoming segment
-  let totalDistance = 0;
-  for (let i = 0; i < upcomingPoints.length - 1; i++) {
-    totalDistance += calculateDistance(upcomingPoints[i], upcomingPoints[i + 1]);
+  for (const point of points) {
+    minLat = Math.min(minLat, point.latitude);
+    maxLat = Math.max(maxLat, point.latitude);
+    minLng = Math.min(minLng, point.longitude);
+    maxLng = Math.max(maxLng, point.longitude);
   }
 
-  // Calculate average speed (meters per millisecond)
-  const timeSpan = upcomingPoints[upcomingPoints.length - 1].timestamp - upcomingPoints[0].timestamp;
-  const speed = timeSpan > 0 ? totalDistance / timeSpan : 0; // m/ms
+  return { minLat, maxLat, minLng, maxLng };
+}
 
-  // Distance covered in 3 seconds
-  const distanceIn3Seconds = speed * 3000; // meters
+// Calculate appropriate zoom level to fit bounds within viewport
+function calculateZoomForBounds(bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number }, viewportWidth: number, viewportHeight: number): number {
+  // Convert latitude/longitude differences to approximate meters
+  const latDiff = bounds.maxLat - bounds.minLat;
+  const lngDiff = bounds.maxLng - bounds.minLng;
 
-  // Map viewport dimensions (approximate)
-  const viewportWidth = 800; // pixels (approximate)
-  const viewportHeight = 600; // pixels (approximate)
+  // Average latitude for more accurate calculation
+  const avgLat = (bounds.minLat + bounds.maxLat) / 2;
 
-  // 20% threshold from edges means we have 60% safe zone (30% on each side)
-  const safeZoneWidth = viewportWidth * 0.6;
-  const safeZoneHeight = viewportHeight * 0.6;
+  // Approximate meters per degree at this latitude
+  const metersPerDegreeLat = 111320;
+  const metersPerDegreeLng = 111320 * Math.cos(avgLat * Math.PI / 180);
 
-  // Calculate required zoom level to keep user in safe zone for 3 seconds
-  // We need the smallest dimension to avoid edge approach
-  const requiredMetersPerPixel = distanceIn3Seconds / Math.min(safeZoneWidth, safeZoneHeight) * 2;
+  // Calculate dimensions in meters
+  const heightMeters = latDiff * metersPerDegreeLat;
+  const widthMeters = lngDiff * metersPerDegreeLng;
 
-  // Find zoom level that provides enough space
-  let optimalZoom = 18;
-  for (let zoom = 18; zoom >= 10; zoom--) {
-    const metersPerPixel = metersPerPixelAtZoom(zoom);
-    if (metersPerPixel >= requiredMetersPerPixel) {
-      optimalZoom = zoom;
-      break;
+  // Add 20% margin on each side (40% total) to prevent edge approach
+  const requiredHeightMeters = heightMeters * 1.4;
+  const requiredWidthMeters = widthMeters * 1.4;
+
+  // Calculate required meters per pixel for both dimensions
+  const requiredMetersPerPixelHeight = requiredHeightMeters / viewportHeight;
+  const requiredMetersPerPixelWidth = requiredWidthMeters / viewportWidth;
+
+  // Use the larger value to ensure both dimensions fit
+  const requiredMetersPerPixel = Math.max(requiredMetersPerPixelHeight, requiredMetersPerPixelWidth);
+
+  // Calculate zoom level based on meters per pixel formula
+  // Formula: metersPerPixel = 156543.03392 * cos(lat) / 2^zoom
+  const zoom = Math.log2(156543.03392 * Math.cos(avgLat * Math.PI / 180) / requiredMetersPerPixel);
+
+  // Clamp zoom between reasonable values
+  return Math.max(10, Math.min(18, Math.floor(zoom)));
+}
+
+// Determine optimal zoom level based on upcoming points in next 3 seconds of animation
+function calculateOptimalZoom(currentTimestamp: number, allPoints: GPSPoint[], secondsPerHour: number, viewportWidth: number = 800, viewportHeight: number = 600): number {
+  if (allPoints.length < 2) return 18;
+
+  // Calculate how much GPS time corresponds to 3 seconds of animation time
+  // secondsPerHour = real seconds to display 1 hour (3600000 ms) of GPS data
+  const msPerRealSecond = 3600000 / secondsPerHour; // GPS milliseconds per real second
+  const threeSecondsGPSTime = msPerRealSecond * 3; // GPS time covered in next 3 real seconds
+
+  // Find all points within the next 3 seconds of GPS time
+  const futureTimestamp = currentTimestamp + threeSecondsGPSTime;
+  const upcomingPoints = allPoints.filter(p => p.timestamp >= currentTimestamp && p.timestamp <= futureTimestamp);
+
+  // If we don't have enough points, look at a minimum window
+  if (upcomingPoints.length < 2) {
+    // Look ahead at least 10 points or until end
+    const currentIndex = allPoints.findIndex(p => p.timestamp >= currentTimestamp);
+    if (currentIndex >= 0) {
+      const endIndex = Math.min(currentIndex + 10, allPoints.length);
+      upcomingPoints.push(...allPoints.slice(currentIndex, endIndex));
     }
   }
 
-  // Clamp zoom between reasonable values
-  return Math.max(10, Math.min(18, optimalZoom));
+  if (upcomingPoints.length < 2) return 18;
+
+  // Calculate bounds for upcoming points
+  const bounds = calculateBounds(upcomingPoints);
+  if (!bounds) return 18;
+
+  // If bounds are too small (stationary), use a reasonable default zoom
+  const latRange = bounds.maxLat - bounds.minLat;
+  const lngRange = bounds.maxLng - bounds.minLng;
+  if (latRange < 0.0001 && lngRange < 0.0001) {
+    return 17; // Zoomed in for stationary periods
+  }
+
+  // Calculate optimal zoom to fit all upcoming points
+  return calculateZoomForBounds(bounds, viewportWidth, viewportHeight);
 }
 
 // Component to capture map instance
@@ -286,13 +331,14 @@ function MapRefCapture({ mapRef }: { mapRef: React.MutableRefObject<L.Map | null
 }
 
 // Component to follow current position with intelligent panning and zoom
-function CameraFollow({ currentPosition, currentIndex, allPoints, manualZoom, isPlaying, intelligentZoomEnabled }: {
+function CameraFollow({ currentPosition, currentIndex, allPoints, manualZoom, isPlaying, intelligentZoomEnabled, secondsPerHour }: {
   currentPosition: GPSPoint | null;
   currentIndex: number;
   allPoints: GPSPoint[];
   manualZoom: number;
   isPlaying: boolean;
   intelligentZoomEnabled: boolean;
+  secondsPerHour: number;
 }) {
   const map = useMap();
   const lastPositionRef = useRef<GPSPoint | null>(null);
@@ -341,20 +387,26 @@ function CameraFollow({ currentPosition, currentIndex, allPoints, manualZoom, is
       const timeSinceLastZoomChange = now - lastZoomChangeRef.current;
 
       if (timeSinceLastZoomChange >= 3000) {
-        // Look ahead at upcoming points (next 10 points or until end)
-        const lookaheadCount = 10;
-        const upcomingPoints = allPoints.slice(currentIndex, Math.min(currentIndex + lookaheadCount, allPoints.length));
+        // Get map size for accurate zoom calculation
+        const mapSize = map.getSize();
+        const viewportWidth = mapSize.x;
+        const viewportHeight = mapSize.y;
 
-        if (upcomingPoints.length >= 2) {
-          const optimalZoom = calculateOptimalZoom(upcomingPoints);
+        // Calculate optimal zoom based on next 3 seconds of GPS data
+        const optimalZoom = calculateOptimalZoom(
+          currentPosition.timestamp,
+          allPoints,
+          secondsPerHour,
+          viewportWidth,
+          viewportHeight
+        );
 
-          // Only change zoom if significantly different (at least 1 level)
-          if (Math.abs(currentZoomRef.current - optimalZoom) >= 1) {
-            map.setZoom(optimalZoom, { animate: true });
-            currentZoomRef.current = optimalZoom;
-            lastZoomChangeRef.current = now;
-            console.log(`[IntelligentZoom] Changed zoom to ${optimalZoom} at index ${currentIndex}`);
-          }
+        // Only change zoom if significantly different (at least 1 level)
+        if (Math.abs(currentZoomRef.current - optimalZoom) >= 1) {
+          map.setZoom(optimalZoom, { animate: true });
+          currentZoomRef.current = optimalZoom;
+          lastZoomChangeRef.current = now;
+          console.log(`[IntelligentZoom] Changed zoom to ${optimalZoom} at timestamp ${currentPosition.timestamp} (speed: ${secondsPerHour}s/h)`);
         }
       }
     }
@@ -1134,6 +1186,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
                 manualZoom={zoomLevel}
                 isPlaying={isPlaying}
                 intelligentZoomEnabled={intelligentZoomEnabled}
+                secondsPerHour={secondsPerHour}
               />
 
               {/* Full Route (grayed out) - Multi-colored by source */}

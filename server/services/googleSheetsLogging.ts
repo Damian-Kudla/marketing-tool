@@ -292,7 +292,10 @@ export class GoogleSheetsLoggingService {
         },
       });
 
-      console.log(`[GoogleSheetsLoggingService] Batch appended ${rows.length} rows to ${worksheetName}`);
+      // Only log for larger batches (5+ rows) to reduce log noise
+      if (rows.length >= 5) {
+        console.log(`[GoogleSheetsLoggingService] Batch appended ${rows.length} rows to ${worksheetName}`);
+      }
     } catch (error) {
       console.error(`[GoogleSheetsLoggingService] Failed to batch append to ${worksheetName}:`, error);
       throw error;

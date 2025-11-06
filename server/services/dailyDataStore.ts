@@ -421,7 +421,7 @@ class DailyDataStore {
 
       // Calculate final statuses from current resident data
       const finalStatuses = new Map<string, number>();
-      
+
       datasets.forEach((dataset: any) => {
         dataset.editableResidents.forEach((resident: any) => {
           if (resident.status) {
@@ -430,8 +430,6 @@ class DailyDataStore {
           }
         });
       });
-
-      userData.finalStatuses = finalStatuses;
 
       // Calculate conversion rates from interest_later
       // We need to track status changes over time from rawLogs
@@ -487,12 +485,28 @@ class DailyDataStore {
         }
       });
 
+      // Only log if data has changed since last calculation
+      const previousFinalStatuses = userData.finalStatuses || new Map();
+      const previousConversions = userData.conversionRates || conversionRates;
+
+      const statusesChanged =
+        finalStatuses.size !== previousFinalStatuses.size ||
+        Array.from(finalStatuses.entries()).some(([status, count]) =>
+          previousFinalStatuses.get(status) !== count
+        );
+
+      const conversionsChanged =
+        JSON.stringify(conversionRates) !== JSON.stringify(previousConversions);
+
+      userData.finalStatuses = finalStatuses;
       userData.conversionRates = conversionRates;
 
-      // Only log if there are interesting conversion rates
-      const hasConversions = Object.values(conversionRates).some(rate => rate > 0);
-      if (hasConversions || finalStatuses.size > 3) {
-        console.log(`[DailyStore] ${username}: ${finalStatuses.size} status types, conversions:`, conversionRates);
+      // Only log if data changed AND there are interesting conversion rates
+      if ((statusesChanged || conversionsChanged)) {
+        const hasConversions = Object.values(conversionRates).some(rate => rate > 0);
+        if (hasConversions || finalStatuses.size > 3) {
+          console.log(`[DailyStore] ${username}: ${finalStatuses.size} status types, conversions:`, conversionRates);
+        }
       }
     } catch (error) {
       console.error('[DailyStore] Error calculating final statuses and conversions:', error);
