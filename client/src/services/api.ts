@@ -1,8 +1,11 @@
+import { withRetry, testNetworkConnection, type RetryConfig } from '@/utils/networkRetry';
+
 // API configuration
 const API_BASE_URL = '/api';
 
 interface ApiRequestOptions extends RequestInit {
   requireAuth?: boolean;
+  retry?: boolean | RetryConfig;
 }
 
 class ApiService {
@@ -18,13 +21,13 @@ class ApiService {
   }
 
   private async makeRequest(
-    endpoint: string, 
+    endpoint: string,
     options: ApiRequestOptions = {}
   ): Promise<Response> {
-    const { requireAuth = true, ...fetchOptions } = options;
-    
+    const { requireAuth = true, retry = false, ...fetchOptions } = options;
+
     const url = `${API_BASE_URL}${endpoint}`;
-    
+
     // Default options
     const defaultOptions: RequestInit = {
       credentials: 'include', // Always include cookies for auth
@@ -35,17 +38,40 @@ class ApiService {
       ...fetchOptions,
     };
 
-    try {
+    // Function to execute the fetch request
+    const executeFetch = async (): Promise<Response> => {
       const response = await fetch(url, defaultOptions);
-      
+
       // Handle 401 Unauthorized responses
       if (response.status === 401 && requireAuth) {
         // ✅ Detect stale cookies scenario (managed by SessionStatusManager)
         // Just throw German error message
         throw new Error('Authentifizierung fehlgeschlagen - Sitzung abgelaufen');
       }
-      
+
+      // For non-2xx responses, throw error with response data
+      if (!response.ok) {
+        const error: any = new Error(`HTTP ${response.status}: ${response.statusText}`);
+        error.response = { status: response.status };
+        try {
+          error.response.data = await response.json();
+        } catch {
+          // Response body not JSON
+        }
+        throw error;
+      }
+
       return response;
+    };
+
+    try {
+      // Apply retry logic if requested
+      if (retry) {
+        const retryConfig = typeof retry === 'object' ? retry : {};
+        return await withRetry(executeFetch, retryConfig);
+      } else {
+        return await executeFetch();
+      }
     } catch (error) {
       console.error(`API request failed for ${endpoint}:`, error);
       throw error;
@@ -139,14 +165,20 @@ export const geocodeAPI = {
 };
 
 export const ocrAPI = {
-  processImage: async (formData: FormData) => {
-    const response = await apiService.postFormData('/ocr', formData);
-    if (!response.ok) {
-      throw new Error('OCR processing failed');
-    }
+  processImage: async (
+    formData: FormData,
+    onProgress?: (message: string, attempt: number) => void
+  ) => {
+    const response = await apiService.postFormData('/ocr', formData, {
+      retry: {
+        maxRetries: 3,
+        timeout: 90000, // 90 seconds for large image uploads
+        onProgress,
+      },
+    });
     return response.json();
   },
-  
+
   correctOCR: async (residentNames: string[], address: any) => {
     const response = await apiService.post('/ocr-correct', { residentNames, address });
     if (!response.ok) {

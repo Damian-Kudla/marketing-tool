@@ -76,7 +76,16 @@ try {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  
+
+  // Health check endpoint (no auth required, fast response)
+  app.head('/api/health', (req, res) => {
+    res.status(200).end();
+  });
+
+  app.get('/api/health', (req, res) => {
+    res.status(200).json({ status: 'ok', timestamp: Date.now() });
+  });
+
   // Add cookie parser middleware
   app.use(cookieParser());
   

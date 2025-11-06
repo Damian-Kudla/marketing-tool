@@ -8,15 +8,17 @@ import type { Address } from '@/components/GPSAddressForm';
 import { ocrAPI } from '@/services/api';
 import { trackingManager } from '@/services/trackingManager';
 import { expandHouseNumberRange, validateHouseNumber } from '@/utils/addressUtils';
-import { 
+import {
   correctImageOrientationNative,
   rotateImageManually,
-  type NativeOrientationResult 
+  type NativeOrientationResult
 } from '@/lib/nativeOrientation';
 import OrientationLoggingService from '@/services/orientationLogging';
 import { offlineStorage } from '@/services/offlineStorage';
 import { pwaService } from '@/services/pwa';
 import { ImageCropDialog } from './ImageCropDialog';
+import { compressImage, needsCompression, formatFileSize } from '@/utils/imageCompression';
+import { testNetworkConnection } from '@/utils/networkRetry';
 
 interface PhotoCaptureProps {
   onPhotoProcessed?: (results: any, imageSrc?: string) => void;
@@ -33,25 +35,47 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
   const [processing, setProcessing] = useState(false);
   const [correcting, setCorrecting] = useState(false);
   const [rotating, setRotating] = useState(false);
+  const [compressing, setCompressing] = useState(false);
   const [manualRotation, setManualRotation] = useState(0); // Track manual rotation steps
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [uploadProgress, setUploadProgress] = useState<string>('');
+  const [retryAttempt, setRetryAttempt] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   // Crop dialog state
   const [showCropDialog, setShowCropDialog] = useState(false);
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
 
-  // Setup online/offline listeners
+  // Compression info state
+  const [compressionInfo, setCompressionInfo] = useState<{
+    originalSize: number;
+    compressedSize: number;
+    wasCompressed: boolean;
+  } | null>(null);
+
+  // Setup online/offline listeners with improved network detection
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
-    
+
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-    
+
+    // Initial network test (navigator.onLine is unreliable)
+    testNetworkConnection(3000).then(result => {
+      setIsOnline(result.isOnline);
+    });
+
+    // Periodic network quality check (every 30 seconds)
+    const intervalId = setInterval(async () => {
+      const result = await testNetworkConnection(3000);
+      setIsOnline(result.isOnline);
+    }, 30000);
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      clearInterval(intervalId);
     };
   }, []);
 
@@ -71,24 +95,71 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
 
     setSelectedFile(file);
     setCorrecting(true);
+    setCompressing(false);
+    setCompressionInfo(null);
 
     try {
+      // STEP 1: Compress the image first (if needed)
+      let fileToProcess = file;
+      const originalSize = file.size;
+
+      if (needsCompression(file)) {
+        console.log('[PhotoCapture] Image needs compression, starting compression...');
+        setCompressing(true);
+
+        try {
+          const compressionResult = await compressImage(file);
+          fileToProcess = compressionResult.compressedFile;
+
+          setCompressionInfo({
+            originalSize: compressionResult.originalSize,
+            compressedSize: compressionResult.compressedSize,
+            wasCompressed: compressionResult.wasCompressed
+          });
+
+          const reductionPercent = ((1 - compressionResult.compressionRatio) * 100).toFixed(1);
+
+          toast({
+            title: t('photo.compressionSuccess', 'Bild komprimiert'),
+            description: `${formatFileSize(compressionResult.originalSize)} → ${formatFileSize(compressionResult.compressedSize)} (${reductionPercent}% kleiner)`,
+            duration: 3000,
+          });
+        } catch (compressionError) {
+          console.error('[PhotoCapture] Compression failed, using original:', compressionError);
+          toast({
+            title: t('photo.compressionFailed', 'Komprimierung fehlgeschlagen'),
+            description: t('photo.compressionFailedDesc', 'Verwende Originalbild'),
+            duration: 3000,
+          });
+        } finally {
+          setCompressing(false);
+        }
+      } else {
+        console.log('[PhotoCapture] Image already under 500KB, skipping compression');
+        setCompressionInfo({
+          originalSize,
+          compressedSize: originalSize,
+          wasCompressed: false
+        });
+      }
+
+      // STEP 2: Orientation correction
       const startTime = Date.now();
-      
-      console.log('Starting native orientation correction for iPhone image...');
-      
+
+      console.log('Starting native orientation correction...');
+
       // Use completely library-free approach to avoid "n is not defined" error
-      const correctionResult = await correctImageOrientationNative(file);
-      
+      const correctionResult = await correctImageOrientationNative(fileToProcess);
+
       const processingTime = Date.now() - startTime;
-      
+
       console.log('Native orientation correction completed:', {
         needsCorrection: correctionResult.orientationInfo.needsCorrection,
         rotation: correctionResult.orientationInfo.rotation,
         method: correctionResult.orientationInfo.detectionMethod,
         confidence: correctionResult.orientationInfo.confidence
       });
-      
+
       // Log the correction for analytics using comprehensive service
       OrientationLoggingService.logOrientationCorrection(
         'ios', // Assume iOS since iPhone was mentioned in the error
@@ -96,7 +167,7 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
         correctionResult.orientationInfo.rotation,
         true, // frontend correction
         false, // backend correction
-        file.size,
+        fileToProcess.size,
         correctionResult.correctedBlob.size,
         processingTime,
         true, // assume OCR success for now, will be updated after processing
@@ -105,15 +176,15 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
 
       // Convert blob to file
       const correctedFile = new File(
-        [correctionResult.correctedBlob], 
-        file.name, 
+        [correctionResult.correctedBlob],
+        file.name,
         { type: 'image/jpeg' }
       );
-      
+
       setCorrectedFile(correctedFile);
       setOrientationInfo(correctionResult);
 
-      // Create preview from corrected image
+      // STEP 3: Create preview from corrected image
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreview(reader.result as string);
@@ -122,25 +193,26 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
 
       // No automatic rotation toast - users can manually rotate if needed
     } catch (error) {
-      console.error('Native orientation correction failed:', error);
-      
+      console.error('Image processing failed:', error);
+
       // Ultimate fallback - use original file
       setCorrectedFile(file);
       setOrientationInfo(null);
-      
+
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
-      
+
       toast({
-        title: t('photo.orientationWarning', 'Orientation Detection Failed'),
-        description: t('photo.orientationWarningDesc', 'Using original image. Manual rotation may be needed'),
+        title: t('photo.processingWarning', 'Bildverarbeitung fehlgeschlagen'),
+        description: t('photo.processingWarningDesc', 'Verwende Originalbild. Manuelle Rotation könnte nötig sein.'),
         duration: 5000,
       });
     } finally {
       setCorrecting(false);
+      setCompressing(false);
     }
   };
 
@@ -218,15 +290,28 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
     }
 
     setProcessing(true);
+    setUploadProgress('');
+    setRetryAttempt(0);
 
     try {
       // Convert file to base64 for storage
       const imageDataUrl = await fileToBase64(fileToProcess);
-      
-      if (!isOnline) {
+
+      // Test network connection before proceeding
+      const networkTest = await testNetworkConnection(5000);
+      if (!networkTest.isOnline) {
         // Handle offline mode - save to IndexedDB
         await handleOfflineProcessing(fileToProcess, imageDataUrl);
         return;
+      }
+
+      // Show network quality warning for poor connections
+      if (networkTest.quality === 'poor') {
+        toast({
+          title: 'Schwache Verbindung',
+          description: 'Upload kann länger dauern. Bitte warten...',
+          duration: 3000,
+        });
       }
 
       // Process address with house number range expansion if needed
@@ -240,17 +325,21 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
         // Join expanded numbers with comma for backend processing
         processedAddress.number = expanded.join(',');
       }
-      
+
       const formData = new FormData();
       formData.append('image', fileToProcess);
       formData.append('address', JSON.stringify(processedAddress));
-      
+
       // Include orientation info if available for backend logging
       if (orientationInfo) {
         formData.append('orientationInfo', JSON.stringify(orientationInfo.orientationInfo));
       }
 
-      const result = await ocrAPI.processImage(formData);
+      // Upload with retry and progress tracking
+      const result = await ocrAPI.processImage(formData, (message, attempt) => {
+        setUploadProgress(message);
+        setRetryAttempt(attempt);
+      });
       
       // Save successful result to offline storage for caching
       await saveResultToOfflineStorage(result, imageDataUrl);
@@ -292,23 +381,40 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
       }
     } catch (error: any) {
       console.error('OCR error:', error);
-      
+
+      // Clear upload progress
+      setUploadProgress('');
+      setRetryAttempt(0);
+
       // Check for rate limit error (429)
       if (error?.response?.status === 429) {
         const errorData = error.response?.data || {};
         const errorMessage = errorData.message || 'Zu viele Bildübermittlungen. Bitte warte eine Minute.';
-        
+
         toast({
           variant: 'destructive',
           title: 'Rate Limit erreicht',
           description: errorMessage,
           duration: 10000,
         });
-      } else if (isOnline) {
-        // If online request fails (but not rate limit), try offline fallback
-        const imageDataUrl = await fileToBase64(fileToProcess);
-        await handleOfflineProcessing(fileToProcess, imageDataUrl, error as Error);
+      } else if (error.name === 'AbortError' || error.message?.includes('timeout')) {
+        // Timeout error - all retries exhausted
+        toast({
+          variant: 'destructive',
+          title: 'Verbindung zu langsam',
+          description: 'Upload konnte nicht abgeschlossen werden. Bitte versuche es an einem Ort mit besserer Verbindung erneut.',
+          duration: 10000,
+        });
+      } else if (error.message?.includes('fetch') || error.message?.includes('network')) {
+        // Network error - all retries exhausted
+        toast({
+          variant: 'destructive',
+          title: 'Verbindungsfehler',
+          description: 'Upload fehlgeschlagen nach mehreren Versuchen. Bitte überprüfe deine Internetverbindung.',
+          duration: 10000,
+        });
       } else {
+        // Other errors
         const errorMessage = error instanceof Error ? error.message : t('photo.errorDesc');
         toast({
           variant: 'destructive',
@@ -318,6 +424,8 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
       }
     } finally {
       setProcessing(false);
+      setUploadProgress('');
+      setRetryAttempt(0);
     }
   };
 
@@ -364,6 +472,7 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
     setCorrectedFile(null);
     setOrientationInfo(null);
     setManualRotation(0);
+    setCompressionInfo(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -383,20 +492,61 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
   const handleCropComplete = async (croppedBlob: Blob) => {
     setShowCropDialog(false);
     setImageToCrop(null);
-    
+
     // Convert blob to file
     const croppedFile = new File([croppedBlob], 'cropped-image.jpg', { type: 'image/jpeg' });
     setCorrecting(true);
+    setCompressing(false);
 
     try {
+      // STEP 1: Compress the cropped image if needed
+      let fileToProcess = croppedFile;
+      const originalSize = croppedFile.size;
+
+      if (needsCompression(croppedFile)) {
+        console.log('[PhotoCapture] Cropped image needs compression, starting compression...');
+        setCompressing(true);
+
+        try {
+          const compressionResult = await compressImage(croppedFile);
+          fileToProcess = compressionResult.compressedFile;
+
+          setCompressionInfo({
+            originalSize: compressionResult.originalSize,
+            compressedSize: compressionResult.compressedSize,
+            wasCompressed: compressionResult.wasCompressed
+          });
+
+          const reductionPercent = ((1 - compressionResult.compressionRatio) * 100).toFixed(1);
+
+          toast({
+            title: t('photo.compressionSuccess', 'Bild komprimiert'),
+            description: `${formatFileSize(compressionResult.originalSize)} → ${formatFileSize(compressionResult.compressedSize)} (${reductionPercent}% kleiner)`,
+            duration: 3000,
+          });
+        } catch (compressionError) {
+          console.error('[PhotoCapture] Compression failed, using original:', compressionError);
+        } finally {
+          setCompressing(false);
+        }
+      } else {
+        console.log('[PhotoCapture] Cropped image already under 500KB, skipping compression');
+        setCompressionInfo({
+          originalSize,
+          compressedSize: originalSize,
+          wasCompressed: false
+        });
+      }
+
+      // STEP 2: Orientation correction
       const startTime = Date.now();
-      
+
       console.log('Starting native orientation correction for cropped image...');
-      
-      const correctionResult = await correctImageOrientationNative(croppedFile);
-      
+
+      const correctionResult = await correctImageOrientationNative(fileToProcess);
+
       const processingTime = Date.now() - startTime;
-      
+
       console.log('Native orientation correction completed:', {
         needsCorrection: correctionResult.orientationInfo.needsCorrection,
         rotation: correctionResult.orientationInfo.rotation,
@@ -405,7 +555,7 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
       });
 
       const correctedFile = new File([correctionResult.correctedBlob], 'cropped-corrected-image.jpg', { type: 'image/jpeg' });
-      
+
       setSelectedFile(croppedFile);
       setCorrectedFile(correctedFile);
       setOrientationInfo(correctionResult);
@@ -418,24 +568,25 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
       reader.readAsDataURL(correctedFile);
 
     } catch (error) {
-      console.error('Native orientation correction failed:', error);
-      
+      console.error('Image processing failed:', error);
+
       setCorrectedFile(croppedFile);
       setOrientationInfo(null);
-      
+
       const reader = new FileReader();
       reader.onloadend = () => {
         setPreview(reader.result as string);
       };
       reader.readAsDataURL(croppedFile);
-      
+
       toast({
-        title: t('photo.orientationWarning', 'Orientation Detection Failed'),
-        description: t('photo.orientationWarningDesc', 'Using cropped image. Manual rotation may be needed'),
+        title: t('photo.processingWarning', 'Bildverarbeitung fehlgeschlagen'),
+        description: t('photo.processingWarningDesc', 'Verwende zugeschnittenes Bild. Manuelle Rotation könnte nötig sein.'),
         duration: 5000,
       });
     } finally {
       setCorrecting(false);
+      setCompressing(false);
     }
   };
 
@@ -467,18 +618,26 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
                   display: 'block',
                 }}
               />
-              {(processing || correcting || rotating) && (
+              {(processing || correcting || rotating || compressing) && (
                 <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
-                  <div className="text-center text-white">
+                  <div className="text-center text-white px-4 max-w-sm">
                     <Loader2 className="h-8 w-8 text-white animate-spin mx-auto mb-2" />
-                    <p className="text-sm">
-                      {rotating 
+                    <p className="text-sm font-medium mb-1">
+                      {compressing
+                        ? t('photo.compressing', 'Komprimiere Bild...')
+                        : rotating
                         ? t('photo.rotating', 'Rotating image...')
-                        : correcting 
-                        ? t('photo.correctingOrientation', 'Correcting orientation...') 
+                        : correcting
+                        ? t('photo.correctingOrientation', 'Correcting orientation...')
                         : t('photo.processing')
                       }
                     </p>
+                    {uploadProgress && (
+                      <p className="text-xs text-white/80 mt-1">
+                        {uploadProgress}
+                        {retryAttempt > 0 && ` (Versuch ${retryAttempt})`}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
@@ -488,18 +647,18 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
                 onClick={clearPhoto}
                 className="absolute top-2 right-2"
                 data-testid="button-clear-photo"
-                disabled={processing || correcting || rotating}
+                disabled={processing || correcting || rotating || compressing}
               >
                 <X className="h-4 w-4" />
               </Button>
-              
+
               {/* Manual rotation and crop controls */}
               <div className="absolute bottom-2 right-2 flex gap-1">
                 <Button
                   variant="secondary"
                   size="icon"
                   onClick={() => rotateImage('counterclockwise')}
-                  disabled={processing || correcting || rotating}
+                  disabled={processing || correcting || rotating || compressing}
                   className="h-8 w-8 bg-black/50 hover:bg-black/70"
                   data-testid="button-rotate-left"
                   title={t('photo.rotateLeft', 'Rotate counterclockwise')}
@@ -510,7 +669,7 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
                   variant="secondary"
                   size="icon"
                   onClick={() => rotateImage('clockwise')}
-                  disabled={processing || correcting || rotating}
+                  disabled={processing || correcting || rotating || compressing}
                   className="h-8 w-8 bg-black/50 hover:bg-black/70"
                   data-testid="button-rotate-right"
                   title={t('photo.rotateRight', 'Rotate clockwise')}
@@ -521,7 +680,7 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
                   variant="secondary"
                   size="icon"
                   onClick={handleCropClick}
-                  disabled={processing || correcting || rotating}
+                  disabled={processing || correcting || rotating || compressing}
                   className="h-8 w-8 bg-black/50 hover:bg-black/70"
                   title="Bild zuschneiden"
                 >
@@ -530,6 +689,19 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
               </div>
             </div>
             
+            {/* Compression info display */}
+            {compressionInfo && compressionInfo.wasCompressed && (
+              <div className="flex items-center gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-sm">
+                <Camera className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <span className="text-blue-700 dark:text-blue-300">
+                  Komprimiert: {formatFileSize(compressionInfo.originalSize)} → {formatFileSize(compressionInfo.compressedSize)}
+                  <span className="text-blue-600 dark:text-blue-400 ml-1">
+                    ({((1 - compressionInfo.compressedSize / compressionInfo.originalSize) * 100).toFixed(0)}% kleiner)
+                  </span>
+                </span>
+              </div>
+            )}
+
             {/* Orientation info display */}
             {(orientationInfo?.orientationInfo.needsCorrection || manualRotation !== 0) && (
               <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg text-sm">
@@ -537,9 +709,9 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
                 <span className="text-green-700 dark:text-green-300">
                   {orientationInfo?.orientationInfo.needsCorrection && (
                     <>
-                      {t('photo.rotatedBy', 'Rotated by {{degrees}}°', { 
-                        degrees: orientationInfo.orientationInfo.rotation 
-                      })} 
+                      {t('photo.rotatedBy', 'Rotated by {{degrees}}°', {
+                        degrees: orientationInfo.orientationInfo.rotation
+                      })}
                       <span className="text-green-600 dark:text-green-400 ml-1">
                         (iOS, {orientationInfo.orientationInfo.detectionMethod})
                       </span>
@@ -548,8 +720,8 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
                   {manualRotation !== 0 && (
                     <>
                       {orientationInfo?.orientationInfo.needsCorrection && ' + '}
-                      {t('photo.manuallyRotated', 'Manual: {{degrees}}°', { 
-                        degrees: manualRotation 
+                      {t('photo.manuallyRotated', 'Manual: {{degrees}}°', {
+                        degrees: manualRotation
                       })}
                     </>
                   )}
@@ -570,7 +742,7 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
             <div className="space-y-2">
               <Button
                 onClick={processPhoto}
-                disabled={processing || correcting || rotating}
+                disabled={processing || correcting || rotating || compressing}
                 size="lg"
                 className="w-full min-h-12 gap-2"
                 data-testid="button-process-photo"
@@ -580,24 +752,29 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
                     <Loader2 className="h-5 w-5 animate-spin" />
                     {isOnline ? t('photo.processing') : t('photo.savingOffline', 'Saving offline...')}
                   </>
+                ) : compressing ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    {t('photo.compressing', 'Komprimiere Bild...')}
+                  </>
                 ) : correcting ? (
                   <>
                     <Loader2 className="h-5 w-5 animate-spin" />
                     {t('photo.correctingOrientation', 'Correcting orientation...')}
-                </>
-              ) : rotating ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  {t('photo.rotating', 'Rotating image...')}
-                </>
-              ) : (
-                <>
-                  {!isOnline && <WifiOff className="h-4 w-4" />}
-                  {isOnline ? t('photo.process') : t('photo.saveOffline', 'Save Offline')}
-                </>
-              )}
+                  </>
+                ) : rotating ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    {t('photo.rotating', 'Rotating image...')}
+                  </>
+                ) : (
+                  <>
+                    {!isOnline && <WifiOff className="h-4 w-4" />}
+                    {isOnline ? t('photo.process') : t('photo.saveOffline', 'Save Offline')}
+                  </>
+                )}
               </Button>
-              
+
               {/* New Image Button - triggers camera for new photo */}
               <Button
                 onClick={() => {
@@ -615,7 +792,7 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
                 variant="outline"
                 size="lg"
                 className="w-full min-h-12 gap-2"
-                disabled={processing || correcting || rotating}
+                disabled={processing || correcting || rotating || compressing}
               >
                 <Camera className="h-5 w-5" />
                 Neues Bild
@@ -636,7 +813,7 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
             />
             <Button
               onClick={() => fileInputRef.current?.click()}
-              disabled={processing || correcting || rotating}
+              disabled={processing || correcting || rotating || compressing}
               size="lg"
               className="w-full min-h-11 gap-2"
               data-testid="button-take-photo"
@@ -656,7 +833,7 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
               size="lg"
               className="w-full min-h-11 gap-2"
               data-testid="button-upload-photo"
-              disabled={processing || correcting || rotating}
+              disabled={processing || correcting || rotating || compressing}
             >
               <Upload className="h-5 w-5" />
               {t('photo.upload')}
