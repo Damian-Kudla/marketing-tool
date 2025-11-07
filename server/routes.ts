@@ -688,18 +688,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log('[API] /api/search-address - Request body:', JSON.stringify(req.body));
 
-      // Pre-process request body: convert empty strings to undefined BEFORE validation
-      // This prevents .min(1) validation from failing on empty strings
-      const cleanedBody = {
-        street: req.body.street?.trim() || undefined,
-        number: req.body.number?.trim() || undefined,
-        city: req.body.city?.trim() || undefined,
-        postal: req.body.postal?.trim() || undefined,
-        country: req.body.country?.trim() || undefined,
-      };
+      // Validate required fields: street, number, and postal must be present and non-empty
+      if (!req.body.street || !req.body.street.trim()) {
+        return res.status(400).json({ error: "Straße ist erforderlich" });
+      }
+      if (!req.body.number || !req.body.number.trim()) {
+        return res.status(400).json({ error: "Hausnummer ist erforderlich" });
+      }
+      if (!req.body.postal || !req.body.postal.trim()) {
+        return res.status(400).json({ error: "Postleitzahl ist erforderlich" });
+      }
 
-      // Now validate with partial schema (all fields optional)
-      const address = addressSchema.partial().parse(cleanedBody);
+      // Parse and validate with full address schema (street, number, postal required)
+      const address = addressSchema.parse(req.body);
       console.log('[API] /api/search-address - Parsed address:', JSON.stringify(address));
 
       // Use the storage method with fuzzy matching

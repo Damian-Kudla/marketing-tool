@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Camera, Upload, Loader2, X, RotateCw, RotateCcw, Wifi, WifiOff, Crop } from 'lucide-react';
+import { Camera, Upload, Loader2, X, RotateCw, RotateCcw, Crop } from 'lucide-react';
 import { useFilteredToast } from '@/hooks/use-filtered-toast';
 import type { Address } from '@/components/GPSAddressForm';
 import { ocrAPI } from '@/services/api';
@@ -18,7 +18,6 @@ import { offlineStorage } from '@/services/offlineStorage';
 import { pwaService } from '@/services/pwa';
 import { ImageCropDialog } from './ImageCropDialog';
 import { compressImage, needsCompression, formatFileSize } from '@/utils/imageCompression';
-import { testNetworkConnection } from '@/utils/networkRetry';
 
 interface PhotoCaptureProps {
   onPhotoProcessed?: (results: any, imageSrc?: string) => void;
@@ -37,7 +36,7 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
   const [rotating, setRotating] = useState(false);
   const [compressing, setCompressing] = useState(false);
   const [manualRotation, setManualRotation] = useState(0); // Track manual rotation steps
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  // REMOVED: Unreliable offline detection - always assume online and let retry logic handle failures
   const [uploadProgress, setUploadProgress] = useState<string>('');
   const [retryAttempt, setRetryAttempt] = useState<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -52,32 +51,6 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
     compressedSize: number;
     wasCompressed: boolean;
   } | null>(null);
-
-  // Setup online/offline listeners with improved network detection
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    // Initial network test (navigator.onLine is unreliable)
-    testNetworkConnection(3000).then(result => {
-      setIsOnline(result.isOnline);
-    });
-
-    // Periodic network quality check (every 30 seconds)
-    const intervalId = setInterval(async () => {
-      const result = await testNetworkConnection(3000);
-      setIsOnline(result.isOnline);
-    }, 30000);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-      clearInterval(intervalId);
-    };
-  }, []);
 
   // Memory Optimization: Revoke Object URLs when preview changes
   useEffect(() => {
@@ -297,22 +270,9 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
       // Convert file to base64 for storage
       const imageDataUrl = await fileToBase64(fileToProcess);
 
-      // Test network connection before proceeding
-      const networkTest = await testNetworkConnection(5000);
-      if (!networkTest.isOnline) {
-        // Handle offline mode - save to IndexedDB
-        await handleOfflineProcessing(fileToProcess, imageDataUrl);
-        return;
-      }
-
-      // Show network quality warning for poor connections
-      if (networkTest.quality === 'poor') {
-        toast({
-          title: 'Schwache Verbindung',
-          description: 'Upload kann länger dauern. Bitte warten...',
-          duration: 3000,
-        });
-      }
+      // REMOVED: Offline detection was unreliable and caused false negatives
+      // The retry logic in ocrAPI.processImage will handle network issues
+      // If upload truly fails, the error handler will catch it
 
       // Process address with house number range expansion if needed
       const processedAddress = { ...address };
@@ -728,17 +688,7 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
                 </span>
               </div>
             )}
-            
-            {/* Offline Status Indicator */}
-            {!isOnline && (
-              <div className="flex items-center gap-2 p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg text-sm border border-orange-200 dark:border-orange-800">
-                <WifiOff className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                <span className="text-orange-700 dark:text-orange-300">
-                  {t('photo.offlineMode', 'Offline Mode - Photos will be processed when connection is restored')}
-                </span>
-              </div>
-            )}
-            
+
             <div className="space-y-2">
               <Button
                 onClick={processPhoto}
@@ -750,7 +700,7 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
                 {processing ? (
                   <>
                     <Loader2 className="h-5 w-5 animate-spin" />
-                    {isOnline ? t('photo.processing') : t('photo.savingOffline', 'Saving offline...')}
+                    {t('photo.processing')}
                   </>
                 ) : compressing ? (
                   <>
@@ -768,10 +718,7 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
                     {t('photo.rotating', 'Rotating image...')}
                   </>
                 ) : (
-                  <>
-                    {!isOnline && <WifiOff className="h-4 w-4" />}
-                    {isOnline ? t('photo.process') : t('photo.saveOffline', 'Save Offline')}
-                  </>
+                  t('photo.process')
                 )}
               </Button>
 
