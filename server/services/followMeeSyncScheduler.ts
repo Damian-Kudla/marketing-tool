@@ -1,18 +1,23 @@
 /**
  * FollowMee Sync Scheduler
- * 
+ *
  * Runs every 5 minutes to fetch GPS data from FollowMee API
- * and integrate it into user activity logs
+ * and queue it via batchLogger (no more direct Google Sheets writes)
+ *
+ * NEW ARCHITECTURE:
+ * - Initial sync on server start: Loads existing logs, compares with FollowMee data
+ * - Periodic sync: Compares with cache, queues only new data
+ * - No more blocking of batchLogger (FollowMee uses queue now)
  */
 
 import { followMeeApiService } from './followMeeApi';
 import { googleSheetsService } from './googleSheets';
-import { batchLogger } from './batchLogger';
 
 class FollowMeeSyncScheduler {
   private intervalId: NodeJS.Timeout | null = null;
   private readonly SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
   private isRunning = false;
+  private initialSyncDone = false;
 
   /**
    * Start the automatic sync scheduler
@@ -25,10 +30,10 @@ class FollowMeeSyncScheduler {
 
     console.log('[FollowMee Scheduler] Starting automatic sync (every 5 minutes)...');
 
-    // Run immediately on startup
+    // Run initial sync on startup
     this.syncNow();
 
-    // Then run every 5 minutes
+    // Then run periodic sync every 5 minutes
     this.intervalId = setInterval(() => {
       this.syncNow();
     }, this.SYNC_INTERVAL_MS);
@@ -55,12 +60,8 @@ class FollowMeeSyncScheduler {
     }
 
     this.isRunning = true;
-    console.log('[FollowMee Scheduler] Starting sync...');
 
     try {
-      // STEP 1: Block batch logger from writing during FollowMee sync
-      batchLogger.setFollowMeeSyncing(true);
-
       // Load user mappings from Google Sheets
       const users = await googleSheetsService.getAllUsers();
       const usersWithDevices = users.filter(u => u.followMeeDeviceId);
@@ -77,21 +78,21 @@ class FollowMeeSyncScheduler {
         followMeeDeviceId: u.followMeeDeviceId!
       })));
 
-      // STEP 2: Fetch and sync GPS data (writes to Google Sheets)
-      await followMeeApiService.syncAllUsers();
+      // Run appropriate sync
+      if (!this.initialSyncDone) {
+        console.log('[FollowMee Scheduler] Running INITIAL SYNC...');
+        await followMeeApiService.initialSync();
+        this.initialSyncDone = true;
+      } else {
+        console.log('[FollowMee Scheduler] Running PERIODIC SYNC...');
+        await followMeeApiService.periodicSync();
+      }
 
       console.log('[FollowMee Scheduler] ✅ Sync completed successfully');
     } catch (error) {
       console.error('[FollowMee Scheduler] ❌ Sync failed:', error);
     } finally {
-      // STEP 3: Always unblock batch logger, even on error
-      batchLogger.setFollowMeeSyncing(false);
       this.isRunning = false;
-
-      // STEP 4: After FollowMee sync, trigger batch flush to write queued logs
-      // This ensures batch logs are written AFTER FollowMee data, respecting the new row count
-      console.log('[FollowMee Scheduler] Triggering batch flush after sync...');
-      await batchLogger.forceFlushNow();
     }
   }
 
@@ -102,6 +103,7 @@ class FollowMeeSyncScheduler {
     return {
       running: !!this.intervalId,
       syncing: this.isRunning,
+      initialSyncDone: this.initialSyncDone,
       intervalMs: this.SYNC_INTERVAL_MS,
       followMeeStatus: followMeeApiService.getStatus()
     };

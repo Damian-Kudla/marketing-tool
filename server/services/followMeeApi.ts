@@ -1,11 +1,29 @@
 /**
  * FollowMee GPS Tracking API Integration
- * 
+ *
  * Fetches GPS location data from FollowMee devices and integrates
- * it chronologically into user activity logs in Google Sheets.
+ * it chronologically into user activity logs via batch queue.
+ *
+ * SYSTEM DESIGN:
+ *
+ * 1. INITIAL SYNC (Server Start):
+ *    - Fetch 24h FollowMee data for all devices
+ *    - For each user with FollowMee device:
+ *      - Load last 10,000 logs from Google Sheets
+ *      - If logs cover < 25h and exactly 10k logs: fetch more (until < 10k or > 25h coverage)
+ *      - Compare FollowMee data timestamps with existing logs
+ *      - Queue new GPS data via batchLogger (not direct write)
+ *    - Store ALL FollowMee data in cache
+ *
+ * 2. CRON JOB (Every 5 minutes):
+ *    - Fetch 24h FollowMee data
+ *    - Compare with cached data (by timestamp)
+ *    - Queue only NEW data via batchLogger
+ *    - Update cache
  */
 
-import { GoogleSheetsLoggingService } from './googleSheetsLogging';
+import { batchLogger } from './batchLogger';
+import type { LogEntry } from './googleSheetsLogging';
 
 const FOLLOWMEE_API_KEY = process.env.FOLLOWMEE_API;
 const FOLLOWMEE_USERNAME = process.env.FOLLOWMEE_USERNAME || 'Saskia.zucht';
@@ -39,10 +57,17 @@ interface UserFollowMeeMapping {
   followMeeDeviceId: string;
 }
 
+interface CachedGPSData {
+  timestamp: number; // Unix timestamp in ms
+  location: FollowMeeLocation;
+  logEntry: LogEntry; // Pre-formatted log entry for queue
+}
+
 class FollowMeeApiService {
   private userMappings: Map<string, UserFollowMeeMapping> = new Map();
-  private lastFetchTimestamps: Map<string, number> = new Map(); // Track last fetch per user
-  private processedLocationIds: Map<string, Set<string>> = new Map(); // Track processed locations per user
+  private gpsDataCache: Map<string, CachedGPSData[]> = new Map(); // Key: userId, Value: sorted array of GPS data
+  private initialSyncCompleted: boolean = false;
+  private lastSyncTime: number = 0;
 
   /**
    * Fetch all devices in the account
@@ -60,29 +85,24 @@ class FollowMeeApiService {
     console.log(`[FollowMee] Fetching device list...`);
 
     const response = await fetch(url.toString());
-    
+
     if (!response.ok) {
       throw new Error(`FollowMee API error: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
     console.log(`[FollowMee] Found ${data.Data?.length || 0} devices in account`);
-    
-    // Log all devices with different possible field names
+
     if (data.Data && data.Data.length > 0) {
       console.log(`[FollowMee] Device list:`);
       data.Data.forEach((device: any) => {
-        // Try different field names for ID
         const deviceId = device.ID || device.DeviceID || device.Id || device.id || 'unknown';
         const deviceName = device.DeviceName || device.Name || device.name || 'unknown';
         const lastUpdate = device.Date || device.LastUpdate || device.date || 'unknown';
         console.log(`[FollowMee]   - ${deviceId}: ${deviceName} (Last update: ${lastUpdate})`);
       });
-      
-      // Also log the raw structure of first device to debug
-      console.log(`[FollowMee] Raw device structure:`, JSON.stringify(data.Data[0], null, 2));
     }
-    
+
     return data;
   }
 
@@ -91,7 +111,7 @@ class FollowMeeApiService {
    */
   updateUserMappings(users: Array<{ userId: string; username: string; followMeeDeviceId?: string }>) {
     this.userMappings.clear();
-    
+
     for (const user of users) {
       if (user.followMeeDeviceId && user.followMeeDeviceId.trim()) {
         this.userMappings.set(user.userId, {
@@ -102,14 +122,14 @@ class FollowMeeApiService {
         console.log(`[FollowMee] Mapped user ${user.username} to device ${user.followMeeDeviceId}`);
       }
     }
-    
+
     console.log(`[FollowMee] Updated mappings for ${this.userMappings.size} users with FollowMee devices`);
   }
 
   /**
    * Fetch history for all devices in the past X hours
    */
-  private async fetchHistoryForAllDevices(hours: number = 1): Promise<FollowMeeResponse> {
+  private async fetchHistoryForAllDevices(hours: number = 24): Promise<FollowMeeResponse> {
     if (!FOLLOWMEE_API_KEY) {
       throw new Error('FOLLOWMEE_API environment variable not set');
     }
@@ -124,109 +144,203 @@ class FollowMeeApiService {
     console.log(`[FollowMee] Fetching ${hours}h history for all devices...`);
 
     const response = await fetch(url.toString());
-    
+
     if (!response.ok) {
       throw new Error(`FollowMee API error: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
     console.log(`[FollowMee] Received ${data.Data?.length || 0} location points`);
-    
+
     return data;
   }
 
   /**
-   * Fetch date range history for all devices
-   */
-  private async fetchDateRangeForAllDevices(from: string, to: string): Promise<FollowMeeResponse> {
-    if (!FOLLOWMEE_API_KEY) {
-      throw new Error('FOLLOWMEE_API environment variable not set');
-    }
-
-    const url = new URL(FOLLOWMEE_BASE_URL);
-    url.searchParams.set('key', FOLLOWMEE_API_KEY);
-    url.searchParams.set('username', FOLLOWMEE_USERNAME);
-    url.searchParams.set('output', 'json');
-    url.searchParams.set('function', 'daterangeforalldevices');
-    url.searchParams.set('from', from);
-    url.searchParams.set('to', to);
-
-    console.log(`[FollowMee] Fetching date range ${from} to ${to} for all devices...`);
-
-    const response = await fetch(url.toString());
-    
-    if (!response.ok) {
-      throw new Error(`FollowMee API error: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    console.log(`[FollowMee] Received ${data.Data?.length || 0} location points`);
-    
-    return data;
-  }
-
-  /**
-   * Parse FollowMee date format to timestamp
+   * Parse FollowMee date format to Unix timestamp (ms)
    */
   private parseFollowMeeDate(dateStr: string): number {
-    // Format: "2025-11-04T22:52:24+01:00" (ISO with timezone)
     const date = new Date(dateStr);
     return date.getTime();
   }
 
   /**
-   * Create unique ID for location (to detect duplicates)
+   * Convert FollowMee location to LogEntry format
    */
-  private createLocationId(location: FollowMeeLocation): string {
-    return `${location.DeviceID}_${location.Date}_${location.Latitude}_${location.Longitude}`;
+  private locationToLogEntry(location: FollowMeeLocation, mapping: UserFollowMeeMapping): LogEntry {
+    const timestamp = new Date(location.Date).toISOString();
+
+    return {
+      timestamp,
+      userId: mapping.userId,
+      username: mapping.username,
+      endpoint: '/api/tracking/gps',
+      method: 'POST',
+      address: `GPS: ${location.Latitude.toFixed(6)}, ${location.Longitude.toFixed(6)} [FollowMee]`,
+      newProspects: [],
+      existingCustomers: [],
+      userAgent: 'FollowMee GPS Tracker',
+      data: {
+        source: 'followmee',
+        deviceId: location.DeviceID,
+        deviceName: location.DeviceName,
+        latitude: location.Latitude,
+        longitude: location.Longitude,
+        speedKmh: location['Speed(km/h)'],
+        speedMph: location['Speed(mph)'],
+        direction: location.Direction,
+        accuracy: location.Accuracy,
+        altitudeM: location['Altitude(m)'],
+        battery: location.Battery,
+        timestamp: this.parseFollowMeeDate(location.Date)
+      }
+    };
   }
 
   /**
-   * Check if location was already processed
+   * Load user's existing logs from Google Sheets (last 25 hours)
    */
-  private isLocationProcessed(userId: string, locationId: string): boolean {
-    const processed = this.processedLocationIds.get(userId);
-    return processed ? processed.has(locationId) : false;
-  }
+  private async loadUserLogsFromSheets(mapping: UserFollowMeeMapping): Promise<LogEntry[]> {
+    const { GoogleSheetsLoggingService } = await import('./googleSheetsLogging');
+    const { google } = await import('googleapis');
 
-  /**
-   * Mark location as processed
-   */
-  private markLocationProcessed(userId: string, locationId: string) {
-    let processed = this.processedLocationIds.get(userId);
-    if (!processed) {
-      processed = new Set();
-      this.processedLocationIds.set(userId, processed);
-    }
-    processed.add(locationId);
-  }
-
-  /**
-   * Fetch and integrate GPS data for all users
-   * Called by cron job every 5 minutes
-   */
-  async syncAllUsers() {
-    if (this.userMappings.size === 0) {
-      console.log('[FollowMee] No users with FollowMee devices configured');
-      return;
+    const sheetsKey = process.env.GOOGLE_SHEETS_KEY;
+    if (!sheetsKey) {
+      console.error('[FollowMee] GOOGLE_SHEETS_KEY not set');
+      return [];
     }
 
     try {
-      // First, fetch device list to see all available devices
+      const credentials = JSON.parse(sheetsKey);
+      const auth = new google.auth.JWT({
+        email: credentials.client_email,
+        key: credentials.private_key,
+        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+      });
+
+      const sheetsClient = google.sheets({ version: 'v4', auth });
+      const LOG_SHEET_ID = '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+      const worksheetName = `${mapping.username}_${mapping.userId}`;
+
+      // Check if worksheet exists
+      const sheetInfo = await sheetsClient.spreadsheets.get({
+        spreadsheetId: LOG_SHEET_ID,
+      });
+
+      const worksheetExists = sheetInfo.data.sheets?.some(
+        (sheet: any) => sheet.properties.title === worksheetName
+      );
+
+      if (!worksheetExists) {
+        console.log(`[FollowMee] No worksheet found for ${mapping.username}, will create on first write`);
+        return [];
+      }
+
+      // Load logs in batches of 10,000 until we have 25h coverage
+      const allLogs: LogEntry[] = [];
+      const twentyFiveHoursAgo = Date.now() - (25 * 60 * 60 * 1000);
+      let offset = 2; // Start after header row
+      let continueLoading = true;
+
+      while (continueLoading) {
+        console.log(`[FollowMee] Loading logs for ${mapping.username} (batch starting at row ${offset})...`);
+
+        const response = await sheetsClient.spreadsheets.values.get({
+          spreadsheetId: LOG_SHEET_ID,
+          range: `${worksheetName}!A${offset}:J${offset + 9999}`, // 10k rows
+        });
+
+        const rows = response.data.values || [];
+
+        if (rows.length === 0) {
+          console.log(`[FollowMee] No more logs found for ${mapping.username}`);
+          break;
+        }
+
+        // Parse rows to LogEntry
+        const parsedLogs: LogEntry[] = rows
+          .filter((row: any[]) => row[0]) // Must have timestamp
+          .map((row: any[]) => ({
+            timestamp: row[0] || '',
+            userId: row[1] || '',
+            username: row[2] || '',
+            endpoint: row[3] || '',
+            method: row[4] || '',
+            address: row[5] || '',
+            newProspects: row[6] ? row[6].split(', ').filter((p: string) => p.length > 0) : [],
+            existingCustomers: row[7] ? row[7].split(', ').map((c: string) => {
+              const match = c.match(/^(.+)\s\((.+)\)$/);
+              return match ? { name: match[1], id: match[2] } : { name: c, id: '' };
+            }) : [],
+            userAgent: row[8] || '',
+            data: row[9] || ''
+          }));
+
+        allLogs.push(...parsedLogs);
+
+        // Check if oldest log in this batch is older than 25h
+        const oldestTimestamp = new Date(parsedLogs[parsedLogs.length - 1].timestamp).getTime();
+
+        // Stop if:
+        // 1. We got less than 10k rows (end of data)
+        // 2. OR oldest log is older than 25h
+        if (rows.length < 10000 || oldestTimestamp < twentyFiveHoursAgo) {
+          continueLoading = false;
+          console.log(`[FollowMee] Loaded ${allLogs.length} logs for ${mapping.username} (covers > 25h or end reached)`);
+        } else {
+          offset += 10000;
+          console.log(`[FollowMee] Loaded ${allLogs.length} logs so far, continuing...`);
+        }
+      }
+
+      // Filter to only last 25 hours
+      const logsLast25h = allLogs.filter(log => {
+        const timestamp = new Date(log.timestamp).getTime();
+        return timestamp >= twentyFiveHoursAgo;
+      });
+
+      console.log(`[FollowMee] Filtered to ${logsLast25h.length} logs from last 25h for ${mapping.username}`);
+      return logsLast25h;
+
+    } catch (error) {
+      console.error(`[FollowMee] Error loading logs for ${mapping.username}:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Initial sync on server start
+   */
+  async initialSync() {
+    if (this.initialSyncCompleted) {
+      console.log('[FollowMee] Initial sync already completed');
+      return;
+    }
+
+    if (this.userMappings.size === 0) {
+      console.log('[FollowMee] No users with FollowMee devices configured');
+      this.initialSyncCompleted = true;
+      return;
+    }
+
+    console.log('[FollowMee] ============================================');
+    console.log('[FollowMee] STARTING INITIAL SYNC');
+    console.log('[FollowMee] ============================================');
+
+    try {
+      // Fetch device list
       await this.fetchDeviceList();
 
-      // Fetch last 26 hours of data to account for timezone differences
-      // Server might be UTC while data is in UTC+1/UTC+2 (Germany)
-      const response = await this.fetchHistoryForAllDevices(26);
-      
+      // Fetch 24h FollowMee data
+      const response = await this.fetchHistoryForAllDevices(24);
+
       if (!response.Data || response.Data.length === 0) {
-        console.log('[FollowMee] No new location data');
+        console.log('[FollowMee] No FollowMee data available');
+        this.initialSyncCompleted = true;
         return;
       }
 
       // Group locations by device
       const locationsByDevice = new Map<string, FollowMeeLocation[]>();
-      
       for (const location of response.Data) {
         if (!locationsByDevice.has(location.DeviceID)) {
           locationsByDevice.set(location.DeviceID, []);
@@ -234,180 +348,182 @@ class FollowMeeApiService {
         locationsByDevice.get(location.DeviceID)!.push(location);
       }
 
-      // Log which devices have data
-      const deviceIds = Array.from(locationsByDevice.keys());
-      console.log(`[FollowMee] Devices in this batch: ${deviceIds.join(', ')}`);
-      deviceIds.forEach(deviceId => {
-        const locations = locationsByDevice.get(deviceId)!;
-        const deviceName = locations[0]?.DeviceName || 'Unknown';
-        console.log(`[FollowMee]   Device ${deviceId} (${deviceName}): ${locations.length} points`);
-      });
+      console.log(`[FollowMee] Found data for ${locationsByDevice.size} devices`);
 
-      // Process each user's device
-      const mappings = Array.from(this.userMappings.values());
-      for (const mapping of mappings) {
+      // Process each user
+      for (const mapping of this.userMappings.values()) {
         const deviceLocations = locationsByDevice.get(mapping.followMeeDeviceId);
-        
+
         if (!deviceLocations || deviceLocations.length === 0) {
-          console.log(`[FollowMee] No locations in this batch for user ${mapping.username} (Device ID: ${mapping.followMeeDeviceId})`);
+          console.log(`[FollowMee] No FollowMee data for ${mapping.username} (Device: ${mapping.followMeeDeviceId})`);
+          this.gpsDataCache.set(mapping.userId, []);
           continue;
         }
 
-        console.log(`[FollowMee] Processing ${deviceLocations.length} locations for user ${mapping.username}`);
+        console.log(`[FollowMee] Processing ${deviceLocations.length} FollowMee locations for ${mapping.username}`);
 
-        // Filter: Only today's data (in German time UTC+1) and not already processed
-        // Get start of today in German time (UTC+1)
-        const now = new Date();
-        const todayGermany = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Berlin' }));
-        todayGermany.setHours(0, 0, 0, 0);
+        // Load existing logs from Google Sheets (last 25h)
+        const existingLogs = await this.loadUserLogsFromSheets(mapping);
 
+        // Build set of existing timestamps (for fast lookup)
+        const existingTimestamps = new Set<number>();
+        for (const log of existingLogs) {
+          // Only track FollowMee entries (to avoid conflicts with manual GPS entries)
+          try {
+            const data = typeof log.data === 'string' ? JSON.parse(log.data) : log.data;
+            if (data?.source === 'followmee') {
+              existingTimestamps.add(data.timestamp);
+            }
+          } catch (e) {
+            // Ignore parse errors
+          }
+        }
+
+        console.log(`[FollowMee] Found ${existingTimestamps.size} existing FollowMee entries in logs for ${mapping.username}`);
+
+        // Filter new locations (not in existing logs)
         const newLocations = deviceLocations.filter(loc => {
-          const locationId = this.createLocationId(loc);
-          const locationDate = new Date(loc.Date);
+          const timestamp = this.parseFollowMeeDate(loc.Date);
+          return !existingTimestamps.has(timestamp);
+        });
 
-          // Filter out already processed AND only keep today's data (German time)
-          return !this.isLocationProcessed(mapping.userId, locationId) &&
-                 locationDate >= todayGermany;
+        console.log(`[FollowMee] ${newLocations.length} new locations to import for ${mapping.username}`);
+
+        // Sort by timestamp
+        newLocations.sort((a, b) =>
+          this.parseFollowMeeDate(a.Date) - this.parseFollowMeeDate(b.Date)
+        );
+
+        // Queue new locations via batchLogger
+        for (const location of newLocations) {
+          const logEntry = this.locationToLogEntry(location, mapping);
+          batchLogger.addUserActivity(logEntry);
+        }
+
+        // Build cache with ALL FollowMee data (sorted by timestamp)
+        const cacheData: CachedGPSData[] = deviceLocations
+          .map(loc => ({
+            timestamp: this.parseFollowMeeDate(loc.Date),
+            location: loc,
+            logEntry: this.locationToLogEntry(loc, mapping)
+          }))
+          .sort((a, b) => a.timestamp - b.timestamp);
+
+        this.gpsDataCache.set(mapping.userId, cacheData);
+
+        console.log(`[FollowMee] ✅ Queued ${newLocations.length} new locations for ${mapping.username}`);
+        console.log(`[FollowMee] 📦 Cached ${cacheData.length} total locations for ${mapping.username}`);
+      }
+
+      this.initialSyncCompleted = true;
+      this.lastSyncTime = Date.now();
+
+      console.log('[FollowMee] ============================================');
+      console.log('[FollowMee] INITIAL SYNC COMPLETED');
+      console.log('[FollowMee] ============================================');
+
+    } catch (error) {
+      console.error('[FollowMee] Error during initial sync:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Periodic sync (cron job every 5 minutes)
+   */
+  async periodicSync() {
+    if (!this.initialSyncCompleted) {
+      console.log('[FollowMee] Initial sync not completed yet, running it now...');
+      await this.initialSync();
+      return;
+    }
+
+    if (this.userMappings.size === 0) {
+      console.log('[FollowMee] No users with FollowMee devices configured');
+      return;
+    }
+
+    try {
+      console.log('[FollowMee] Starting periodic sync...');
+
+      // Fetch 24h FollowMee data
+      const response = await this.fetchHistoryForAllDevices(24);
+
+      if (!response.Data || response.Data.length === 0) {
+        console.log('[FollowMee] No new FollowMee data');
+        return;
+      }
+
+      // Group locations by device
+      const locationsByDevice = new Map<string, FollowMeeLocation[]>();
+      for (const location of response.Data) {
+        if (!locationsByDevice.has(location.DeviceID)) {
+          locationsByDevice.set(location.DeviceID, []);
+        }
+        locationsByDevice.get(location.DeviceID)!.push(location);
+      }
+
+      // Process each user
+      for (const mapping of this.userMappings.values()) {
+        const deviceLocations = locationsByDevice.get(mapping.followMeeDeviceId);
+
+        if (!deviceLocations || deviceLocations.length === 0) {
+          continue;
+        }
+
+        // Get cached data for comparison
+        const cachedData = this.gpsDataCache.get(mapping.userId) || [];
+        const cachedTimestamps = new Set(cachedData.map(d => d.timestamp));
+
+        // Find NEW locations (not in cache)
+        const newLocations = deviceLocations.filter(loc => {
+          const timestamp = this.parseFollowMeeDate(loc.Date);
+          return !cachedTimestamps.has(timestamp);
         });
 
         if (newLocations.length === 0) {
-          console.log(`[FollowMee] No new locations for user ${mapping.username} (all already processed or not from today)`);
+          console.log(`[FollowMee] No new locations for ${mapping.username}`);
           continue;
         }
 
-        console.log(`[FollowMee] ${newLocations.length} new locations for user ${mapping.username}`);
-
-        // Sort by timestamp (chronological order)
-        newLocations.sort((a, b) => {
-          const timeA = this.parseFollowMeeDate(a.Date);
-          const timeB = this.parseFollowMeeDate(b.Date);
-          return timeA - timeB;
-        });
-
-        // Insert into Google Sheets chronologically
-        await this.insertLocationsChronologically(mapping, newLocations);
-
-        // Mark as processed
-        for (const location of newLocations) {
-          const locationId = this.createLocationId(location);
-          this.markLocationProcessed(mapping.userId, locationId);
-        }
-      }
-
-    } catch (error) {
-      console.error('[FollowMee] Error syncing users:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Insert FollowMee locations chronologically into user's Google Sheets log
-   */
-  private async insertLocationsChronologically(
-    mapping: UserFollowMeeMapping,
-    locations: FollowMeeLocation[]
-  ) {
-    const worksheetName = `${mapping.username}_${mapping.userId}`;
-
-    try {
-      // Ensure worksheet exists
-      await GoogleSheetsLoggingService.ensureUserWorksheet(mapping.userId, mapping.username);
-
-      // Note: For now we append to the end
-      // In the future, could implement true chronological insertion by reading existing data
-
-      // Convert locations to log rows
-      const logRows = locations.map(location => {
-        const timestamp = new Date(location.Date).toISOString();
-        
-        return [
-          timestamp, // Timestamp
-          mapping.userId, // User ID
-          mapping.username, // Username
-          '/api/tracking/gps', // Endpoint
-          'POST', // Method
-          `GPS: ${location.Latitude.toFixed(6)}, ${location.Longitude.toFixed(6)} [FollowMee]`, // Address
-          '', // New Prospects
-          '', // Existing Customers
-          'FollowMee GPS Tracker', // User Agent
-          JSON.stringify({
-            source: 'followmee',
-            deviceId: location.DeviceID,
-            deviceName: location.DeviceName,
-            latitude: location.Latitude,
-            longitude: location.Longitude,
-            speedKmh: location['Speed(km/h)'],
-            speedMph: location['Speed(mph)'],
-            direction: location.Direction,
-            accuracy: location.Accuracy,
-            altitudeM: location['Altitude(m)'],
-            battery: location.Battery,
-            timestamp: this.parseFollowMeeDate(location.Date)
-          })
-        ];
-      });
-
-      // Insert chronologically (reads existing logs, merges, sorts, rewrites)
-      await GoogleSheetsLoggingService.batchInsertChronologically(worksheetName, logRows);
-      console.log(`[FollowMee] Inserted ${logRows.length} locations chronologically into ${mapping.username}'s log`);
-
-    } catch (error) {
-      console.error(`[FollowMee] Error inserting locations for ${mapping.username}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Fetch and sync GPS data for a specific date range (for historical data)
-   */
-  async syncDateRange(from: string, to: string) {
-    if (this.userMappings.size === 0) {
-      console.log('[FollowMee] No users with FollowMee devices configured');
-      return;
-    }
-
-    try {
-      const response = await this.fetchDateRangeForAllDevices(from, to);
-      
-      if (!response.Data || response.Data.length === 0) {
-        console.log('[FollowMee] No location data for date range');
-        return;
-      }
-
-      // Group locations by device
-      const locationsByDevice = new Map<string, FollowMeeLocation[]>();
-      
-      for (const location of response.Data) {
-        if (!locationsByDevice.has(location.DeviceID)) {
-          locationsByDevice.set(location.DeviceID, []);
-        }
-        locationsByDevice.get(location.DeviceID)!.push(location);
-      }
-
-      // Process each user's device
-      const mappings = Array.from(this.userMappings.values());
-      for (const mapping of mappings) {
-        const deviceLocations = locationsByDevice.get(mapping.followMeeDeviceId);
-        
-        if (!deviceLocations || deviceLocations.length === 0) {
-          continue;
-        }
-
-        console.log(`[FollowMee] Processing ${deviceLocations.length} locations for user ${mapping.username} (${from} to ${to})`);
+        console.log(`[FollowMee] ${newLocations.length} new locations for ${mapping.username}`);
 
         // Sort by timestamp
-        deviceLocations.sort((a, b) => {
-          const timeA = this.parseFollowMeeDate(a.Date);
-          const timeB = this.parseFollowMeeDate(b.Date);
-          return timeA - timeB;
-        });
+        newLocations.sort((a, b) =>
+          this.parseFollowMeeDate(a.Date) - this.parseFollowMeeDate(b.Date)
+        );
 
-        // Insert into Google Sheets
-        await this.insertLocationsChronologically(mapping, deviceLocations);
+        // Queue new locations via batchLogger
+        for (const location of newLocations) {
+          const logEntry = this.locationToLogEntry(location, mapping);
+          batchLogger.addUserActivity(logEntry);
+        }
+
+        // Update cache: add new data and keep sorted
+        const newCacheEntries: CachedGPSData[] = newLocations.map(loc => ({
+          timestamp: this.parseFollowMeeDate(loc.Date),
+          location: loc,
+          logEntry: this.locationToLogEntry(loc, mapping)
+        }));
+
+        const updatedCache = [...cachedData, ...newCacheEntries]
+          .sort((a, b) => a.timestamp - b.timestamp);
+
+        // Keep only last 24h in cache (to prevent memory growth)
+        const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
+        const trimmedCache = updatedCache.filter(d => d.timestamp >= twentyFourHoursAgo);
+
+        this.gpsDataCache.set(mapping.userId, trimmedCache);
+
+        console.log(`[FollowMee] ✅ Queued ${newLocations.length} new locations for ${mapping.username}`);
+        console.log(`[FollowMee] 📦 Cache updated: ${trimmedCache.length} locations (trimmed to 24h)`);
       }
 
+      this.lastSyncTime = Date.now();
+      console.log('[FollowMee] ✅ Periodic sync completed');
+
     } catch (error) {
-      console.error('[FollowMee] Error syncing date range:', error);
+      console.error('[FollowMee] Error during periodic sync:', error);
       throw error;
     }
   }
@@ -419,11 +535,12 @@ class FollowMeeApiService {
     return {
       configured: !!FOLLOWMEE_API_KEY,
       userCount: this.userMappings.size,
+      initialSyncCompleted: this.initialSyncCompleted,
+      lastSyncTime: this.lastSyncTime,
       users: Array.from(this.userMappings.values()).map(m => ({
         username: m.username,
         deviceId: m.followMeeDeviceId,
-        lastFetch: this.lastFetchTimestamps.get(m.userId) || null,
-        processedLocations: this.processedLocationIds.get(m.userId)?.size || 0
+        cachedLocations: this.gpsDataCache.get(m.userId)?.length || 0
       }))
     };
   }
