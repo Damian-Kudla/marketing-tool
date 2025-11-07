@@ -1,0 +1,564 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { MapPin, Loader2, Check, Search, Plus, Minus, Wand2 } from 'lucide-react';
+import { useFilteredToast } from '@/hooks/use-filtered-toast';
+import { geocodeAPI, addressAPI } from '@/services/api';
+import { expandHouseNumberRange, validateHouseNumber } from '@/utils/addressUtils';
+
+interface GPSAddressFormProps {
+  onAddressDetected?: (address: Address) => void;
+  onAddressSearch?: (customers: any[]) => void;
+  initialAddress?: Address | null;
+  onResetDataset?: () => void; // Callback to reset dataset when filters change
+  showCorrectionEffect?: boolean; // Trigger visual effect when address is corrected
+}
+
+export interface Address {
+  street: string;
+  number: string;
+  city: string;
+  postal: string;
+  onlyEven?: boolean;
+  onlyOdd?: boolean;
+}
+
+export default function GPSAddressForm({ onAddressDetected, onAddressSearch, initialAddress, onResetDataset, showCorrectionEffect }: GPSAddressFormProps) {
+  const { t } = useTranslation();
+  const { toast } = useFilteredToast();
+  const [loading, setLoading] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [detected, setDetected] = useState(false);
+  const [houseNumberError, setHouseNumberError] = useState<string | null>(null);
+  const [onlyEven, setOnlyEven] = useState(false);
+  const [onlyOdd, setOnlyOdd] = useState(false);
+  const [streetCorrected, setStreetCorrected] = useState(false); // Animation state for corrected street
+  const [relatedHouseNumbers, setRelatedHouseNumbers] = useState<string[]>([]); // Related house numbers hint
+  const [address, setAddress] = useState<Address>(initialAddress || {
+    street: '',
+    number: '',
+    city: '',
+    postal: ''
+  });
+
+  // Store previous initialAddress to detect changes
+  const prevInitialAddressRef = useRef<Address | null | undefined>(undefined);
+
+  // Trigger visual effect when showCorrectionEffect prop changes to true
+  useEffect(() => {
+    if (showCorrectionEffect) {
+      console.log('[GPSAddressForm] Triggering correction animation');
+      setStreetCorrected(true);
+      setTimeout(() => setStreetCorrected(false), 2000); // Reset after 2 seconds
+    }
+  }, [showCorrectionEffect]);
+
+  // Update internal address state when initialAddress prop changes
+  // Also reset to empty when initialAddress is null (Reset button clicked)
+  useEffect(() => {
+    // Check if initialAddress actually changed (deep comparison)
+    const hasChanged = 
+      prevInitialAddressRef.current === undefined || // First render
+      (prevInitialAddressRef.current !== initialAddress && (
+        !prevInitialAddressRef.current ||
+        !initialAddress ||
+        prevInitialAddressRef.current.street !== initialAddress.street ||
+        prevInitialAddressRef.current.number !== initialAddress.number ||
+        prevInitialAddressRef.current.postal !== initialAddress.postal ||
+        prevInitialAddressRef.current.city !== initialAddress.city
+      ));
+    
+    if (!hasChanged) {
+      return; // No change, don't update
+    }
+    
+    // Update the ref
+    prevInitialAddressRef.current = initialAddress;
+    
+    if (initialAddress) {
+      setAddress(initialAddress);
+    } else if (initialAddress === null) {
+      // Reset to empty state
+      setAddress({
+        street: '',
+        number: '',
+        city: '',
+        postal: ''
+      });
+    }
+  }, [initialAddress]); // Only depend on initialAddress, NOT on address!
+
+  // Validate house number whenever it changes
+  useEffect(() => {
+    if (address.number) {
+      const error = validateHouseNumber(address.number);
+      setHouseNumberError(error);
+    } else {
+      setHouseNumberError(null);
+    }
+  }, [address.number]);
+
+  // Check if house number is a natural number (positive integer)
+  const isNaturalNumber = (value: string): boolean => {
+    const trimmed = value.trim();
+    const num = parseInt(trimmed, 10);
+    return /^\d+$/.test(trimmed) && num > 0 && num.toString() === trimmed;
+  };
+
+  const canShowPlusMinus = isNaturalNumber(address.number);
+
+  const incrementHouseNumber = () => {
+    if (canShowPlusMinus) {
+      const current = parseInt(address.number, 10);
+      setAddress({ ...address, number: (current + 1).toString() });
+    }
+  };
+
+  const decrementHouseNumber = () => {
+    if (canShowPlusMinus) {
+      const current = parseInt(address.number, 10);
+      if (current > 1) {
+        setAddress({ ...address, number: (current - 1).toString() });
+      }
+    }
+  };
+
+  // Store previous address to detect ACTUAL changes (not just re-renders)
+  const prevAddressRef = useRef<string>('');
+  
+  // Notify parent component whenever address changes
+  // Using JSON.stringify to detect actual changes and prevent infinite loops
+  useEffect(() => {
+    // Only notify if address has actual values (not empty initial state)
+    if (address.street || address.postal || address.number) {
+      // Compare with previous address using JSON to detect real changes
+      const addressStr = JSON.stringify(address);
+      if (addressStr !== prevAddressRef.current) {
+        prevAddressRef.current = addressStr;
+        onAddressDetected?.({ ...address, onlyEven, onlyOdd });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    address.street, 
+    address.number, 
+    address.city, 
+    address.postal
+    // DO NOT include onAddressDetected - causes infinite loop
+  ]);
+
+  const detectLocation = async () => {
+    setLoading(true);
+    setDetected(false);
+    
+    if ('geolocation' in navigator) {
+      // Permissions-Check vorab
+      const permission = await navigator.permissions.query({ name: 'geolocation' });
+      if (permission.state === 'denied') {
+        toast({
+          variant: 'destructive',
+          title: 'Keine Standortberechtigung',
+          description: 'Die Standort-Berechtigung wurde verweigert. Bitte erlauben Sie den Standortzugriff in Ihren Browsereinstellungen, um diese Funktion zu nutzen.',
+        });
+        setLoading(false);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          try {
+            const addressData: Partial<Address> = await geocodeAPI.reverseGeocode(
+              position.coords.latitude,
+              position.coords.longitude
+            );
+
+            // Setze immer alle verfügbaren Felder mit Defaults für fehlende Werte
+            const completeAddress: Address = {
+              street: addressData.street || '',
+              number: addressData.number || '',
+              postal: addressData.postal || '',
+              city: addressData.city || ''
+            };
+
+            setAddress(completeAddress);
+            setDetected(true);
+            onAddressDetected?.({ ...completeAddress, onlyEven, onlyOdd });
+
+            // Warnung bei unvollständiger Adresse (z. B. keine street/number, aber PLZ/city vorhanden)
+            if (!completeAddress.street || !completeAddress.number) {
+              toast({
+                variant: 'default',
+                title: 'Unvollständige Adresse',
+                description: 'Straße oder Hausnummer konnte nicht genau ermittelt werden. Bitte überprüfen und ergänzen Sie die Eingabe manuell.',
+              });
+            }
+          } catch (error: any) {
+            console.error('Geocoding error:', error);
+
+            if (error?.response?.status === 429) {
+              const errorData = error.response?.data || {};
+              const errorMessage = errorData.message || 'Zu viele Standortabfragen. Bitte warte eine Minute.';
+              toast({
+                variant: 'destructive',
+                title: 'Rate Limit erreicht',
+                description: errorMessage,
+                duration: 10000,
+              });
+            } else if (error?.response?.data?.errorCode === 'POSTAL_CODE_RESTRICTED') {
+              toast({
+                variant: 'destructive',
+                title: 'Postleitzahl nicht erlaubt',
+                description: error.response.data.error,
+                duration: 8000,
+              });
+            } else if (error?.response?.data?.error === 'No geocoding results found') {
+              toast({
+                variant: 'destructive',
+                title: 'Keine Ergebnisse',
+                description: 'Keine passende Adresse gefunden. Versuchen Sie eine andere Position oder geben Sie die Adresse manuell ein.',
+              });
+            } else if (error?.response?.data?.error === 'Location not in Germany') {
+              toast({
+                variant: 'destructive',
+                title: 'Standort nicht in Deutschland',
+                description: 'Dieser Service ist nur für Adressen in Deutschland verfügbar.',
+              });
+            } else {
+              toast({
+                variant: 'destructive',
+                title: 'Standort-Fehler',
+                description: error?.response?.data?.error || 'Die Adresse konnte nicht vom Standort erkannt werden. Bitte versuchen Sie es erneut.',
+              });
+            }
+          } finally {
+            setLoading(false);
+          }
+        },
+        (error) => {
+          setLoading(false);
+          console.error('Geolocation error:', error);
+          toast({
+            variant: 'destructive',
+            title: 'Standort-Berechtigung',
+            description: 'Die Standort-Berechtigung wurde verweigert. Bitte erlauben Sie den Standortzugriff in Ihren Browsereinstellungen.',
+          });
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }  // Hohe Genauigkeit, 15s Timeout, frische Position
+      );
+    } else {
+      setLoading(false);
+      toast({
+        variant: 'destructive',
+        title: 'Standort nicht verfügbar',
+        description: 'Ihr Browser unterstützt keine Standorterkennung. Bitte geben Sie die Adresse manuell ein.',
+      });
+    }
+  };
+
+  // Helper function to expand range notation (e.g., "1-5" -> [1,2,3,4,5])
+
+
+  const searchAddress = async () => {
+    // VALIDATION: Check required fields before searching
+    const missingFields: string[] = [];
+    if (!address.street || !address.street.trim()) {
+      missingFields.push(t('address.street'));
+    }
+    if (!address.number || !address.number.trim()) {
+      missingFields.push(t('address.number'));
+    }
+    if (!address.postal || !address.postal.trim()) {
+      missingFields.push(t('address.postal'));
+    }
+
+    if (missingFields.length > 0) {
+      toast({
+        variant: 'destructive',
+        title: t('address.missingFields', 'Fehlende Pflichtfelder'),
+        description: t('address.missingFieldsDesc', 'Folgende Felder müssen ausgefüllt werden: {{fields}}', {
+          fields: missingFields.join(', ')
+        }),
+      });
+      return;
+    }
+
+    setSearching(true);
+    
+    try {
+      // Expand ranges and handle multiple house numbers
+      const inputNumbers = address.number
+        .split(',')
+        .map(n => n.trim())
+        .filter(n => n.length > 0);
+      
+      let allHouseNumbers: string[] = [];
+      
+      for (const input of inputNumbers) {
+        if (input.includes('-')) {
+          // Expand range with filters
+          const expanded = expandHouseNumberRange(input, onlyEven, onlyOdd);
+          allHouseNumbers = [...allHouseNumbers, ...expanded];
+        } else {
+          // Regular number
+          allHouseNumbers.push(input);
+        }
+      }
+      
+      // Remove duplicates
+      allHouseNumbers = Array.from(new Set(allHouseNumbers));
+      
+      // ✅ FIX: Send all house numbers as comma-separated string in ONE API call
+      // instead of looping and making separate calls for each number
+      const searchParams: Partial<Address> = {};
+      if (address.street?.trim()) searchParams.street = address.street;
+      // Only include number if we have house numbers
+      if (allHouseNumbers.length > 0) {
+        searchParams.number = allHouseNumbers.join(','); // All numbers at once
+      }
+      if (address.postal?.trim()) searchParams.postal = address.postal;
+      if (address.city?.trim()) searchParams.city = address.city;
+      
+      const response = await addressAPI.searchAddress(searchParams);
+      
+      // Handle new response format with customers and relatedHouseNumbers
+      const customers = response.customers || response || [];
+      const relatedNumbers = response.relatedHouseNumbers || [];
+      
+      // Remove duplicates based on customer ID (in case backend returns duplicates)
+      const uniqueCustomers = Array.from(
+        new Map(customers.map((c: any) => [c.id || c.name, c])).values()
+      );
+      
+      // Update related house numbers state (always show if available)
+      setRelatedHouseNumbers(relatedNumbers);
+      
+      if (uniqueCustomers.length === 0) {
+        toast({
+          title: t('address.searchSuccess'),
+          description: t('results.empty'),
+          category: 'system',
+        });
+      } else {
+        toast({
+          title: t('address.searchSuccess'),
+          description: `${uniqueCustomers.length} ${t('address.searchSuccessDesc')}`,
+          category: 'system',
+        });
+      }
+      
+      // Set the address in parent component so it shows in header
+      onAddressDetected?.({ ...address, onlyEven, onlyOdd });
+      onAddressSearch?.(uniqueCustomers);
+    } catch (error) {
+      console.error('Address search error:', error);
+      toast({
+        variant: 'destructive',
+        title: t('address.searchError'),
+        description: 'Adresse konnte nicht gesucht werden',
+      });
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  // Check if house number contains dash
+  const hasDashInNumber = address.number && address.number.includes('-');
+  const hasAddressData = address.postal || address.street;
+  const isSearchDisabled = searching || !!houseNumberError;
+
+  // Reset even/odd filters when dash is removed
+  useEffect(() => {
+    if (!hasDashInNumber) {
+      setOnlyEven(false);
+      setOnlyOdd(false);
+    }
+  }, [hasDashInNumber]);
+
+  return (
+    <Card data-testid="card-gps-address">
+      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
+        <CardTitle className="text-lg font-semibold">{t('gps.title')}</CardTitle>
+        <Button
+          onClick={detectLocation}
+          disabled={loading}
+          size="default"
+          data-testid="button-detect-location"
+          className="gap-2"
+        >
+          {loading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : detected ? (
+            <Check className="h-4 w-4" />
+          ) : (
+            <MapPin className="h-4 w-4" />
+          )}
+          {loading ? t('gps.detecting') : detected ? t('gps.detected') : t('gps.button')}
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-3 gap-4">
+          <div className="col-span-2 relative">
+            <Label htmlFor="street" className="text-sm font-medium">{t('address.street')}</Label>
+            <div className="relative">
+              <Input
+                id="street"
+                value={address.street}
+                onChange={(e) => setAddress({ ...address, street: e.target.value })}
+                data-testid="input-street"
+                className={`mt-1.5 min-h-11 transition-all duration-300 ${
+                  streetCorrected 
+                    ? 'ring-2 ring-purple-500 ring-offset-2 bg-purple-50 dark:bg-purple-950/20' 
+                    : ''
+                }`}
+              />
+              {/* Magic wand icon animation when street is corrected */}
+              {streetCorrected && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                  <Wand2 
+                    className="h-5 w-5 text-purple-500 animate-bounce" 
+                    style={{
+                      animation: 'bounce 0.6s ease-in-out 3',
+                      filter: 'drop-shadow(0 0 8px rgba(168, 85, 247, 0.6))'
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+          <div>
+            <Label htmlFor="number" className="text-sm font-medium">{t('address.number')}</Label>
+            <Input
+              id="number"
+              value={address.number}
+              onChange={(e) => {
+                setAddress({ ...address, number: e.target.value });
+                setRelatedHouseNumbers([]); // Clear hint when user changes house number
+              }}
+              data-testid="input-number"
+              className={`mt-1.5 min-h-11 ${houseNumberError ? 'border-red-500' : ''}`}
+              placeholder="z.B. 1,2,3 oder 1-5"
+            />
+            {/* Error message for invalid house number */}
+            {houseNumberError && (
+              <p className="text-xs text-red-500 mt-1">
+                {houseNumberError}
+              </p>
+            )}
+            {/* Plus/Minus buttons directly under house number */}
+            {canShowPlusMinus && (
+              <div className="flex gap-2 mt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={decrementHouseNumber}
+                  disabled={parseInt(address.number, 10) <= 1}
+                  className="h-11 w-full"
+                  title="Hausnummer verringern"
+                >
+                  <Minus className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={incrementHouseNumber}
+                  className="h-11 w-full"
+                  title="Hausnummer erhöhen"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+            {hasDashInNumber && (
+              <div className="mt-3 space-y-2 p-3 bg-muted rounded-md">
+                <p className="text-xs text-muted-foreground mb-2">
+                  Bereich wird automatisch erweitert (z.B. 1-5 → 1,2,3,4,5)
+                </p>
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="onlyEven"
+                      checked={onlyEven}
+                      onCheckedChange={(checked) => {
+                        setOnlyEven(!!checked);
+                        if (checked) setOnlyOdd(false); // Uncheck odd when even is checked
+                      }}
+                      data-testid="checkbox-even"
+                    />
+                    <Label htmlFor="onlyEven" className="text-sm cursor-pointer">
+                      Nur gerade Nummern
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="onlyOdd"
+                      checked={onlyOdd}
+                      onCheckedChange={(checked) => {
+                        setOnlyOdd(!!checked);
+                        if (checked) setOnlyEven(false); // Uncheck even when odd is checked
+                      }}
+                      data-testid="checkbox-odd"
+                    />
+                    <Label htmlFor="onlyOdd" className="text-sm cursor-pointer">
+                      Nur ungerade Nummern
+                    </Label>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {/* Postal code field - full width */}
+        <div>
+          <Label htmlFor="postal" className="text-sm font-medium">{t('address.postal')}</Label>
+          <Input
+            id="postal"
+            value={address.postal}
+            onChange={(e) => setAddress({ ...address, postal: e.target.value })}
+            data-testid="input-postal"
+            className="mt-1.5 min-h-11"
+          />
+        </div>
+
+        {/* Related house numbers hint */}
+        {relatedHouseNumbers.length > 0 && (
+          <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+            <p className="text-sm text-amber-800 dark:text-amber-200 font-medium mb-1">
+              💡 Hinweis: Weitere Hausnummern-Varianten gefunden
+            </p>
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              Zu <strong>{address.number}</strong> gibt es auch Kundendaten unter: <strong>{relatedHouseNumbers.join(', ')}</strong>
+            </p>
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+              Falls du nicht alle erwarteten Anwohner findest, schau auch bei diesen Hausnummern-Varianten nach.
+            </p>
+          </div>
+        )}
+
+        {hasAddressData && (
+          <Button
+            onClick={searchAddress}
+            disabled={isSearchDisabled}
+            size="lg"
+            variant="outline"
+            data-testid="button-search-address"
+            className="w-full min-h-12 gap-2"
+          >
+            {searching ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Search className="h-4 w-4" />
+            )}
+            {searching ? t('address.searching') : t('action.searchAddress')}
+          </Button>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

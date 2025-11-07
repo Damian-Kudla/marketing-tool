@@ -302,92 +302,39 @@ export class GoogleSheetsLoggingService {
     }
   }
 
-  // Insert rows chronologically by reading existing data, merging, sorting, and rewriting
+  // Insert rows chronologically - OPTIMIZED VERSION
+  // For FollowMee sync: Simply appends to end (FollowMee data is already sorted)
+  // This avoids reading/rewriting entire sheets which caused timeouts
   static async batchInsertChronologically(worksheetName: string, newRows: any[][]): Promise<void> {
     if (!sheetsEnabled || !sheetsClient) {
       throw new Error('Google Sheets API not available');
     }
 
+    if (newRows.length === 0) {
+      console.log(`[GoogleSheetsLoggingService] No rows to insert for ${worksheetName}`);
+      return;
+    }
+
     try {
-      console.log(`[GoogleSheetsLoggingService] Reading existing data from ${worksheetName}...`);
-      
-      // Read all existing rows (skip header row A1:J1)
-      let response = await sheetsClient.spreadsheets.values.get({
+      console.log(`[GoogleSheetsLoggingService] Appending ${newRows.length} rows to ${worksheetName}...`);
+
+      // OPTIMIZED APPROACH: Simply append to the end
+      // FollowMee data is already sorted chronologically before calling this method
+      // This avoids the expensive read-all-merge-sort-rewrite cycle
+
+      await sheetsClient.spreadsheets.values.append({
         spreadsheetId: this.LOG_SHEET_ID,
-        range: `${worksheetName}!A2:J`,
+        range: `${worksheetName}!A2:J`, // Start from A2 (after header)
+        valueInputOption: 'RAW',
+        insertDataOption: 'INSERT_ROWS',
+        resource: {
+          values: newRows,
+        },
       });
 
-      let existingRows = response.data.values || [];
-      
-      // Fallback: If no rows returned (likely API limit on large sheets), read last 10000 rows
-      if (existingRows.length === 0) {
-        console.log(`[GoogleSheetsLoggingService] ⚠️ No rows returned, trying to read last 10000 rows as fallback...`);
-        response = await sheetsClient.spreadsheets.values.get({
-          spreadsheetId: this.LOG_SHEET_ID,
-          range: `${worksheetName}!A2:J10001`, // Last 10000 rows
-        });
-        existingRows = response.data.values || [];
-        
-        if (existingRows.length > 0) {
-          console.log(`[GoogleSheetsLoggingService] ⚠️ Fallback successful: Found ${existingRows.length} rows (showing last 10000 max)`);
-          console.log(`[GoogleSheetsLoggingService] ⚠️ WARNING: This worksheet may have more data that wasn't loaded!`);
-        }
-      }
-      
-      console.log(`[GoogleSheetsLoggingService] Found ${existingRows.length} existing rows`);
-
-      // Filter out duplicates: Check if new rows already exist in existing data
-      // We identify duplicates by comparing: Timestamp (col 0), Username (col 2), and Data (col 9)
-      const existingSet = new Set(
-        existingRows.map((row: any) => `${row[0]}_${row[2]}_${row[9]}`)
-      );
-      
-      const uniqueNewRows = newRows.filter((row: any) => {
-        const key = `${row[0]}_${row[2]}_${row[9]}`;
-        return !existingSet.has(key);
-      });
-      
-      const duplicatesCount = newRows.length - uniqueNewRows.length;
-      if (duplicatesCount > 0) {
-        console.log(`[GoogleSheetsLoggingService] ⚠️ Filtered out ${duplicatesCount} duplicate rows`);
-      }
-
-      // Merge existing and unique new rows
-      const allRows = [...existingRows, ...uniqueNewRows];
-      console.log(`[GoogleSheetsLoggingService] Total rows after merge: ${allRows.length} (${uniqueNewRows.length} new, ${existingRows.length} existing)`);
-
-      // Sort by timestamp (column A, index 0)
-      allRows.sort((a, b) => {
-        const timeA = new Date(a[0] || 0).getTime();
-        const timeB = new Date(b[0] || 0).getTime();
-        return timeA - timeB;
-      });
-
-      console.log(`[GoogleSheetsLoggingService] Sorted ${allRows.length} rows chronologically`);
-
-      // Clear existing data (keep header)
-      await sheetsClient.spreadsheets.values.clear({
-        spreadsheetId: this.LOG_SHEET_ID,
-        range: `${worksheetName}!A2:J`,
-      });
-
-      console.log(`[GoogleSheetsLoggingService] Cleared existing data`);
-
-      // Write all rows back in sorted order
-      if (allRows.length > 0) {
-        await sheetsClient.spreadsheets.values.update({
-          spreadsheetId: this.LOG_SHEET_ID,
-          range: `${worksheetName}!A2:J`,
-          valueInputOption: 'RAW',
-          resource: {
-            values: allRows,
-          },
-        });
-
-        console.log(`[GoogleSheetsLoggingService] ✅ Inserted ${newRows.length} rows chronologically (total: ${allRows.length} rows)`);
-      }
+      console.log(`[GoogleSheetsLoggingService] ✅ Appended ${newRows.length} rows to ${worksheetName}`);
     } catch (error) {
-      console.error(`[GoogleSheetsLoggingService] Failed to insert chronologically into ${worksheetName}:`, error);
+      console.error(`[GoogleSheetsLoggingService] Failed to append rows to ${worksheetName}:`, error);
       throw error;
     }
   }

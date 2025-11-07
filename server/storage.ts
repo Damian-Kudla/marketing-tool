@@ -166,11 +166,17 @@ export class GoogleSheetsStorage implements IStorage {
    * - matchesHouseNumber("1-3", "2") → true
    */
   private matchesHouseNumber(searchNumber: string, customerNumber: string): boolean {
-    const searchExpanded = this.expandHouseNumberRange(searchNumber);
-    const customerExpanded = this.expandHouseNumberRange(customerNumber);
-    
-    // Check if ANY number overlaps
-    return searchExpanded.some(s => customerExpanded.includes(s));
+    try {
+      const searchExpanded = this.expandHouseNumberRange(searchNumber);
+      const customerExpanded = this.expandHouseNumberRange(customerNumber);
+
+      // Check if ANY number overlaps
+      return searchExpanded.some(s => customerExpanded.includes(s));
+    } catch (error) {
+      // If customer's house number is invalid (e.g., "26- 26A"), log warning and skip
+      console.warn(`[Storage] Invalid house number in database: "${customerNumber}" - skipping. Error: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    }
   }
 
   /**

@@ -214,9 +214,10 @@ class FollowMeeApiService {
     try {
       // First, fetch device list to see all available devices
       await this.fetchDeviceList();
-      
-      // Fetch last 24 hours of data (whole day)
-      const response = await this.fetchHistoryForAllDevices(24);
+
+      // Fetch last 26 hours of data to account for timezone differences
+      // Server might be UTC while data is in UTC+1/UTC+2 (Germany)
+      const response = await this.fetchHistoryForAllDevices(26);
       
       if (!response.Data || response.Data.length === 0) {
         console.log('[FollowMee] No new location data');
@@ -254,14 +255,23 @@ class FollowMeeApiService {
 
         console.log(`[FollowMee] Processing ${deviceLocations.length} locations for user ${mapping.username}`);
 
-        // Filter out already processed locations
+        // Filter: Only today's data (in German time UTC+1) and not already processed
+        // Get start of today in German time (UTC+1)
+        const now = new Date();
+        const todayGermany = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Berlin' }));
+        todayGermany.setHours(0, 0, 0, 0);
+
         const newLocations = deviceLocations.filter(loc => {
           const locationId = this.createLocationId(loc);
-          return !this.isLocationProcessed(mapping.userId, locationId);
+          const locationDate = new Date(loc.Date);
+
+          // Filter out already processed AND only keep today's data (German time)
+          return !this.isLocationProcessed(mapping.userId, locationId) &&
+                 locationDate >= todayGermany;
         });
 
         if (newLocations.length === 0) {
-          console.log(`[FollowMee] No new locations for user ${mapping.username} (all already processed)`);
+          console.log(`[FollowMee] No new locations for user ${mapping.username} (all already processed or not from today)`);
           continue;
         }
 

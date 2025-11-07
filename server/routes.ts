@@ -686,37 +686,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/search-address", requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
-      const address = addressSchema.partial().parse(req.body);
-      
+      console.log('[API] /api/search-address - Request body:', JSON.stringify(req.body));
+
+      // Pre-process request body: convert empty strings to undefined BEFORE validation
+      // This prevents .min(1) validation from failing on empty strings
+      const cleanedBody = {
+        street: req.body.street?.trim() || undefined,
+        number: req.body.number?.trim() || undefined,
+        city: req.body.city?.trim() || undefined,
+        postal: req.body.postal?.trim() || undefined,
+        country: req.body.country?.trim() || undefined,
+      };
+
+      // Now validate with partial schema (all fields optional)
+      const address = addressSchema.partial().parse(cleanedBody);
+      console.log('[API] /api/search-address - Parsed address:', JSON.stringify(address));
+
       // Use the storage method with fuzzy matching
       const matches = await storage.getCustomersByAddress(address);
-      
+
       // Always find related house numbers (regardless of whether customers were found)
       let relatedHouseNumbers: string[] = [];
       if (address.number) {
         relatedHouseNumbers = await storage.findRelatedHouseNumbers(address);
       }
-      
+
       // Log the address search WITH existing customers in the dedicated column
       const addressString = address ? `${address.street} ${address.number}, ${address.city} ${address.postal}`.trim() : undefined;
       await logUserActivityWithRetry(
-        req, 
-        addressString, 
+        req,
+        addressString,
         undefined, // No newProspects for address search
         matches    // Pass existing customers to log in dedicated column
       );
-      
+
       // Track action in daily data store for live dashboard
       if (req.userId && req.username) {
         dailyDataStore.addAction(req.userId, req.username, 'search_address');
       }
-      
-      res.json({ 
+
+      res.json({
         customers: matches,
         relatedHouseNumbers: relatedHouseNumbers.length > 0 ? relatedHouseNumbers : undefined
       });
     } catch (error) {
-      console.error("Address search error:", error);
+      console.error("[API] /api/search-address error:", error);
+      // Log more details about the error
+      if (error instanceof Error) {
+        console.error("[API] Error message:", error.message);
+        console.error("[API] Error stack:", error.stack);
+      }
       res.status(400).json({ error: "Invalid request" });
     }
   });
