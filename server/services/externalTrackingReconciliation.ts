@@ -5,7 +5,8 @@ import { getBerlinTimestamp } from '../utils/timezone';
 import { initDB } from './sqliteLogService';
 import path from 'path';
 import fs from 'fs/promises';
-import { uploadDatabase } from '../utils/googleDrive';
+// TODO: Implement uploadDatabase function in utils/googleDrive
+// import { uploadDatabase } from '../utils/googleDrive';
 
 /**
  * External Tracking Reconciliation Service
@@ -171,6 +172,8 @@ class ExternalTrackingReconciliationService {
           }
 
           // 7. Upload geänderte SQLite-DBs zu Google Drive
+          // TODO: Implement uploadDatabase function
+          /*
           for (const date of modifiedDatabases) {
             const dbPath = path.join(process.cwd(), 'databases', `daily_${date}.db`);
             const exists = await fs.access(dbPath).then(() => true).catch(() => false);
@@ -189,6 +192,8 @@ class ExternalTrackingReconciliationService {
               }
             }
           }
+          */
+          console.log(`[ExternalTrackingReconciliation] Skipped database upload (not implemented) for ${modifiedDatabases.size} dates`);
 
           // 8. Lösche das Tabellenblatt nach erfolgreicher Zuordnung
           await this.deleteWorksheet(worksheet.sheetId);
