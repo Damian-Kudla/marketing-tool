@@ -39,7 +39,8 @@ router.post('/gps', async (req: AuthenticatedRequest, res: Response) => {
         latitude: gps.latitude,
         longitude: gps.longitude,
         accuracy: gps.accuracy,
-        timestamp
+        timestamp,
+        source: 'native' // Mark as native source for historical reconstruction
       }
     );
 

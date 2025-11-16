@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { googleSheetsService } from '../services/googleSheets';
 import { AuthService } from '../middleware/auth';
 import { logAuthAttemptWithRetry } from '../services/enhancedLogging';
+import { getBerlinTimestamp } from '../utils/timezone';
 
 const router = Router();
 
@@ -9,7 +10,7 @@ const router = Router();
 router.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({ 
     status: 'ok', 
-    timestamp: new Date().toISOString(),
+    timestamp: getBerlinTimestamp(),
     service: 'energy-scan-capture-api'
   });
 });
@@ -65,19 +66,19 @@ function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: number } {
 // Login route
 router.post('/login', async (req: Request, res: Response) => {
   const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
-  
+
   // Check rate limit
   const rateLimitResult = checkRateLimit(clientIP);
   if (!rateLimitResult.allowed) {
     await logAuthAttemptWithRetry(clientIP, false, undefined, undefined, 'rate_limit_exceeded');
-    
+
     return res.status(429).json({
       error: 'Too many login attempts. Please try again later.',
       retryAfter: rateLimitResult.retryAfter || 900
     });
   }
 
-  const { password } = req.body;
+  const { password, deviceInfo } = req.body;
 
   // Validate input
   if (!password || typeof password !== 'string' || password.trim().length === 0) {
@@ -97,16 +98,21 @@ router.post('/login', async (req: Request, res: Response) => {
     // Check if user is admin
     const isAdmin = await googleSheetsService.isUserAdmin(password.trim());
 
-    // Generate session token with username and admin status
-    const sessionToken = AuthService.generateSessionToken(password.trim(), username, isAdmin);
+    // Log device info if provided
+    if (deviceInfo) {
+      console.log(`[Auth] Login from device: ${deviceInfo.deviceName} (${deviceInfo.deviceId})`);
+    }
+
+    // Generate session token with username, admin status, and device info
+    const sessionToken = AuthService.generateSessionToken(password.trim(), username, isAdmin, deviceInfo);
     const userId = AuthService.getUserIdFromPassword(password.trim());
 
-    // Set secure HTTP-only cookie
+    // Set secure HTTP-only cookie with 1 month expiration
     res.cookie('authToken', sessionToken, {
       httpOnly: true,
       secure: false, // Always false for development to work with http://localhost
       sameSite: 'lax', // Changed from 'strict' to 'lax' for better compatibility
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days (1 month)
       path: '/'
     });
 

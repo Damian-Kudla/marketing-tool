@@ -2,6 +2,7 @@ import { google } from 'googleapis';
 import type { LocationData } from '../../shared/externalTrackingTypes';
 import { googleSheetsService } from './googleSheets';
 import { batchLogger } from './batchLogger';
+import { getBerlinDate, getBerlinTimestamp } from '../utils/timezone';
 
 /**
  * External Tracking Service
@@ -122,6 +123,8 @@ class ExternalTrackingService {
           'Device Name',
           'Device Model',
           'OS Version',
+          'Device Unique ID',         // NEU: Eindeutige Geräte-ID
+          'Device Serial Number',     // NEU: Hardware-Seriennummer
           'Is Connected',
           'Connection Type',
           'Received At' // Server-Zeitstempel
@@ -129,7 +132,7 @@ class ExternalTrackingService {
 
         await this.sheetsClient.spreadsheets.values.update({
           spreadsheetId: this.SHEET_ID,
-          range: `'${normalizedUserName}'!A1:R1`,
+          range: `'${normalizedUserName}'!A1:T1`,
           valueInputOption: 'RAW',
           resource: {
             values: [headers]
@@ -158,9 +161,12 @@ class ExternalTrackingService {
         // Nutzer gefunden - schreibe in dessen Log
         console.log(`[ExternalTrackingService] Found user ${user.username} for tracking name "${locationData.userName}"`);
 
+        // ✅ Verwende GPS-Timestamp aus dem Request-Body, NICHT Server-Zeit!
+        const gpsTimestamp = getBerlinTimestamp(new Date(locationData.timestamp));
+        
         // Erstelle Log-Eintrag mit GPS-Daten im data-Feld
         const logEntry = {
-          timestamp: new Date().toISOString(),
+          timestamp: gpsTimestamp, // ✅ GPS-Zeit verwenden
           userId: user.userId,
           username: user.username,
           endpoint: '/api/external-tracking/location',
@@ -170,13 +176,14 @@ class ExternalTrackingService {
             latitude: locationData.latitude,
             longitude: locationData.longitude,
             timestamp: locationData.timestamp,
-            source: 'external_app' // Markierung für spätere Auswertung
+            source: 'external_app', // Markierung für spätere Auswertung
+            receivedAt: getBerlinTimestamp() // Optional: Server-Empfangszeit
           }
         };
 
         // Schreibe in Nutzer-Log über batchLogger
         batchLogger.addUserActivity(logEntry);
-        console.log(`[ExternalTrackingService] Added tracking data to user log for ${user.username}`);
+        console.log(`[ExternalTrackingService] Added tracking data to user log for ${user.username} with GPS timestamp ${gpsTimestamp}`);
       } else {
         // Nutzer nicht gefunden - Fallback: schreibe in Google Sheet
         console.log(`[ExternalTrackingService] No user found for tracking name "${locationData.userName}" - writing to Google Sheet as fallback`);
@@ -203,7 +210,7 @@ class ExternalTrackingService {
       const sheetName = await this.ensureUserSheetExists(locationData.userName);
 
       // Bereite die Daten-Zeile vor
-      const receivedAt = new Date().toISOString();
+      const receivedAt = getBerlinTimestamp();
       const rowData = [
         locationData.timestamp,
         locationData.latitude,
@@ -220,6 +227,8 @@ class ExternalTrackingService {
         locationData.deviceName ?? '',
         locationData.deviceModel ?? '',
         locationData.osVersion ?? '',
+        locationData.deviceUniqueId ?? '',      // NEU: Abwärtskompatibel
+        locationData.deviceSerialNumber ?? '',  // NEU: Abwärtskompatibel
         locationData.isConnected,
         locationData.connectionType ?? '',
         receivedAt
@@ -228,7 +237,7 @@ class ExternalTrackingService {
       // Füge die Daten an das Ende des Sheets an
       await this.sheetsClient.spreadsheets.values.append({
         spreadsheetId: this.SHEET_ID,
-        range: `'${sheetName}'!A:R`,
+        range: `'${sheetName}'!A:T`,
         valueInputOption: 'RAW',
         resource: {
           values: [rowData]
@@ -280,7 +289,9 @@ class ExternalTrackingService {
           typeof item.longitude === 'number'
         );
 
-      console.log(`[ExternalTrackingService] Found ${externalTrackingLogs.length} external tracking logs for ${username} on ${date.toISOString().split('T')[0]}`);
+      console.log(
+        `[ExternalTrackingService] Found ${externalTrackingLogs.length} external tracking logs for ${username} on ${getBerlinDate(date)}`
+      );
       return externalTrackingLogs;
     } catch (error) {
       console.error('[ExternalTrackingService] Error loading external tracking data from user log:', error);

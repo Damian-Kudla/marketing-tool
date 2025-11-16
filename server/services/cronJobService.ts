@@ -1,5 +1,6 @@
 import { retryFailedLogs } from './enhancedLogging';
 import { generateDailyReport } from './reportGenerator';
+import { getBerlinDate, getBerlinTimestamp, getNextBerlinTime } from '../utils/timezone';
 
 class CronJobService {
   private retryInterval: NodeJS.Timeout | null = null;
@@ -36,26 +37,20 @@ class CronJobService {
   }
 
   /**
-   * Schedule daily report generation at 20:00
+   * Schedule daily report generation at 20:00 CET/CEST
    */
   private scheduleDailyReport() {
     const now = new Date();
-    const target = new Date(now);
-    target.setHours(20, 0, 0, 0); // 20:00 today
+    const target = getNextBerlinTime(20, 0, 0, now);
+    const msUntilTarget = Math.max(target.getTime() - now.getTime(), 0);
 
-    // If it's already past 20:00 today, schedule for tomorrow
-    if (target <= now) {
-      target.setDate(target.getDate() + 1);
-    }
-
-    const msUntilTarget = target.getTime() - now.getTime();
-
-    console.log(`[CronJobService] Daily report scheduled for ${target.toLocaleString('de-DE')} (in ${Math.round(msUntilTarget / 1000 / 60)} minutes)`);
+    console.log(
+      `[CronJobService] Daily report scheduled for ${getBerlinTimestamp(target)} (in ${Math.round(msUntilTarget / 60000)} minutes)`
+    );
 
     this.dailyReportTimeout = setTimeout(() => {
       this.runDailyReport();
-      
-      // Reschedule for next day (24 hours from now)
+
       setInterval(() => {
         this.runDailyReport();
       }, 24 * 60 * 60 * 1000);
@@ -74,7 +69,7 @@ class CronJobService {
     
     /* Deaktiviert - Reports werden on-demand generiert
     try {
-      const date = new Date().toISOString().split('T')[0];
+      const date = getBerlinDate();
       const reportPath = await generateDailyReport(date);
       console.log(`[CronJobService] Daily report generated successfully: ${reportPath}`);
     } catch (error: any) {

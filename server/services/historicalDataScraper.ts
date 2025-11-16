@@ -8,6 +8,7 @@
 import { google, sheets_v4 } from 'googleapis';
 import crypto from 'crypto';
 import type { DailyUserData, GPSCoordinates, ActionLog, DeviceStatus } from '../../shared/trackingTypes';
+import { getBerlinDate } from '../utils/timezone';
 
 // Google Sheets Configuration - Uses individual user worksheets in LOG_SHEET_ID
 const LOG_SHEET_ID = '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw'; // Same as GoogleSheetsLoggingService
@@ -473,7 +474,7 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
   const data: DailyUserData = {
     userId,
     username,
-    date: new Date().toISOString().split('T')[0], // Wird vom ersten Log überschrieben
+    date: getBerlinDate(), // Wird vom ersten Log überschrieben
     gpsPoints: [],
     totalDistance: 0,
     uniqueAddresses: new Set(),
@@ -783,7 +784,7 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
 
   // Set date from first log
   if (logs.length > 0) {
-    data.date = logs[0].timestamp.toISOString().split('T')[0];
+    data.date = getBerlinDate(logs[0].timestamp);
   }
 
   return data;

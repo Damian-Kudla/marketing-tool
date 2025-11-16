@@ -152,29 +152,24 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
   ]);
 
   const detectLocation = async () => {
+    console.log('[GPSAddressForm] detectLocation called');
     setLoading(true);
     setDetected(false);
-    
-    if ('geolocation' in navigator) {
-      // Permissions-Check vorab
-      const permission = await navigator.permissions.query({ name: 'geolocation' });
-      if (permission.state === 'denied') {
-        toast({
-          variant: 'destructive',
-          title: 'Keine Standortberechtigung',
-          description: 'Die Standort-Berechtigung wurde verweigert. Bitte erlauben Sie den Standortzugriff in Ihren Browsereinstellungen, um diese Funktion zu nutzen.',
-        });
-        setLoading(false);
-        return;
-      }
 
+    if ('geolocation' in navigator) {
+      console.log('[GPSAddressForm] Geolocation supported, requesting position...');
+      // Try to get position directly - let browser handle permission prompt
+      // Don't pre-check permissions as it prevents the browser from showing the permission dialog
       navigator.geolocation.getCurrentPosition(
         async (position) => {
+          console.log('[GPSAddressForm] Position received:', position.coords);
           try {
+            console.log('[GPSAddressForm] Calling geocodeAPI.reverseGeocode...');
             const addressData: Partial<Address> = await geocodeAPI.reverseGeocode(
               position.coords.latitude,
               position.coords.longitude
             );
+            console.log('[GPSAddressForm] Geocoding successful:', addressData);
 
             // Setze immer alle verfügbaren Felder mit Defaults für fehlende Werte
             const completeAddress: Address = {
@@ -240,16 +235,38 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
         },
         (error) => {
           setLoading(false);
-          console.error('Geolocation error:', error);
+          console.error('[GPSAddressForm] Geolocation error:', error);
+          console.error('[GPSAddressForm] Error code:', error.code, 'Message:', error.message);
+
+          // Handle different error codes
+          let title = 'Standort-Fehler';
+          let description = 'Der Standort konnte nicht ermittelt werden.';
+
+          if (error.code === 1) { // PERMISSION_DENIED
+            title = 'Standort-Berechtigung verweigert';
+            description = 'Bitte erlauben Sie den Standortzugriff in Ihren Browsereinstellungen.';
+          } else if (error.code === 2) { // POSITION_UNAVAILABLE
+            title = 'Standort nicht verfügbar';
+            description = 'Ihr Gerät konnte Ihre Position nicht bestimmen. Bitte geben Sie die Adresse manuell ein.';
+          } else if (error.code === 3) { // TIMEOUT
+            title = 'Standort-Timeout';
+            description = 'Die Standortermittlung dauert zu lange. Bitte versuchen Sie es erneut oder geben Sie die Adresse manuell ein.';
+          }
+
           toast({
             variant: 'destructive',
-            title: 'Standort-Berechtigung',
-            description: 'Die Standort-Berechtigung wurde verweigert. Bitte erlauben Sie den Standortzugriff in Ihren Browsereinstellungen.',
+            title,
+            description,
           });
         },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }  // Hohe Genauigkeit, 15s Timeout, frische Position
+        {
+          enableHighAccuracy: false,  // Disable GPS - use network-based location (faster on desktop)
+          timeout: 30000,              // 30 seconds timeout
+          maximumAge: 60000            // Allow cached position up to 1 minute old
+        }
       );
     } else {
+      console.log('[GPSAddressForm] Geolocation NOT supported');
       setLoading(false);
       toast({
         variant: 'destructive',

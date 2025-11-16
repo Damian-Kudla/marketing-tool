@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer, createLogger } from "vite";
+import type { UserConfig } from "vite";
 import { type Server } from "http";
 import viteConfig from "../vite.config";
 
@@ -24,15 +25,16 @@ export function log(message: string, source = "express") {
 }
 
 export async function setupVite(app: Express, server: Server) {
-  const resolvedViteConfig =
+  const rawViteConfig =
     typeof viteConfig === "function"
       ? await viteConfig({ mode: app.get("env") ?? "development", command: "serve" })
       : viteConfig;
 
-  const { server: userServerConfig, ...restViteConfig } = resolvedViteConfig ?? {};
+  const resolvedViteConfig = (rawViteConfig ?? {}) as UserConfig;
+  const userServerConfig = resolvedViteConfig.server;
 
   const vite = await createViteServer({
-    ...restViteConfig,
+    ...resolvedViteConfig,
     configFile: false,
     customLogger: {
       ...viteLogger,

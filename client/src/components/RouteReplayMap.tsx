@@ -1,6 +1,6 @@
 /**
  * Route Replay Map Component
- * 
+ *
  * Zeigt die Route eines Mitarbeiters mit Animation:
  * - Statische Anzeige aller GPS-Punkte
  * - Animierte Route-Wiedergabe (8 Stunden in 5 Sekunden)
@@ -8,22 +8,43 @@
  * - Zeitstempel während Animation
  */
 
-import { useState, useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap, ZoomControl } from 'react-leaflet';
-import L from 'leaflet';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Play, Pause, RotateCcw, Zap, MapPin, ArrowUp } from 'lucide-react';
-import 'leaflet/dist/leaflet.css';
+import { Play, Pause, RotateCcw, Zap, MapPin, ArrowUp, ChevronLeft, ChevronRight } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
 interface GPSPoint {
   latitude: number;
   longitude: number;
   accuracy: number;
   timestamp: number;
-  source?: 'native' | 'followmee' | 'external';
+  source?: 'native' | 'followmee' | 'external' | 'external_app';
+}
+
+interface SnapPoint {
+  latitude: number;
+  longitude: number;
+  timestamp: number;
+  source?: 'native' | 'followmee' | 'external' | 'external_app';
+  placeId?: string;
+}
+
+interface SnapSegment {
+  segmentId: string;
+  startTimestamp: number;
+  endTimestamp: number;
+  distanceMeters: number;
+  points: SnapPoint[];
+}
+
+interface GapSegment {
+  id: string;
+  start: GPSPoint;
+  end: GPSPoint;
+  distanceMeters: number;
 }
 
 interface RouteReplayMapProps {
@@ -31,125 +52,85 @@ interface RouteReplayMapProps {
   gpsPoints: GPSPoint[];
   photoTimestamps?: number[];
   date: string;
+  userId?: string;
+  source?: 'all' | 'native' | 'followmee' | 'external' | 'external_app';
 }
 
-// Custom marker for animated position
-const createAnimatedMarker = () => {
-  return L.divIcon({
-    className: 'custom-marker',
-    html: `
-      <div style="
-        background-color: #3b82f6;
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        border: 3px solid white;
-        box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
-        animation: pulse 1.5s ease-in-out infinite;
-      "></div>
-      <style>
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.2); }
-        }
-      </style>
-    `,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
-  });
+const MORNING_CUTOFF_HOUR = 6;
+const GAP_DISTANCE_THRESHOLD_METERS = 50;
+const SNAP_SEGMENT_COST_CENT_PER_CALL = 0.5;
+
+function buildRouteSignature(points: GPSPoint[]): string {
+  if (!points || points.length === 0) return 'empty';
+  const first = points[0];
+  const last = points[points.length - 1];
+  return `${first.timestamp}-${last.timestamp}-${points.length}`;
+}
+
+const SOURCE_COLORS: Record<'native' | 'followmee' | 'external' | 'external_app', string> = {
+  native: '#3b82f6',      // Blau für native GPS
+  followmee: '#000000',   // Schwarz für FollowMee
+  external: '#ef4444',    // Rot für externe Quellen
+  external_app: '#ef4444', // Alias für externe Quellen (same as external)
 };
 
-// Start marker (green)
-const createStartMarker = () => {
-  return L.divIcon({
-    className: 'custom-marker',
-    html: `
-      <div style="
-        background-color: #22c55e;
-        width: 25px;
-        height: 25px;
-        border-radius: 50%;
-        border: 3px solid white;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: bold;
-        color: white;
-      ">S</div>
-    `,
-    iconSize: [25, 25],
-    iconAnchor: [12, 12],
-  });
+const SNAP_SEGMENT_COLOR = '#10b981';
+
+let googleMapsLoaderPromise: Promise<void> | null = null;
+
+async function loadGoogleMapsApi(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  if (window.google?.maps) return;
+
+  if (!googleMapsLoaderPromise) {
+    googleMapsLoaderPromise = (async () => {
+      const response = await fetch('/api/admin/google-maps-config', { credentials: 'same-origin' });
+      if (!response.ok) {
+        throw new Error('Failed to load Google Maps config');
+      }
+
+      const { apiKey } = await response.json();
+      if (!apiKey) {
+        throw new Error('Google Maps API key missing');
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=geometry`;
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Google Maps script failed to load'));
+        document.head.appendChild(script);
+      });
+    })();
+  }
+
+  await googleMapsLoaderPromise;
+}
+
+interface MapOverlays {
+  fullRoutes: google.maps.Polyline[];
+  animatedRoutes: google.maps.Polyline[];
+  snapRoutes: google.maps.Polyline[];
+  startMarker: google.maps.Marker | null;
+  endMarker: google.maps.Marker | null;
+  currentMarker: google.maps.Marker | null;
+  photoMarker: google.maps.Marker | null;
+  gpsMarkers: google.maps.Marker[];
+}
+
+const DEFAULT_MAP_CENTER = { lat: 51.1657, lng: 10.4515 };
+
+const clearPolylineList = (polylines: google.maps.Polyline[]) => {
+  polylines.forEach(polyline => polyline.setMap(null));
+  polylines.length = 0;
 };
 
-// End marker (red)
-const createEndMarker = () => {
-  return L.divIcon({
-    className: 'custom-marker',
-    html: `
-      <div style="
-        background-color: #ef4444;
-        width: 25px;
-        height: 25px;
-        border-radius: 50%;
-        border: 3px solid white;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: bold;
-        color: white;
-      ">E</div>
-    `,
-    iconSize: [25, 25],
-    iconAnchor: [12, 12],
-  });
-};
-
-// Photo flash marker
-const createPhotoFlashMarker = () => {
-  return L.divIcon({
-    className: 'custom-marker',
-    html: `
-      <div style="
-        font-size: 35px;
-        filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.8));
-        animation: flash-pulse 1s ease-in-out;
-      ">⚡</div>
-      <style>
-        @keyframes flash-pulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.7; transform: scale(1.2); }
-        }
-      </style>
-    `,
-    iconSize: [35, 35],
-    iconAnchor: [17, 17],
-  });
-};
-
-// Small clickable marker for GPS points with source-based coloring
-const createGPSPointMarker = (source?: 'native' | 'followmee' | 'external') => {
-  // Native: Blue (#3b82f6), FollowMee: Black (#000000), External: Red (#ef4444)
-  const color = source === 'followmee' ? '#000000' : source === 'external' ? '#ef4444' : '#3b82f6';
-
-  return L.divIcon({
-    className: 'custom-marker',
-    html: `
-      <div style="
-        background-color: ${color};
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        border: 2px solid white;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-        cursor: pointer;
-      "></div>
-    `,
-    iconSize: [8, 8],
-    iconAnchor: [4, 4],
-  });
+const removeMarker = (marker: google.maps.Marker | null) => {
+  if (marker) {
+    marker.setMap(null);
+  }
+  return null;
 };
 
 // Generate Google Maps URL with proper pin marker
@@ -161,17 +142,21 @@ const getGoogleMapsUrl = (lat: number, lng: number): string => {
 
 // Calculate distance between two GPS points in meters
 function calculateDistance(point1: GPSPoint, point2: GPSPoint): number {
-  const R = 6371e3; // Earth's radius in meters
-  const φ1 = (point1.latitude * Math.PI) / 180;
-  const φ2 = (point2.latitude * Math.PI) / 180;
-  const Δφ = ((point2.latitude - point1.latitude) * Math.PI) / 180;
-  const Δλ = ((point2.longitude - point1.longitude) * Math.PI) / 180;
+  const earthRadiusMeters = 6371e3;
+  const lat1 = (point1.latitude * Math.PI) / 180;
+  const lat2 = (point2.latitude * Math.PI) / 180;
+  const deltaLat = ((point2.latitude - point1.latitude) * Math.PI) / 180;
+  const deltaLng = ((point2.longitude - point1.longitude) * Math.PI) / 180;
 
-  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const sinLat = Math.sin(deltaLat / 2);
+  const sinLng = Math.sin(deltaLng / 2);
+
+  const a =
+    sinLat * sinLat +
+    Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
-  return R * c; // Distance in meters
+  return earthRadiusMeters * c;
 }
 
 // Interface for stationary period
@@ -243,13 +228,10 @@ function calculateBounds(points: GPSPoint[]): { minLat: number; maxLat: number; 
   return { minLat, maxLat, minLng, maxLng };
 }
 
-// Calculate appropriate zoom level to fit bounds within viewport
+// Calculate appropriate zoom level to fit bounds within viewport (Google Maps optimized)
 function calculateZoomForBounds(bounds: { minLat: number; maxLat: number; minLng: number; maxLng: number }, viewportWidth: number, viewportHeight: number): number {
-  // Convert latitude/longitude differences to approximate meters
   const latDiff = bounds.maxLat - bounds.minLat;
   const lngDiff = bounds.maxLng - bounds.minLng;
-
-  // Average latitude for more accurate calculation
   const avgLat = (bounds.minLat + bounds.maxLat) / 2;
 
   // Approximate meters per degree at this latitude
@@ -260,223 +242,50 @@ function calculateZoomForBounds(bounds: { minLat: number; maxLat: number; minLng
   const heightMeters = latDiff * metersPerDegreeLat;
   const widthMeters = lngDiff * metersPerDegreeLng;
 
-  // Add 20% margin on each side (40% total) to prevent edge approach
-  const requiredHeightMeters = heightMeters * 1.4;
-  const requiredWidthMeters = widthMeters * 1.4;
+  // Add 60% buffer around the bounds (40% margin on each side)
+  // This ensures points stay well within the viewport
+  const requiredHeightMeters = heightMeters * 2.4;
+  const requiredWidthMeters = widthMeters * 2.4;
 
-  // Calculate required meters per pixel for both dimensions
+  // Calculate required meters per pixel
   const requiredMetersPerPixelHeight = requiredHeightMeters / viewportHeight;
   const requiredMetersPerPixelWidth = requiredWidthMeters / viewportWidth;
-
-  // Use the larger value to ensure both dimensions fit
   const requiredMetersPerPixel = Math.max(requiredMetersPerPixelHeight, requiredMetersPerPixelWidth);
 
-  // Calculate zoom level based on meters per pixel formula
-  // Formula: metersPerPixel = 156543.03392 * cos(lat) / 2^zoom
+  // Google Maps zoom formula: metersPerPixel = 156543.03392 * cos(lat) / 2^zoom
   const zoom = Math.log2(156543.03392 * Math.cos(avgLat * Math.PI / 180) / requiredMetersPerPixel);
 
-  // Clamp zoom between reasonable values
-  return Math.max(10, Math.min(18, Math.floor(zoom)));
+  // Clamp between min 12 (overview) and max 20 (very close)
+  // Don't round - let Google Maps handle sub-zoom levels
+  const clampedZoom = Math.max(12, Math.min(20, zoom));
+
+  console.log('[RouteReplay] Zoom calculation - heightMeters:', heightMeters.toFixed(2),
+    'widthMeters:', widthMeters.toFixed(2),
+    'rawZoom:', zoom.toFixed(2),
+    'clampedZoom:', clampedZoom.toFixed(2));
+
+  return clampedZoom;
 }
 
-// Determine optimal zoom level based on upcoming points in next 3 seconds of animation
-function calculateOptimalZoom(currentTimestamp: number, allPoints: GPSPoint[], secondsPerHour: number, viewportWidth: number = 800, viewportHeight: number = 600): number {
-  if (allPoints.length < 2) return 18;
+// calculateOptimalZoom function removed - auto-zoom disabled to prevent rendering conflicts
 
-  // Calculate how much GPS time corresponds to 3 seconds of animation time
-  // secondsPerHour = real seconds to display 1 hour (3600000 ms) of GPS data
-  const msPerRealSecond = 3600000 / secondsPerHour; // GPS milliseconds per real second
-  const threeSecondsGPSTime = msPerRealSecond * 3; // GPS time covered in next 3 real seconds
-
-  // Find all points within the next 3 seconds of GPS time
-  const futureTimestamp = currentTimestamp + threeSecondsGPSTime;
-  const upcomingPoints = allPoints.filter(p => p.timestamp >= currentTimestamp && p.timestamp <= futureTimestamp);
-
-  // If we don't have enough points, look at a minimum window
-  if (upcomingPoints.length < 2) {
-    // Look ahead at least 10 points or until end
-    const currentIndex = allPoints.findIndex(p => p.timestamp >= currentTimestamp);
-    if (currentIndex >= 0) {
-      const endIndex = Math.min(currentIndex + 10, allPoints.length);
-      upcomingPoints.push(...allPoints.slice(currentIndex, endIndex));
-    }
-  }
-
-  if (upcomingPoints.length < 2) return 18;
-
-  // Calculate bounds for upcoming points
-  const bounds = calculateBounds(upcomingPoints);
-  if (!bounds) return 18;
-
-  // If bounds are too small (stationary), use a reasonable default zoom
-  const latRange = bounds.maxLat - bounds.minLat;
-  const lngRange = bounds.maxLng - bounds.minLng;
-  if (latRange < 0.0001 && lngRange < 0.0001) {
-    return 17; // Zoomed in for stationary periods
-  }
-
-  // Calculate optimal zoom to fit all upcoming points
-  return calculateZoomForBounds(bounds, viewportWidth, viewportHeight);
-}
-
-// Component to capture map instance
-function MapRefCapture({ mapRef }: { mapRef: React.MutableRefObject<L.Map | null> }) {
-  const map = useMap();
-
-  useEffect(() => {
-    mapRef.current = map;
-  }, [map, mapRef]);
-
-  return null;
-}
-
-// Component to follow current position with intelligent panning and zoom
-function CameraFollow({ currentPosition, currentIndex, allPoints, manualZoom, isPlaying, intelligentZoomEnabled, secondsPerHour }: {
-  currentPosition: GPSPoint | null;
-  currentIndex: number;
-  allPoints: GPSPoint[];
-  manualZoom: number;
-  isPlaying: boolean;
-  intelligentZoomEnabled: boolean;
-  secondsPerHour: number;
-}) {
-  const map = useMap();
-  const lastPositionRef = useRef<GPSPoint | null>(null);
-  const lastZoomChangeRef = useRef<number>(0);
-  const currentZoomRef = useRef<number>(manualZoom);
-
-  useEffect(() => {
-    if (!intelligentZoomEnabled) {
-      // Use manual zoom
-      if (map.getZoom() !== manualZoom) {
-        map.setZoom(manualZoom, { animate: false });
-        currentZoomRef.current = manualZoom;
-      }
-    }
-  }, [manualZoom, map, intelligentZoomEnabled]);
-
-  useEffect(() => {
-    if (!currentPosition) return;
-
-    const targetLat = currentPosition.latitude;
-    const targetLng = currentPosition.longitude;
-    const now = Date.now();
-
-    // Initial centering (first position or when starting playback)
-    if (!lastPositionRef.current) {
-      const initialZoom = intelligentZoomEnabled && isPlaying ? 18 : manualZoom;
-      map.setView([targetLat, targetLng], initialZoom, { animate: true, duration: 0.5 });
-      lastPositionRef.current = currentPosition;
-      currentZoomRef.current = initialZoom;
-      lastZoomChangeRef.current = now;
-      return;
-    }
-
-    // Don't control camera when paused - allow free user control
-    if (!isPlaying) {
-      lastPositionRef.current = currentPosition;
-      return;
-    }
-
-    // Re-center and lock camera when starting to play
-    map.setView([targetLat, targetLng], currentZoomRef.current, { animate: true, duration: 0.5 });
-
-    // Intelligent zoom calculation (only when enabled and playing)
-    if (intelligentZoomEnabled) {
-      // Check if 3 seconds have passed since last zoom change
-      const timeSinceLastZoomChange = now - lastZoomChangeRef.current;
-
-      if (timeSinceLastZoomChange >= 3000) {
-        // Get map size for accurate zoom calculation
-        const mapSize = map.getSize();
-        const viewportWidth = mapSize.x;
-        const viewportHeight = mapSize.y;
-
-        // Calculate optimal zoom based on next 3 seconds of GPS data
-        const optimalZoom = calculateOptimalZoom(
-          currentPosition.timestamp,
-          allPoints,
-          secondsPerHour,
-          viewportWidth,
-          viewportHeight
-        );
-
-        // Only change zoom if significantly different (at least 1 level)
-        if (Math.abs(currentZoomRef.current - optimalZoom) >= 1) {
-          map.setZoom(optimalZoom, { animate: true });
-          currentZoomRef.current = optimalZoom;
-          lastZoomChangeRef.current = now;
-          console.log(`[IntelligentZoom] Changed zoom to ${optimalZoom} at timestamp ${currentPosition.timestamp} (speed: ${secondsPerHour}s/h)`);
-        }
-      }
-    }
-
-    // Get current map bounds and size
-    const bounds = map.getBounds();
-    const mapSize = map.getSize();
-
-    // Calculate 30% threshold from edges (in pixels)
-    const threshold = 0.3;
-    const thresholdX = mapSize.x * threshold;
-    const thresholdY = mapSize.y * threshold;
-
-    // Convert target position to pixel coordinates
-    const targetPoint = map.latLngToContainerPoint([targetLat, targetLng]);
-
-    // Check if point is getting too close to any edge (within 30%)
-    const tooCloseLeft = targetPoint.x < thresholdX;
-    const tooCloseRight = targetPoint.x > (mapSize.x - thresholdX);
-    const tooCloseTop = targetPoint.y < thresholdY;
-    const tooCloseBottom = targetPoint.y > (mapSize.y - thresholdY);
-
-    if (tooCloseLeft || tooCloseRight || tooCloseTop || tooCloseBottom) {
-      // Pan smoothly to re-center the point
-      map.panTo([targetLat, targetLng], {
-        animate: true,
-        duration: 0.25,
-        easeLinearity: 0.25,
-        noMoveStart: true
-      });
-    }
-
-    lastPositionRef.current = currentPosition;
-  }, [currentPosition, currentIndex, allPoints, map, isPlaying, manualZoom, intelligentZoomEnabled]);
-
-  return null;
-}
-
-// Initial bounds setup (only on mount)
-function InitialBounds({ points }: { points: GPSPoint[] }) {
-  const map = useMap();
-  const [initialized, setInitialized] = useState(false);
-
-  useEffect(() => {
-    if (points.length === 0 || initialized) return;
-
-    const bounds = L.latLngBounds(
-      points.map(p => [p.latitude, p.longitude])
-    );
-
-    if (bounds.isValid()) {
-      map.fitBounds(bounds, { padding: [50, 50] });
-      setInitialized(true);
-    }
-  }, [points, map, initialized]);
-
-  return null;
-}
-
-export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = [], date }: RouteReplayMapProps) {
+export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = [], date, userId, source = 'all' }: RouteReplayMapProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentTimestamp, setCurrentTimestamp] = useState(0); // Current GPS timestamp for smooth interpolation
   const [showFullRoute, setShowFullRoute] = useState(true);
-  const [zoomLevel, setZoomLevel] = useState(18);
-  const [secondsPerHour, setSecondsPerHour] = useState(5); // Seconds to display one hour of data
-  const [intelligentZoomEnabled, setIntelligentZoomEnabled] = useState(true); // Auto-zoom based on speed
   const [activePhotoFlash, setActivePhotoFlash] = useState<number | null>(null);
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  const [snapToRoadsEnabled, setSnapToRoadsEnabled] = useState(false); // Snap-to-roads toggle
+  const [secondsPerHour, setSecondsPerHour] = useState(5); // Animation speed: 5 real seconds per GPS hour
+  const [autoZoomEnabled, setAutoZoomEnabled] = useState(true); // Auto-Zoom toggle
+  const [snapSegments, setSnapSegments] = useState<SnapSegment[] | null>(null);
+  const [snapStats, setSnapStats] = useState<{ apiCallsUsed: number; costCents: number; segmentCount: number } | null>(null);
+  const [snapError, setSnapError] = useState<string | null>(null);
+  const [isSnapping, setIsSnapping] = useState(false); // Loading state for snapping
+  const [mapsApiLoaded, setMapsApiLoaded] = useState(false);
+  const [mapLoadError, setMapLoadError] = useState<string | null>(null);
   
   // Draggable panel positions
   const [leftPanelPos, setLeftPanelPos] = useState({ x: 16, y: 96 }); // left-4 top-24 (16px, 96px)
@@ -489,7 +298,35 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
   const pausedIndexRef = useRef<number>(0);
   const pausedTimestampRef = useRef<number>(0);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<L.Map | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const mapOverlaysRef = useRef<MapOverlays>({
+    fullRoutes: [],
+    animatedRoutes: [],
+    snapRoutes: [],
+    startMarker: null,
+    endMarker: null,
+    currentMarker: null,
+    photoMarker: null,
+    gpsMarkers: [],
+  });
+  const zoomListenerRef = useRef<google.maps.MapsEventListener | null>(null);
+  const lastViewportChange = useRef(0); // Für 3-Sekunden-Regel
+  const currentTimestampRef = useRef(0); // Aktueller Timestamp für Auto-Zoom
+  const lastBoundsRef = useRef<{ latRange: number; lngRange: number } | null>(null); // Letzte Bounds für Vergleich
+  const cameraStateRef = useRef<{
+    datasetSignature: string;
+    lastPosition: GPSPoint | null;
+    lastZoomChange: number;
+    currentZoom: number;
+  }>({
+    datasetSignature: '',
+    lastPosition: null,
+    lastZoomChange: 0,
+    currentZoom: 16,
+  });
+  const basePointsRef = useRef<GPSPoint[]>([]);
+  const snapRequestIdRef = useRef(0);
 
   // Drag handlers for movable panels
   const handleMouseDown = (e: React.MouseEvent, panel: 'left' | 'right') => {
@@ -535,37 +372,434 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     }
   }, [dragging, dragStart]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    loadGoogleMapsApi()
+      .then(() => {
+        if (!cancelled) {
+          setMapsApiLoaded(true);
+          setMapLoadError(null);
+        }
+      })
+      .catch((error: Error) => {
+        console.error('[RouteReplayMap] Failed to load Google Maps API:', error);
+        if (!cancelled) {
+          setMapLoadError(error.message || 'Google Maps konnte nicht geladen werden.');
+          toast({
+            title: 'Google Maps Fehler',
+            description: error.message || 'Die Karte konnte nicht geladen werden.',
+            variant: 'destructive'
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Sort GPS points by timestamp
   const sortedPoints = [...gpsPoints].sort((a, b) => a.timestamp - b.timestamp);
+  const originalRouteSignature = useMemo(() => buildRouteSignature(sortedPoints), [sortedPoints]);
 
-  // Initialize current timestamp
+  // Filter out early-morning points (before 06:00 local time)
+  const pointsAfterSix = sortedPoints.filter(point => {
+    const hour = new Date(point.timestamp).getHours();
+    return hour >= MORNING_CUTOFF_HOUR;
+  });
+
+  const basePoints = pointsAfterSix;
+
+  // Display points always follow filtered base data; snap segments overlay separately
+  const displayPoints = basePoints;
+
+  const baseRouteSignature = useMemo(() => buildRouteSignature(basePoints), [basePoints]);
+
   useEffect(() => {
-    if (sortedPoints.length > 0 && currentTimestamp === 0) {
-      setCurrentTimestamp(sortedPoints[0].timestamp);
-      pausedTimestampRef.current = sortedPoints[0].timestamp;
+    basePointsRef.current = basePoints;
+  }, [basePoints]);
+
+  useEffect(() => {
+    if (!mapsApiLoaded) return;
+    if (mapRef.current) return;
+    if (!mapContainerRef.current) return;
+    if (!window.google?.maps) return;
+
+    const initialCenter = basePoints.length > 0
+      ? { lat: basePoints[0].latitude, lng: basePoints[0].longitude }
+      : DEFAULT_MAP_CENTER;
+
+    mapRef.current = new window.google.maps.Map(mapContainerRef.current, {
+      center: initialCenter,
+      zoom: 15, // Fixed default zoom
+      disableDefaultUI: true,
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: false,
+      backgroundColor: '#0f172a',
+      gestureHandling: 'greedy', // Scroll-Zoom ohne Strg
+    });
+  }, [mapsApiLoaded, basePoints]);
+
+  // Initialer Zoom beim Laden: Zeigt alle GPS-Punkte mit 10% Puffer
+  // NUR EINMAL beim ersten Laden ausführen
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!window.google?.maps) return;
+    if (basePoints.length === 0) return;
+
+    // Prüfen ob dieser Dataset bereits initialisiert wurde
+    if (cameraStateRef.current.datasetSignature === baseRouteSignature) {
+      return; // Bereits initialisiert, nicht erneut zoomen
     }
-  }, [sortedPoints, currentTimestamp]);
+
+    const bounds = new window.google.maps.LatLngBounds();
+    basePoints.forEach(point => bounds.extend({ lat: point.latitude, lng: point.longitude }));
+
+    if (!bounds.isEmpty()) {
+      // 10% Puffer (50px padding approximiert ~10% bei typischen Bildschirmgrößen)
+      map.fitBounds(bounds, { top: 50, right: 50, bottom: 50, left: 50 });
+
+      // Initialen Kamera-Status setzen
+      cameraStateRef.current = {
+        datasetSignature: baseRouteSignature,
+        lastPosition: null,
+        lastZoomChange: 0,
+        currentZoom: map.getZoom() || 15,
+      };
+
+      console.log('[RouteReplay] Initial zoom set for dataset:', {
+        pointsCount: basePoints.length,
+        zoom: map.getZoom()
+      });
+    }
+  }, [baseRouteSignature, basePoints, mapsApiLoaded]);
+
+  // Manual zoom control removed - user controls zoom via map controls
+  // Zoom listener removed - no longer needed
+
+  useEffect(() => {
+    return () => {
+      const overlays = mapOverlaysRef.current;
+      clearPolylineList(overlays.fullRoutes);
+      clearPolylineList(overlays.animatedRoutes);
+      clearPolylineList(overlays.snapRoutes);
+      overlays.startMarker = removeMarker(overlays.startMarker);
+      overlays.endMarker = removeMarker(overlays.endMarker);
+      overlays.currentMarker = removeMarker(overlays.currentMarker);
+      overlays.photoMarker = removeMarker(overlays.photoMarker);
+      overlays.gpsMarkers.forEach(marker => marker.setMap(null));
+      overlays.gpsMarkers = [];
+      zoomListenerRef.current?.remove();
+      zoomListenerRef.current = null;
+      mapRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (sortedPoints.length > 0 && basePoints.length === 0) {
+      toast({
+        title: 'Keine GPS-Daten nach 06:00 Uhr',
+        description: 'Alle Punkte liegen zwischen 00:00 und 06:00 Uhr und werden ausgeblendet.'
+      });
+    }
+  }, [originalRouteSignature, basePoints.length, sortedPoints.length]);
+
+  const gapSegments = useMemo(() => {
+    if (basePoints.length < 2) return [];
+    const segments: GapSegment[] = [];
+    for (let i = 1; i < basePoints.length; i++) {
+      const prev = basePoints[i - 1];
+      const curr = basePoints[i];
+      const distanceMeters = calculateDistance(prev, curr);
+      if (distanceMeters >= GAP_DISTANCE_THRESHOLD_METERS) {
+        segments.push({
+          id: `${prev.timestamp}-${curr.timestamp}`,
+          start: prev,
+          end: curr,
+          distanceMeters
+        });
+      }
+    }
+    return segments;
+  }, [basePoints]);
+
+  const estimatedSnapPointCount = gapSegments.length * 2;
+  // Google Roads API accepts up to 100 points per call, each segment = 2 points
+  // So we can process up to 50 segments per API call
+  const estimatedSnapApiCalls = gapSegments.length > 0 ? Math.ceil(gapSegments.length / 50) : 0;
+  const estimatedSnapCostCents = estimatedSnapApiCalls * SNAP_SEGMENT_COST_CENT_PER_CALL;
+  const appliedSnapSegmentCount = snapStats?.segmentCount ?? snapSegments?.length ?? 0;
+  const appliedSnapApiCalls = snapStats?.apiCallsUsed ?? appliedSnapSegmentCount;
+  const gapSegmentIdSet = useMemo(() => new Set(gapSegments.map(segment => segment.id)), [gapSegments]);
+
+
+  // Effect to snap points when toggle is enabled
+  useEffect(() => {
+    if (!snapToRoadsEnabled) {
+      setSnapSegments(null);
+      setSnapStats(null);
+      setSnapError(null);
+      setIsSnapping(false);
+      return;
+    }
+
+    if (!userId) {
+      setSnapError('Kein Benutzer ausgewaehlt.');
+      setSnapSegments(null);
+      setSnapStats(null);
+      return;
+    }
+
+    const currentBasePoints = basePointsRef.current;
+    if (currentBasePoints.length < 2) {
+      setSnapError('Nicht genug GPS-Daten fuer Snap-to-Roads.');
+      setSnapSegments(null);
+      setSnapStats(null);
+      return;
+    }
+
+    // Calculate gap segments here to avoid dependency issues
+    const currentGapSegments: GapSegment[] = [];
+    for (let i = 1; i < currentBasePoints.length; i++) {
+      const prev = currentBasePoints[i - 1];
+      const curr = currentBasePoints[i];
+      const distanceMeters = calculateDistance(prev, curr);
+      if (distanceMeters >= GAP_DISTANCE_THRESHOLD_METERS) {
+        currentGapSegments.push({
+          id: `${prev.timestamp}-${curr.timestamp}`,
+          start: prev,
+          end: curr,
+          distanceMeters
+        });
+      }
+    }
+
+    if (currentGapSegments.length === 0) {
+      setSnapError('Keine Luecken ueber 50 m vorhanden.');
+      setSnapSegments(null);
+      setSnapStats(null);
+      setIsSnapping(false);
+      return;
+    }
+
+    setSnapSegments(null);
+    setSnapStats(null);
+
+    const controller = new AbortController();
+    const requestId = ++snapRequestIdRef.current;
+    setIsSnapping(true);
+    setSnapError(null);
+    const payloadSegments = currentGapSegments.map(segment => ({
+      start: segment.start,
+      end: segment.end
+    }));
+
+    (async () => {
+      try {
+        // Optimierung: Sende nur Segmente statt alle GPS-Punkte (reduziert Body-Größe erheblich)
+        const response = await fetch('/api/admin/dashboard/snap-to-roads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            userId,
+            date,
+            source,
+            points: [], // Backend extrahiert Punkte aus Segmenten
+            segments: payloadSegments
+          }),
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || 'Snap-to-Roads fehlgeschlagen.');
+        }
+
+        const result = await response.json();
+        if (controller.signal.aborted || snapRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        setSnapSegments(result.segments || []);
+        setSnapStats({
+          apiCallsUsed: result.apiCallsUsed || 0,
+          costCents: Number(result.costCents || 0),
+          segmentCount: result.segmentCount || (result.segments?.length ?? 0)
+        });
+        setSnapError(null);
+      } catch (error: any) {
+        if (controller.signal.aborted || snapRequestIdRef.current !== requestId) {
+          return;
+        }
+        setSnapError(error?.message || 'Snap-to-Roads fehlgeschlagen.');
+        setSnapSegments(null);
+        setSnapStats(null);
+      } finally {
+        if (snapRequestIdRef.current === requestId) {
+          setIsSnapping(false);
+        }
+      }
+    })();
+
+    return () => {
+      controller.abort();
+    };
+  }, [snapToRoadsEnabled, baseRouteSignature, userId, date, source]);
+
+  // Initialize current timestamp to first GPS point
+  useEffect(() => {
+    if (displayPoints.length === 0) return;
+
+    // Stop any running animation
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+
+    // Reset animation state
+    startTimeRef.current = null;
+    pausedIndexRef.current = 0;
+    pausedTimestampRef.current = displayPoints[0].timestamp;
+    currentTimestampRef.current = displayPoints[0].timestamp;
+    lastBoundsRef.current = null; // Reset bounds tracking
+    setCurrentIndex(0);
+    setCurrentTimestamp(displayPoints[0].timestamp);
+    setIsPlaying(false);
+  }, [baseRouteSignature]); // Only reset when route signature changes, not on every displayPoints change
 
   // Detect stationary periods (20+ min in 20m radius)
-  const stationaryPeriods = detectStationaryPeriods(sortedPoints);
+  const stationaryPeriods = detectStationaryPeriods(displayPoints);
 
   // Get time range for timeline
-  const startTime = sortedPoints.length > 0 ? sortedPoints[0].timestamp : 0;
-  const endTime = sortedPoints.length > 0 ? sortedPoints[sortedPoints.length - 1].timestamp : 0;
+  const startTime = displayPoints.length > 0 ? displayPoints[0].timestamp : 0;
+  const endTime = displayPoints.length > 0 ? displayPoints[displayPoints.length - 1].timestamp : 0;
+
+  // Track container width for adaptive hour markers
+  const [containerWidth, setContainerWidth] = useState(1200);
+
+  useEffect(() => {
+    const updateWidth = () => {
+      if (containerRef.current) {
+        setContainerWidth(containerRef.current.clientWidth);
+      }
+    };
+
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
+
+  const hourMarkers = useMemo(() => {
+    if (displayPoints.length === 0) return [];
+    const duration = endTime - startTime;
+    if (duration <= 0) return [];
+
+    // Calculate adaptive interval based on container width
+    // Each hour marker needs ~60px minimum to avoid overlap
+    const minSpacingPx = 60;
+    const availableWidth = Math.max(400, containerWidth - 600); // Subtract space for buttons
+    const maxMarkers = Math.floor(availableWidth / minSpacingPx);
+    const durationHours = duration / (1000 * 60 * 60);
+
+    // Calculate hour interval: 1, 2, 3, 4, 6, 8, 12, or 24 hours
+    let hourInterval = 1;
+    const possibleIntervals = [1, 2, 3, 4, 6, 8, 12, 24];
+    for (const interval of possibleIntervals) {
+      if (durationHours / interval <= maxMarkers) {
+        hourInterval = interval;
+        break;
+      }
+    }
+
+    const markers: { position: number; time: Date }[] = [];
+    const startHour = new Date(startTime);
+    startHour.setMinutes(0, 0, 0);
+    if (startHour.getTime() <= startTime) {
+      startHour.setHours(startHour.getHours() + hourInterval);
+    } else {
+      // Align to interval (e.g., if interval is 2, round to even hours)
+      const currentHourValue = startHour.getHours();
+      const alignedHour = Math.ceil(currentHourValue / hourInterval) * hourInterval;
+      startHour.setHours(alignedHour);
+    }
+
+    const currentHour = new Date(startHour);
+    while (currentHour.getTime() < endTime) {
+      const position = ((currentHour.getTime() - startTime) / duration) * 100;
+      if (position > 0 && position < 100) {
+        markers.push({ position, time: new Date(currentHour) });
+      }
+      currentHour.setHours(currentHour.getHours() + hourInterval);
+    }
+
+    return markers;
+  }, [startTime, endTime, displayPoints.length, containerWidth]);
+
+  const timelineProgress = endTime > startTime
+    ? (currentTimestamp - startTime) / (endTime - startTime)
+    : 0;
+  const clampedTimelineProgress = Math.max(0, Math.min(1, timelineProgress));
 
   // Interpolate position between two GPS points based on timestamp
+  // If snap-to-roads is enabled, interpolate along snap segments
   const interpolatePosition = (timestamp: number): GPSPoint | null => {
-    if (sortedPoints.length === 0) return null;
+    if (displayPoints.length === 0) return null;
 
     // Clamp timestamp to valid range
     const clampedTime = Math.max(startTime, Math.min(endTime, timestamp));
 
+    // If snap-to-roads enabled, check if we're in a snap segment
+    if (snapToRoadsEnabled && snapSegments && snapSegments.length > 0) {
+      for (const segment of snapSegments) {
+        if (clampedTime >= segment.startTimestamp && clampedTime <= segment.endTimestamp) {
+          // We're in this snap segment - interpolate along snap points
+          const segmentDuration = segment.endTimestamp - segment.startTimestamp;
+          const elapsed = clampedTime - segment.startTimestamp;
+          const progress = segmentDuration > 0 ? elapsed / segmentDuration : 0;
+
+          const totalPoints = segment.points.length;
+          const exactPosition = progress * (totalPoints - 1);
+          const beforeIdx = Math.floor(exactPosition);
+          const afterIdx = Math.min(beforeIdx + 1, totalPoints - 1);
+
+          if (beforeIdx === afterIdx) {
+            // At the end of segment
+            const point = segment.points[beforeIdx];
+            return {
+              latitude: point.latitude,
+              longitude: point.longitude,
+              accuracy: 10,
+              timestamp: clampedTime,
+              source: point.source
+            };
+          }
+
+          const beforePoint = segment.points[beforeIdx];
+          const afterPoint = segment.points[afterIdx];
+          const localProgress = exactPosition - beforeIdx;
+
+          return {
+            latitude: beforePoint.latitude + (afterPoint.latitude - beforePoint.latitude) * localProgress,
+            longitude: beforePoint.longitude + (afterPoint.longitude - beforePoint.longitude) * localProgress,
+            accuracy: 10,
+            timestamp: clampedTime,
+            source: beforePoint.source
+          };
+        }
+      }
+    }
+
+    // Not in a snap segment, or snap-to-roads disabled - use regular GPS interpolation
     // Find the two points surrounding this timestamp
     let beforeIdx = 0;
     let afterIdx = 0;
 
-    for (let i = 0; i < sortedPoints.length; i++) {
-      if (sortedPoints[i].timestamp <= clampedTime) {
+    for (let i = 0; i < displayPoints.length; i++) {
+      if (displayPoints[i].timestamp <= clampedTime) {
         beforeIdx = i;
       } else {
         afterIdx = i;
@@ -575,11 +809,11 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
 
     // If we're at or after the last point
     if (afterIdx === 0 || afterIdx === beforeIdx) {
-      return sortedPoints[beforeIdx];
+      return displayPoints[beforeIdx];
     }
 
-    const beforePoint = sortedPoints[beforeIdx];
-    const afterPoint = sortedPoints[afterIdx];
+    const beforePoint = displayPoints[beforeIdx];
+    const afterPoint = displayPoints[afterIdx];
 
     // Calculate interpolation ratio
     const timeDiff = afterPoint.timestamp - beforePoint.timestamp;
@@ -596,33 +830,35 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
   };
 
   // Get current interpolated position
-  const currentPosition = interpolatePosition(currentTimestamp);
+  const currentPosition = useMemo(() => {
+    return interpolatePosition(currentTimestamp);
+  }, [currentTimestamp, snapToRoadsEnabled, snapSegments, displayPoints]);
 
   // Note: Animation is now time-based, not duration-based
   // The animation speed is controlled by secondsPerHour in real-time
 
   // Calculate photo positions between GPS points
   const calculatePhotoPosition = (photoTimestamp: number): [number, number] | null => {
-    if (sortedPoints.length < 2) return null;
+    if (displayPoints.length < 2) return null;
 
     // Find the two GPS points surrounding the photo timestamp
     let beforePoint: GPSPoint | null = null;
     let afterPoint: GPSPoint | null = null;
 
-    for (let i = 0; i < sortedPoints.length - 1; i++) {
-      if (sortedPoints[i].timestamp <= photoTimestamp && sortedPoints[i + 1].timestamp >= photoTimestamp) {
-        beforePoint = sortedPoints[i];
-        afterPoint = sortedPoints[i + 1];
+    for (let i = 0; i < displayPoints.length - 1; i++) {
+      if (displayPoints[i].timestamp <= photoTimestamp && displayPoints[i + 1].timestamp >= photoTimestamp) {
+        beforePoint = displayPoints[i];
+        afterPoint = displayPoints[i + 1];
         break;
       }
     }
 
     // If photo is before first GPS or after last GPS, use closest point
     if (!beforePoint && !afterPoint) {
-      if (photoTimestamp < sortedPoints[0].timestamp) {
-        return [sortedPoints[0].latitude, sortedPoints[0].longitude];
+      if (photoTimestamp < displayPoints[0].timestamp) {
+        return [displayPoints[0].latitude, displayPoints[0].longitude];
       } else {
-        const last = sortedPoints[sortedPoints.length - 1];
+        const last = displayPoints[displayPoints.length - 1];
         return [last.latitude, last.longitude];
       }
     }
@@ -649,11 +885,43 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     }))
     .filter(p => p.position !== null) as Array<{ timestamp: number; position: [number, number] }>;
 
+  useEffect(() => {
+    const map = mapRef.current;
+    const googleMaps = window.google?.maps;
+    if (!map || !googleMaps) return;
+
+    const overlays = mapOverlaysRef.current;
+    overlays.photoMarker = removeMarker(overlays.photoMarker);
+
+    if (activePhotoFlash === null) return;
+
+    const flash = photoPositions.find(photo => photo.timestamp === activePhotoFlash);
+    if (!flash) return;
+
+    overlays.photoMarker = new googleMaps.Marker({
+      map,
+      position: { lat: flash.position[0], lng: flash.position[1] },
+      icon: {
+        path: googleMaps.SymbolPath.CIRCLE,
+        fillColor: '#fbbf24',
+        fillOpacity: 1,
+        strokeColor: '#ffffff',
+        strokeWeight: 2,
+        scale: 8,
+      },
+      label: {
+        text: '⚡',
+        fontSize: '20px',
+      },
+      zIndex: 600,
+    });
+  }, [activePhotoFlash, photoPositions, mapsApiLoaded]);
+
   // Check if current animation time should trigger a photo flash
   useEffect(() => {
-    if (!isPlaying || sortedPoints.length === 0) return;
+    if (!isPlaying || displayPoints.length === 0) return;
 
-    const currentPoint = sortedPoints[currentIndex];
+    const currentPoint = displayPoints[currentIndex];
     if (!currentPoint) return;
 
     // Check if any photo timestamp is close to current position (within 5 seconds)
@@ -669,15 +937,15 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
         setActivePhotoFlash(null);
       }, 1000);
     }
-  }, [currentIndex, isPlaying, photoTimestamps, sortedPoints, activePhotoFlash]);
+  }, [currentIndex, isPlaying, photoTimestamps, displayPoints, activePhotoFlash]);
 
   // Calculate time span
-  const timeSpan = sortedPoints.length > 0
-    ? sortedPoints[sortedPoints.length - 1].timestamp - sortedPoints[0].timestamp
+  const timeSpan = displayPoints.length > 0
+    ? displayPoints[displayPoints.length - 1].timestamp - displayPoints[0].timestamp
     : 0;
 
   // Route up to current timestamp (all points before or at current time)
-  const animatedRoute = sortedPoints.filter(p => p.timestamp <= currentTimestamp);
+  const animatedRoute = displayPoints.filter(p => p.timestamp <= currentTimestamp);
 
   // Add interpolated current position to animated route for smooth drawing
   const animatedRouteWithInterpolation = currentPosition && currentPosition.timestamp > (animatedRoute[animatedRoute.length - 1]?.timestamp || 0)
@@ -685,17 +953,28 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     : animatedRoute;
 
   // Create polyline segments grouped by source for multi-colored route
-  const createRouteSegments = (points: GPSPoint[]) => {
-    const segments: { points: [number, number][]; source: 'native' | 'followmee' | 'external' }[] = [];
+  const createRouteSegments = (points: GPSPoint[], gapIds?: Set<string>) => {
+    const segments: { points: [number, number][]; source: 'native' | 'followmee' | 'external' | 'external_app' }[] = [];
 
     if (points.length < 2) return segments;
 
     let currentSegment: [number, number][] = [[points[0].latitude, points[0].longitude]];
-    let currentSource: 'native' | 'followmee' | 'external' = points[0].source || 'native';
+    let currentSource: 'native' | 'followmee' | 'external' | 'external_app' = points[0].source || 'native';
 
     for (let i = 1; i < points.length; i++) {
       const point = points[i];
-      const pointSource: 'native' | 'followmee' | 'external' = point.source || 'native';
+      const pointSource: 'native' | 'followmee' | 'external' | 'external_app' = point.source || 'native';
+      const pairId = `${points[i - 1].timestamp}-${point.timestamp}`;
+      const isGap = gapIds?.has(pairId);
+
+      if (isGap) {
+        if (currentSegment.length > 1) {
+          segments.push({ points: currentSegment, source: currentSource });
+        }
+        currentSegment = [[point.latitude, point.longitude]];
+        currentSource = pointSource;
+        continue;
+      }
 
       if (pointSource === currentSource) {
         // Continue current segment
@@ -718,8 +997,443 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     return segments;
   };
 
-  const fullRouteSegments = createRouteSegments(sortedPoints);
-  const animatedRouteSegments = createRouteSegments(animatedRouteWithInterpolation);
+  const fullRouteSegments = createRouteSegments(displayPoints, snapToRoadsEnabled ? gapSegmentIdSet : undefined);
+  const animatedRouteSegments = createRouteSegments(animatedRouteWithInterpolation, snapToRoadsEnabled ? gapSegmentIdSet : undefined);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const googleMaps = window.google?.maps;
+    if (!map || !googleMaps) return;
+
+    const overlays = mapOverlaysRef.current;
+    clearPolylineList(overlays.fullRoutes);
+
+    if (!showFullRoute) return;
+
+    overlays.fullRoutes = fullRouteSegments.map(segment => {
+      const sourceColor = SOURCE_COLORS[segment.source || 'native'];
+
+      console.log('[RouteReplay] Full Route Segment:', {
+        source: segment.source,
+        color: sourceColor,
+        points: segment.points.length
+      });
+
+      return new googleMaps.Polyline({
+        map,
+        path: segment.points.map(([lat, lng]) => ({ lat, lng })),
+        strokeColor: sourceColor,
+        strokeOpacity: 0.5,
+        strokeWeight: 2,
+        zIndex: 50,
+      });
+    });
+  }, [fullRouteSegments, showFullRoute, mapsApiLoaded]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const googleMaps = window.google?.maps;
+    if (!map || !googleMaps) return;
+
+    const overlays = mapOverlaysRef.current;
+    clearPolylineList(overlays.animatedRoutes);
+
+    overlays.animatedRoutes = animatedRouteSegments.map(segment => {
+      const sourceColor = SOURCE_COLORS[segment.source || 'native'];
+
+      return new googleMaps.Polyline({
+        map,
+        path: segment.points.map(([lat, lng]) => ({ lat, lng })),
+        strokeColor: sourceColor,
+        strokeOpacity: 0.9,
+        strokeWeight: 4,
+        zIndex: 200,
+      });
+    });
+  }, [animatedRouteSegments, mapsApiLoaded]);
+
+  // Calculate animated snap segments up to current timestamp
+  const animatedSnapSegments = useMemo(() => {
+    if (!snapToRoadsEnabled || !snapSegments || snapSegments.length === 0) return [];
+
+    const result: Array<{ points: Array<{ lat: number; lng: number }> }> = [];
+
+    for (const segment of snapSegments) {
+      if (!segment.points || segment.points.length < 2) continue;
+
+      // Check if animation has reached this segment
+      if (currentTimestamp < segment.startTimestamp) {
+        // Haven't reached this segment yet - don't draw it
+        continue;
+      } else if (currentTimestamp >= segment.endTimestamp) {
+        // Fully past this segment - draw entire segment
+        result.push({
+          points: segment.points.map(p => ({ lat: p.latitude, lng: p.longitude }))
+        });
+      } else {
+        // Currently animating through this segment - interpolate progressively
+        const segmentDuration = segment.endTimestamp - segment.startTimestamp;
+        const elapsed = currentTimestamp - segment.startTimestamp;
+
+        // Ensure progress is between 0 and 1
+        let progress = segmentDuration > 0 ? elapsed / segmentDuration : 0;
+        progress = Math.max(0, Math.min(1, progress));
+
+        // Calculate exact position along the snap points
+        const totalPoints = segment.points.length;
+
+        if (totalPoints === 0) continue;
+        if (totalPoints === 1) {
+          // Single point - can't draw a line
+          continue;
+        }
+
+        // Calculate which point we're at (0 to totalPoints-1)
+        const exactPosition = progress * (totalPoints - 1);
+        const beforeIdx = Math.floor(exactPosition);
+        const afterIdx = Math.min(beforeIdx + 1, totalPoints - 1);
+
+        // Take all points up to beforeIdx
+        const fullPoints = segment.points.slice(0, beforeIdx + 1);
+
+        // If we're between two points, interpolate
+        if (beforeIdx < afterIdx && progress < 1) {
+          const beforePoint = segment.points[beforeIdx];
+          const afterPoint = segment.points[afterIdx];
+          const localProgress = exactPosition - beforeIdx;
+
+          const interpolatedLat = beforePoint.latitude + (afterPoint.latitude - beforePoint.latitude) * localProgress;
+          const interpolatedLng = beforePoint.longitude + (afterPoint.longitude - beforePoint.longitude) * localProgress;
+
+          fullPoints.push({
+            latitude: interpolatedLat,
+            longitude: interpolatedLng,
+            timestamp: currentTimestamp,
+            source: beforePoint.source
+          });
+        }
+
+        if (fullPoints.length >= 2) {
+          result.push({
+            points: fullPoints.map(p => ({ lat: p.latitude, lng: p.longitude }))
+          });
+        }
+      }
+    }
+
+    return result;
+  }, [snapSegments, snapToRoadsEnabled, currentTimestamp]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const googleMaps = window.google?.maps;
+    if (!map || !googleMaps) return;
+
+    const overlays = mapOverlaysRef.current;
+    clearPolylineList(overlays.snapRoutes);
+
+    if (!snapToRoadsEnabled || animatedSnapSegments.length === 0) return;
+
+    overlays.snapRoutes = animatedSnapSegments.map(segment => new googleMaps.Polyline({
+      map,
+      path: segment.points,
+      strokeColor: SNAP_SEGMENT_COLOR,
+      strokeOpacity: 0.9,
+      strokeWeight: 3, // Dünner: 3 statt 5
+      zIndex: 300,
+    }));
+  }, [animatedSnapSegments, snapToRoadsEnabled, mapsApiLoaded]);
+
+  // Intelligente Kamera-Steuerung mit prädiktivem Auto-Zoom
+  // WICHTIG: Keine Dependencies außer Refs, um Endlosschleife zu vermeiden
+  const updateCameraView = useCallback((forceUpdate = false) => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!window.google?.maps) return;
+
+    const points = basePointsRef.current;
+    if (points.length === 0) return;
+
+    // Aktuelle Position basierend auf currentTimestampRef berechnen (nicht aus Closure!)
+    const currentTime = currentTimestampRef.current;
+    const currentIdx = points.findIndex(p => p.timestamp >= currentTime);
+    if (currentIdx === -1) return;
+
+    // Interpoliere Position für genauen Timestamp
+    let position: GPSPoint;
+    if (currentIdx === 0) {
+      position = points[0];
+    } else {
+      const before = points[currentIdx - 1];
+      const after = points[currentIdx];
+      const timeDiff = after.timestamp - before.timestamp;
+      const ratio = timeDiff > 0 ? (currentTime - before.timestamp) / timeDiff : 0;
+      position = {
+        latitude: before.latitude + (after.latitude - before.latitude) * ratio,
+        longitude: before.longitude + (after.longitude - before.longitude) * ratio,
+        accuracy: before.accuracy,
+        timestamp: currentTime,
+        source: before.source
+      };
+    }
+
+    const now = Date.now();
+
+    // Pre-Check: Ist der Nutzer bereits zu nah am Rand? (Emergency Zoom)
+    // Berechne erstmal grob die Lookahead-Punkte für Edge-Detection
+    const msPerHour = 3600000;
+    const sph = secondsPerHour;
+    const animationSpeedMsPerSec = msPerHour / sph;
+    const lookaheadWindowMs = animationSpeedMsPerSec * 3;
+
+    let preliminaryLookaheadPoints = points.filter(p =>
+      p.timestamp >= currentTime && p.timestamp <= currentTime + lookaheadWindowMs
+    );
+
+    if (preliminaryLookaheadPoints.length < 10) {
+      const currentIndex = points.findIndex(p => p.timestamp >= currentTime);
+      if (currentIndex !== -1) {
+        preliminaryLookaheadPoints = points.slice(currentIndex, Math.min(currentIndex + 20, points.length));
+      }
+    }
+
+    const preliminaryMaxLatDiff = preliminaryLookaheadPoints.length > 0
+      ? Math.max(...preliminaryLookaheadPoints.map(p => Math.abs(p.latitude - position.latitude)), 0)
+      : 0;
+    const preliminaryMaxLngDiff = preliminaryLookaheadPoints.length > 0
+      ? Math.max(...preliminaryLookaheadPoints.map(p => Math.abs(p.longitude - position.longitude)), 0)
+      : 0;
+
+    let isEmergencyZoom = false;
+    if (lastBoundsRef.current) {
+      const latEdgeRatio = preliminaryMaxLatDiff / (lastBoundsRef.current.latRange / 2);
+      const lngEdgeRatio = preliminaryMaxLngDiff / (lastBoundsRef.current.lngRange / 2);
+      isEmergencyZoom = latEdgeRatio > 0.7 || lngEdgeRatio > 0.7;
+    }
+
+    // 3-Sekunden-Regel: Keine Änderung öfter als alle 3 Sekunden
+    // ABER: Überspringen bei forceUpdate, erstem Zoom (lastBoundsRef === null), oder Emergency
+    const timeSinceLastChange = now - lastViewportChange.current;
+    if (!forceUpdate && !isEmergencyZoom && lastBoundsRef.current !== null && timeSinceLastChange < 3000) {
+      console.log('[RouteReplay] Camera update skipped (3s cooldown)', {
+        timeSinceLastChange: (timeSinceLastChange / 1000).toFixed(1) + 's'
+      });
+      return;
+    }
+
+    if (isEmergencyZoom) {
+      console.log('[RouteReplay] 🚨 Emergency zoom triggered - skipping cooldown');
+    }
+
+    // 1. Lookahead-Punkte verwenden (bereits berechnet für Emergency Check)
+    let lookaheadPoints = preliminaryLookaheadPoints;
+
+    if (lookaheadPoints.length === 0) return;
+
+    // 3. Aktuelle Position muss auch berücksichtigt werden
+    const allPointsToShow = [position, ...lookaheadPoints];
+
+    const lats = allPointsToShow.map(p => p.latitude);
+    const lngs = allPointsToShow.map(p => p.longitude);
+
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+
+    // 4. Berechne Bounds mit aktuelle Position als Zentrum
+    // Der Zoom soll so gewählt werden, dass:
+    // - Die aktuelle Position im Zentrum ist
+    // - Alle Lookahead-Punkte mindestens 20% vom Rand entfernt sind
+
+    // Finde den am weitesten entfernten Punkt von der aktuellen Position
+    const latDiffs = lookaheadPoints.map(p => Math.abs(p.latitude - position.latitude));
+    const lngDiffs = lookaheadPoints.map(p => Math.abs(p.longitude - position.longitude));
+
+    const maxLatDiff = Math.max(...latDiffs, 0);
+    const maxLngDiff = Math.max(...lngDiffs, 0);
+
+    // Mit 20% Margin: der äußerste Punkt soll 40% vom Zentrum entfernt sein (= 20% vom Rand)
+    // Also: sichtbarer Bereich = maxDiff / 0.4 = maxDiff * 2.5
+    // ABER: Mindestens 0.005° (ca. 500m), um nicht zu nah zu zoomen bei stationären Punkten
+    const MIN_VISIBLE_RANGE = 0.005;
+    const visibleLatRange = Math.max(maxLatDiff * 2.5, MIN_VISIBLE_RANGE);
+    const visibleLngRange = Math.max(maxLngDiff * 2.5, MIN_VISIBLE_RANGE);
+
+    // 5. Prüfe ob sich die Bounds signifikant geändert haben (> 30% Änderung in IRGENDEINER Dimension)
+    // ABER: Emergency Zoom überspringt diese Prüfung (bereits oben geprüft)
+    const lastBoundsData = lastBoundsRef.current;
+    if (!forceUpdate && !isEmergencyZoom && lastBoundsData) {
+      const latChange = Math.abs(visibleLatRange - lastBoundsData.latRange) / lastBoundsData.latRange;
+      const lngChange = Math.abs(visibleLngRange - lastBoundsData.lngRange) / lastBoundsData.lngRange;
+
+      // Zoom nur wenn BEIDE Dimensionen sich weniger als 30% ändern
+      // Wenn eine sich > 30% ändert, zoomen wir
+      const maxChange = Math.max(latChange, lngChange);
+
+      if (maxChange < 0.3) {
+        console.log('[RouteReplay] Camera update skipped (bounds change < 30%)', {
+          latChange: (latChange * 100).toFixed(1) + '%',
+          lngChange: (lngChange * 100).toFixed(1) + '%',
+          maxChange: (maxChange * 100).toFixed(1) + '%'
+        });
+        return;
+      }
+    }
+
+    // 6. Bounds setzen
+    const bounds = new window.google.maps.LatLngBounds(
+      { lat: position.latitude - visibleLatRange / 2, lng: position.longitude - visibleLngRange / 2 },
+      { lat: position.latitude + visibleLatRange / 2, lng: position.longitude + visibleLngRange / 2 }
+    );
+
+    // 7. Zoom und Zentrum setzen
+    map.fitBounds(bounds);
+
+    // 8. Bounds speichern und Timestamp aktualisieren
+    lastBoundsRef.current = { latRange: visibleLatRange, lngRange: visibleLngRange };
+    lastViewportChange.current = now;
+
+    console.log('[RouteReplay] Camera updated:', {
+      currentPos: { lat: position.latitude.toFixed(5), lng: position.longitude.toFixed(5) },
+      lookaheadPoints: lookaheadPoints.length,
+      windowMs: lookaheadWindowMs,
+      maxLatDiff: maxLatDiff.toFixed(5),
+      maxLngDiff: maxLngDiff.toFixed(5),
+      visibleLatRange: visibleLatRange.toFixed(5),
+      visibleLngRange: visibleLngRange.toFixed(5)
+    });
+  }, []); // KEINE Dependencies - stabil
+
+  // Periodische Kamera-Updates alle 3 Sekunden während Animation
+  useEffect(() => {
+    if (!isPlaying || !mapRef.current || !autoZoomEnabled) return;
+
+    // Sofort beim Start ausführen (erzwungen, ignoriert 3s-Regel)
+    console.log('[RouteReplay] Animation started - forcing initial camera update');
+    updateCameraView(true);
+
+    // Dann alle 3 Sekunden wiederholen
+    const interval = setInterval(() => updateCameraView(false), 3000);
+    return () => clearInterval(interval);
+  }, [isPlaying, autoZoomEnabled]); // isPlaying und autoZoomEnabled als Dependencies
+
+  // Start/End Marker: Nur bei Route-Wechsel neu erstellen, nicht während Animation
+  useEffect(() => {
+    const map = mapRef.current;
+    const googleMaps = window.google?.maps;
+    if (!map || !googleMaps) return;
+
+    const overlays = mapOverlaysRef.current;
+    overlays.startMarker = removeMarker(overlays.startMarker);
+    overlays.endMarker = removeMarker(overlays.endMarker);
+
+    if (basePoints.length === 0) return;
+
+    const startPoint = basePoints[0];
+    overlays.startMarker = new googleMaps.Marker({
+      map,
+      position: { lat: startPoint.latitude, lng: startPoint.longitude },
+      icon: {
+        path: googleMaps.SymbolPath.CIRCLE,
+        fillColor: '#22c55e',
+        fillOpacity: 1,
+        strokeColor: '#ffffff',
+        strokeWeight: 2,
+        scale: 10,
+      },
+      label: {
+        text: 'S',
+        color: '#ffffff',
+        fontWeight: 'bold',
+      },
+      zIndex: 400,
+    });
+
+    if (basePoints.length > 1) {
+      const endPoint = basePoints[basePoints.length - 1];
+      overlays.endMarker = new googleMaps.Marker({
+        map,
+        position: { lat: endPoint.latitude, lng: endPoint.longitude },
+        icon: {
+          path: googleMaps.SymbolPath.CIRCLE,
+          fillColor: '#ef4444',
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 2,
+          scale: 10,
+        },
+        label: {
+          text: 'E',
+          color: '#ffffff',
+          fontWeight: 'bold',
+        },
+        zIndex: 400,
+      });
+    }
+  }, [baseRouteSignature, mapsApiLoaded]); // baseRouteSignature statt displayPoints!
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const googleMaps = window.google?.maps;
+    if (!map || !googleMaps) return;
+
+    const overlays = mapOverlaysRef.current;
+    if (!currentPosition || currentIndex <= 0 || currentIndex >= displayPoints.length - 1) {
+      overlays.currentMarker = removeMarker(overlays.currentMarker);
+      return;
+    }
+
+    if (!overlays.currentMarker) {
+      overlays.currentMarker = new googleMaps.Marker({
+        map,
+        icon: {
+          path: googleMaps.SymbolPath.CIRCLE,
+          fillColor: SOURCE_COLORS.native,
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 3,
+          scale: 8,
+        },
+        zIndex: 450,
+      });
+    }
+
+    overlays.currentMarker.setPosition({ lat: currentPosition.latitude, lng: currentPosition.longitude });
+  }, [currentPosition, currentIndex, displayPoints.length, mapsApiLoaded]);
+
+  // GPS-Marker: Nur basierend auf baseRouteSignature (ändert sich nur bei Route-Wechsel)
+  useEffect(() => {
+    const map = mapRef.current;
+    const googleMaps = window.google?.maps;
+    if (!map || !googleMaps) return;
+
+    const overlays = mapOverlaysRef.current;
+    overlays.gpsMarkers.forEach(marker => marker.setMap(null));
+    overlays.gpsMarkers = [];
+
+    if (basePoints.length === 0) return;
+
+    overlays.gpsMarkers = basePoints
+      .filter((_, index) => index % 5 === 0)
+      .map(point => {
+        const marker = new googleMaps.Marker({
+          map,
+          position: { lat: point.latitude, lng: point.longitude },
+          icon: {
+            path: googleMaps.SymbolPath.CIRCLE,
+            fillColor: SOURCE_COLORS[point.source || 'native'],
+            fillOpacity: 0.9,
+            strokeColor: '#ffffff',
+            strokeWeight: 1,
+            scale: 4,
+          },
+          title: format(new Date(point.timestamp), 'HH:mm:ss', { locale: de }),
+        });
+        marker.addListener('click', () => window.open(getGoogleMapsUrl(point.latitude, point.longitude), '_blank'));
+        return marker;
+      });
+  }, [baseRouteSignature, mapsApiLoaded]); // baseRouteSignature ändert sich nur bei Route-Wechsel!
 
   // Manual scrubbing: Update position based on timestamp slider
   const handleScrub = (timestamp: number) => {
@@ -735,21 +1449,56 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     pausedIndexRef.current = idx;
   };
 
+  // Navigate to next GPS point
+  const handleNextPoint = () => {
+    if (currentIndex < displayPoints.length - 1) {
+      const nextIndex = currentIndex + 1;
+      const nextPoint = displayPoints[nextIndex];
+      setCurrentTimestamp(nextPoint.timestamp);
+      pausedTimestampRef.current = nextPoint.timestamp;
+      setCurrentIndex(nextIndex);
+      pausedIndexRef.current = nextIndex;
+    }
+  };
+
+  // Navigate to previous GPS point
+  const handlePreviousPoint = () => {
+    if (currentIndex > 0) {
+      const prevIndex = currentIndex - 1;
+      const prevPoint = displayPoints[prevIndex];
+      setCurrentTimestamp(prevPoint.timestamp);
+      pausedTimestampRef.current = prevPoint.timestamp;
+      setCurrentIndex(prevIndex);
+      pausedIndexRef.current = prevIndex;
+    }
+  };
+
   // Find GPS point index by timestamp
   const findIndexByTimestamp = (targetTimestamp: number): number => {
     // Find the first GPS point that is at or after the target timestamp
-    for (let i = 0; i < sortedPoints.length; i++) {
-      if (sortedPoints[i].timestamp >= targetTimestamp) {
+    for (let i = 0; i < displayPoints.length; i++) {
+      if (displayPoints[i].timestamp >= targetTimestamp) {
         return i;
       }
     }
     // If no point found, return last index
-    return sortedPoints.length - 1;
+    return displayPoints.length - 1;
   };
 
   // Start animation - Time-based with smooth interpolation
   const startAnimation = () => {
-    if (sortedPoints.length === 0) return;
+    if (displayPoints.length === 0) {
+      console.log('[RouteReplay] Cannot start animation: no display points');
+      return;
+    }
+
+    console.log('[RouteReplay] Starting animation', {
+      displayPointsCount: displayPoints.length,
+      currentTimestamp,
+      startTime,
+      endTime,
+      duration: endTime - startTime
+    });
 
     setIsPlaying(true);
     startTimeRef.current = Date.now();
@@ -758,13 +1507,15 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     const startGPSTimestamp = currentTimestamp;
 
     const animate = () => {
-      if (!startTimeRef.current) return;
+      if (!startTimeRef.current) {
+        console.log('[RouteReplay] animate() aborted: no startTimeRef');
+        return;
+      }
 
       // Elapsed real time since animation started
       const elapsedRealTime = Date.now() - startTimeRef.current;
 
       // Calculate how much GPS time has passed based on animation speed
-      // secondsPerHour defines how many real seconds = 1 GPS hour
       const realTimePerGPSHour = secondsPerHour * 1000; // milliseconds
       const gpsTimePerRealTime = (60 * 60 * 1000) / realTimePerGPSHour; // GPS ms per real ms
       const elapsedGPSTime = elapsedRealTime * gpsTimePerRealTime;
@@ -772,17 +1523,33 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
       // Current GPS timestamp in the animation
       const targetGPSTimestamp = startGPSTimestamp + elapsedGPSTime;
 
+      if (elapsedRealTime % 1000 < 16) { // Log ungefähr jede Sekunde
+        console.log('[RouteReplay] animate()', {
+          elapsedRealTime,
+          elapsedGPSTime,
+          targetGPSTimestamp,
+          startGPSTimestamp,
+          endTime,
+          progress: ((targetGPSTimestamp - startGPSTimestamp) / (endTime - startGPSTimestamp) * 100).toFixed(1) + '%'
+        });
+      }
+
       // Update timestamp for smooth interpolation
       setCurrentTimestamp(targetGPSTimestamp);
       pausedTimestampRef.current = targetGPSTimestamp;
+      currentTimestampRef.current = targetGPSTimestamp; // Für Auto-Zoom
 
       // Update index for compatibility
       const newIndex = findIndexByTimestamp(targetGPSTimestamp);
       setCurrentIndex(newIndex);
       pausedIndexRef.current = newIndex;
 
+      // Kamera-Steuerung erfolgt über updateCameraView (alle 3 Sekunden)
+      // Keine redundante Pan-Logik hier im Animationsloop
+
       // Check if we've reached the end
       if (targetGPSTimestamp >= endTime) {
+        console.log('[RouteReplay] Animation reached end', { targetGPSTimestamp, endTime });
         setIsPlaying(false);
         startTimeRef.current = null;
         setCurrentTimestamp(endTime);
@@ -791,6 +1558,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
       }
     };
 
+    console.log('[RouteReplay] Starting animation frame');
     animationRef.current = requestAnimationFrame(animate);
   };
 
@@ -808,7 +1576,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
   // Reset animation
   const resetAnimation = () => {
     pauseAnimation();
-    if (sortedPoints.length > 0) {
+    if (displayPoints.length > 0) {
       setCurrentTimestamp(startTime);
       pausedTimestampRef.current = startTime;
       setCurrentIndex(0);
@@ -825,14 +1593,31 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     };
   }, []);
 
+  // Keyboard navigation: Arrow Left/Right for previous/next GPS point
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        handlePreviousPoint();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        handleNextPoint();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [currentIndex, displayPoints]);
+
   // Center map on current position
   const centerOnCurrentPosition = () => {
     if (mapRef.current && currentPosition) {
-      mapRef.current.setView(
-        [currentPosition.latitude, currentPosition.longitude],
-        mapRef.current.getZoom(),
-        { animate: true, duration: 0.5 }
-      );
+      mapRef.current.panTo({
+        lat: currentPosition.latitude,
+        lng: currentPosition.longitude
+      });
     }
   };
 
@@ -843,7 +1628,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     return `${hours}h ${minutes}m`;
   };
 
-  if (sortedPoints.length === 0) {
+  if (displayPoints.length === 0) {
     return (
       <Card>
         <CardContent className="pt-6">
@@ -858,37 +1643,77 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
   return (
     <div ref={containerRef} className="relative w-full h-full">
       {/* Timeline Bar - Always at top, floating over map */}
-      <div className="absolute top-0 left-0 right-0 z-[1000] px-4 py-3 bg-background/95 backdrop-blur-sm shadow-lg border-b">
-        <div className="flex items-center gap-3">
+      <div className="absolute left-0 right-0 z-[1000] px-2 sm:px-4 bg-background/95 backdrop-blur-sm shadow-lg border-b top-0 pt-6 pb-3">
+        <div className="flex items-center gap-1 sm:gap-2 lg:gap-3">
           {/* Play/Pause/Reset Controls */}
           <div className="flex gap-2">
             {!isPlaying ? (
               <Button onClick={startAnimation} size="sm" className="h-9">
-                <Play className="h-4 w-4 mr-1" />
-                Abspielen
+                <Play className="h-4 w-4 md:mr-1" />
+                <span className="hidden md:inline">Abspielen</span>
               </Button>
             ) : (
               <Button onClick={pauseAnimation} size="sm" variant="secondary" className="h-9">
-                <Pause className="h-4 w-4 mr-1" />
-                Pause
+                <Pause className="h-4 w-4 md:mr-1" />
+                <span className="hidden md:inline">Pause</span>
               </Button>
             )}
             <Button onClick={resetAnimation} size="sm" variant="outline" className="h-9">
-              <RotateCcw className="h-4 w-4 mr-1" />
-              Zurück
+              <RotateCcw className="h-4 w-4 md:mr-1" />
+              <span className="hidden md:inline">Zurück</span>
             </Button>
-            <Button onClick={centerOnCurrentPosition} size="sm" variant="outline" className="h-9" title="Zur aktuellen Position zentrieren">
+            <div className="flex items-center gap-1 border-l pl-2">
+              <Button
+                onClick={handlePreviousPoint}
+                size="sm"
+                variant="outline"
+                className="h-9 px-2"
+                title="Vorheriger GPS-Punkt (Pfeil Links)"
+                disabled={currentIndex <= 0}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                onClick={handleNextPoint}
+                size="sm"
+                variant="outline"
+                className="h-9 px-2"
+                title="Nächster GPS-Punkt (Pfeil Rechts)"
+                disabled={currentIndex >= displayPoints.length - 1}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+            <Button onClick={centerOnCurrentPosition} size="sm" variant="outline" className="h-9 px-2" title="Zur aktuellen Position zentrieren">
               <MapPin className="h-4 w-4" />
             </Button>
           </div>
 
           {/* Timeline Slider with Time Labels */}
           <div className="flex-1 min-w-0">
-            <div className="relative pb-4">
+            <div className="relative pb-4 pt-5">
+              {/* Hour labels above slider */}
+              {hourMarkers.length > 0 && (
+                <div className="absolute left-0 right-0 top-0 h-5 pointer-events-none">
+                  {hourMarkers.map((marker, idx) => (
+                    <div
+                      key={`hour-label-${idx}`}
+                      className="absolute flex flex-col items-center text-[10px] text-muted-foreground font-mono"
+                      style={{ left: `${marker.position}%`, transform: 'translateX(-50%)' }}
+                    >
+                      <span className="px-1 rounded bg-background/80 shadow-sm">
+                        {format(marker.time, 'HH:mm', { locale: de })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Stationary period backgrounds */}
               <div className="absolute w-full h-3 pointer-events-none">
-                {sortedPoints.length > 0 && stationaryPeriods.map((period, idx) => {
+                {displayPoints.length > 0 && stationaryPeriods.map((period, idx) => {
                   const totalDuration = endTime - startTime;
+                  if (totalDuration <= 0) return null;
                   const startPos = ((period.startTime - startTime) / totalDuration) * 100;
                   const endPos = ((period.endTime - startTime) / totalDuration) * 100;
                   const width = endPos - startPos;
@@ -905,28 +1730,14 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
 
               {/* Hour marker ticks */}
               <div className="absolute w-full h-3 pointer-events-none">
-                {(() => {
-                  const hourMarkers: { position: number; time: Date }[] = [];
-                  const startHour = new Date(startTime);
-                  startHour.setMinutes(0, 0, 0);
-                  let currentHour = new Date(startHour);
-                  currentHour.setHours(currentHour.getHours() + 1);
-
-                  while (currentHour.getTime() <= endTime) {
-                    const position = ((currentHour.getTime() - startTime) / (endTime - startTime)) * 100;
-                    hourMarkers.push({ position, time: new Date(currentHour) });
-                    currentHour.setHours(currentHour.getHours() + 1);
-                  }
-
-                  return hourMarkers.map((marker, idx) => (
-                    <div
-                      key={idx}
-                      className="absolute h-full border-l border-gray-400"
-                      style={{ left: `${marker.position}%` }}
-                      title={format(marker.time, 'HH:mm', { locale: de })}
-                    />
-                  ));
-                })()}
+                {hourMarkers.map((marker, idx) => (
+                  <div
+                    key={`hour-tick-${idx}`}
+                    className="absolute h-full border-l border-gray-400"
+                    style={{ left: `${marker.position}%` }}
+                    title={format(marker.time, 'HH:mm', { locale: de })}
+                  />
+                ))}
               </div>
 
               <input
@@ -937,7 +1748,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
                 onChange={(e) => handleScrub(Number(e.target.value))}
                 className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer relative z-10"
                 style={{
-                  background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${((currentTimestamp - startTime) / (endTime - startTime)) * 100}%, #e5e7eb ${((currentTimestamp - startTime) / (endTime - startTime)) * 100}%, #e5e7eb 100%)`
+                  background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${clampedTimelineProgress * 100}%, #e5e7eb ${clampedTimelineProgress * 100}%, #e5e7eb 100%)`
                 }}
               />
 
@@ -950,25 +1761,13 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
           </div>
 
           {/* Current time + Speed */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 lg:gap-3">
             {currentPosition && (
-              <span className="text-sm font-bold whitespace-nowrap font-mono tabular-nums">
+              <span className="hidden sm:inline text-sm font-bold whitespace-nowrap font-mono tabular-nums">
                 {format(new Date(currentPosition.timestamp), 'HH:mm:ss', { locale: de })}
               </span>
             )}
-            <div className="flex items-center gap-2">
-              <Zap className="h-4 w-4 text-muted-foreground" />
-              <input
-                type="range"
-                min="1"
-                max="30"
-                value={secondsPerHour}
-                onChange={(e) => setSecondsPerHour(Number(e.target.value))}
-                className="w-20"
-                title="Geschwindigkeit"
-              />
-              <span className="text-xs font-medium w-12 font-mono tabular-nums">{secondsPerHour}s/h</span>
-            </div>
+            {/* Speed control removed - fixed at 5s/hour */}
           </div>
         </div>
       </div>
@@ -1008,44 +1807,44 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
         {/* Content */}
         {!leftPanelCollapsed && (
           <div className="p-4 space-y-3">
+            {/* Auto-Zoom Toggle */}
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={intelligentZoomEnabled}
-                  onChange={(e) => setIntelligentZoomEnabled(e.target.checked)}
+                  checked={autoZoomEnabled}
+                  onChange={(e) => setAutoZoomEnabled(e.target.checked)}
                   className="rounded"
                 />
                 <span>Auto-Zoom</span>
               </label>
-              <label className="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showFullRoute}
-                  onChange={(e) => setShowFullRoute(e.target.checked)}
-                  className="rounded"
-                />
-                <span>Gesamte Route</span>
-              </label>
+              <p className="text-[10px] text-muted-foreground">
+                {autoZoomEnabled
+                  ? 'Kamera folgt automatisch der Route'
+                  : 'Manuelle Kamerasteuerung aktiv'}
+              </p>
             </div>
 
-            {/* Manual Zoom (when auto-zoom disabled) */}
-            {!intelligentZoomEnabled && !isPlaying && (
-              <div className="pt-2 border-t space-y-1">
-                <label className="text-xs text-muted-foreground">Zoom-Stufe</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="range"
-                    min="10"
-                    max="18"
-                    value={zoomLevel}
-                    onChange={(e) => setZoomLevel(Number(e.target.value))}
-                    className="flex-1"
-                  />
-                  <span className="text-sm font-medium w-8 font-mono tabular-nums">{zoomLevel}</span>
-                </div>
+            {/* Geschwindigkeitsregler */}
+            <div className="pt-3 border-t space-y-2">
+              <label className="text-sm font-medium">Geschwindigkeit</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="range"
+                  min="1"
+                  max="20"
+                  step="1"
+                  value={secondsPerHour}
+                  onChange={(e) => setSecondsPerHour(Number(e.target.value))}
+                  className="flex-1"
+                  disabled={isPlaying}
+                />
+                <span className="text-xs font-mono w-12 text-right">{secondsPerHour}s/h</span>
               </div>
-            )}
+              <p className="text-[10px] text-muted-foreground">
+                {secondsPerHour} Sekunden = 1 Stunde GPS-Daten
+              </p>
+            </div>
           </div>
         )}
       </div>
@@ -1090,7 +1889,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
               <div>
                 <p className="text-muted-foreground">Start</p>
                 <p className="font-medium font-mono tabular-nums">
-                  {format(new Date(sortedPoints[0].timestamp), 'HH:mm', { locale: de })}
+                  {format(new Date(displayPoints[0].timestamp), 'HH:mm', { locale: de })}
                 </p>
               </div>
               <div>
@@ -1102,7 +1901,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
               <div>
                 <p className="text-muted-foreground">Ende</p>
                 <p className="font-medium font-mono tabular-nums">
-                  {format(new Date(sortedPoints[sortedPoints.length - 1].timestamp), 'HH:mm', { locale: de })}
+                  {format(new Date(displayPoints[displayPoints.length - 1].timestamp), 'HH:mm', { locale: de })}
                 </p>
               </div>
             </div>
@@ -1153,182 +1952,29 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
             <div className="w-3 h-3 rounded-full bg-[#ef4444] border border-white shadow-sm"></div>
             <span>Damians Tracking App</span>
           </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-full bg-[#10b981] border border-white shadow-sm"></div>
+            <span>Snap-to-Roads</span>
+          </div>
         </div>
       </div>
 
       {/* Map Container - Full screen */}
-      <div className="w-full h-full">
-            <MapContainer
-              center={[sortedPoints[0].latitude, sortedPoints[0].longitude]}
-              zoom={zoomLevel}
-              style={{ height: '100%', width: '100%' }}
-              zoomControl={false}
-            >
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-
-              {/* Zoom Control - Bottom Left */}
-              <ZoomControl position="bottomleft" />
-
-              {/* Capture map reference */}
-              <MapRefCapture mapRef={mapRef} />
-
-              {/* Initial bounds setup (only on first load) */}
-              <InitialBounds points={sortedPoints} />
-              
-              {/* Camera follows current position with intelligent panning */}
-              <CameraFollow
-                currentPosition={currentPosition}
-                currentIndex={currentIndex}
-                allPoints={sortedPoints}
-                manualZoom={zoomLevel}
-                isPlaying={isPlaying}
-                intelligentZoomEnabled={intelligentZoomEnabled}
-                secondsPerHour={secondsPerHour}
-              />
-
-              {/* Full Route (grayed out) - Multi-colored by source */}
-              {showFullRoute && fullRouteSegments.map((segment, idx) => {
-                const color = segment.source === 'followmee' ? '#9ca3af' : '#9ca3af'; // All gray for full route
-                return (
-                  <Polyline
-                    key={`full-segment-${idx}`}
-                    positions={segment.points}
-                    color={color}
-                    weight={3}
-                    opacity={0.5}
-                    dashArray="5, 5"
-                  />
-                );
-              })}
-
-              {/* Animated Route (colored by source) */}
-              {animatedRouteSegments.map((segment, idx) => {
-                // Black for FollowMee, Red for External, Blue for Native
-                const color = segment.source === 'followmee' ? '#000000' : segment.source === 'external' ? '#ef4444' : '#3b82f6';
-                return (
-                  <Polyline
-                    key={`animated-segment-${idx}`}
-                    positions={segment.points}
-                    color={color}
-                    weight={4}
-                    opacity={0.8}
-                  />
-                );
-              })}
-
-              {/* Start Marker */}
-              {sortedPoints.length > 0 && (
-                <Marker
-                  position={[sortedPoints[0].latitude, sortedPoints[0].longitude]}
-                  icon={createStartMarker()}
-                >
-                  <Popup>
-                    <div className="text-sm">
-                      <p className="font-bold">Start</p>
-                      <p>{format(new Date(sortedPoints[0].timestamp), 'HH:mm:ss', { locale: de })}</p>
-                    </div>
-                  </Popup>
-                </Marker>
-              )}
-
-              {/* End Marker */}
-              {sortedPoints.length > 1 && (
-                <Marker
-                  position={[
-                    sortedPoints[sortedPoints.length - 1].latitude,
-                    sortedPoints[sortedPoints.length - 1].longitude
-                  ]}
-                  icon={createEndMarker()}
-                >
-                  <Popup>
-                    <div className="text-sm">
-                      <p className="font-bold">Ende</p>
-                      <p>{format(new Date(sortedPoints[sortedPoints.length - 1].timestamp), 'HH:mm:ss', { locale: de })}</p>
-                    </div>
-                  </Popup>
-                </Marker>
-              )}
-
-              {/* Current Position Marker (animated) */}
-              {currentPosition && currentIndex > 0 && currentIndex < sortedPoints.length - 1 && (
-                <Marker
-                  position={[currentPosition.latitude, currentPosition.longitude]}
-                  icon={createAnimatedMarker()}
-                >
-                  <Popup>
-                    <div className="text-sm">
-                      <p className="font-bold">Aktuelle Position</p>
-                      <p>{format(new Date(currentPosition.timestamp), 'HH:mm:ss', { locale: de })}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Genauigkeit: ±{Math.round(currentPosition.accuracy)}m
-                      </p>
-                    </div>
-                  </Popup>
-                </Marker>
-              )}
-
-              {/* Photo Flash Markers */}
-              {activePhotoFlash !== null && photoPositions.map(photo => {
-                if (photo.timestamp !== activePhotoFlash) return null;
-                
-                return (
-                  <Marker
-                    key={`photo-flash-${photo.timestamp}`}
-                    position={photo.position}
-                    icon={createPhotoFlashMarker()}
-                    zIndexOffset={2000}
-                  >
-                    <Popup>
-                      <div className="text-sm">
-                        <p className="font-bold">📸 Foto aufgenommen</p>
-                        <p>{format(new Date(photo.timestamp), 'HH:mm:ss', { locale: de })}</p>
-                      </div>
-                    </Popup>
-                  </Marker>
-                );
-              })}
-
-              {/* Clickable GPS Point Markers (only show every 5th point to avoid clutter) */}
-              {sortedPoints
-                .filter((_, index) => index % 5 === 0)
-                .map((point, index) => (
-                  <Marker
-                    key={`gps-point-${index}`}
-                    position={[point.latitude, point.longitude]}
-                    icon={createGPSPointMarker(point.source)}
-                    eventHandlers={{
-                      click: () => {
-                        window.open(getGoogleMapsUrl(point.latitude, point.longitude), '_blank');
-                      }
-                    }}
-                  >
-                    <Popup>
-                      <div className="text-sm">
-                        <p className="font-bold">GPS-Punkt</p>
-                        <p className="text-xs">{format(new Date(point.timestamp), 'HH:mm:ss', { locale: de })}</p>
-                        <p className="text-xs mt-1">
-                          {point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}
-                        </p>
-                        {point.source && (
-                          <p className="text-xs mt-1 text-muted-foreground">
-                            Quelle: {point.source === 'followmee' ? 'FollowMee' : point.source === 'external' ? 'Damians Tracking App' : 'Native App'}
-                          </p>
-                        )}
-                        <button
-                          onClick={() => window.open(getGoogleMapsUrl(point.latitude, point.longitude), '_blank')}
-                          className="mt-2 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 w-full"
-                        >
-                          In Google Maps öffnen
-                        </button>
-                      </div>
-                    </Popup>
-                  </Marker>
-                ))}
-            </MapContainer>
+      <div className="w-full h-full rounded-xl overflow-hidden border border-border relative bg-muted">
+        <div ref={mapContainerRef} className="w-full h-full" />
+        {!mapsApiLoaded && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background/75 backdrop-blur-sm z-[600]">
+            <div className="text-sm text-muted-foreground">Google Maps wird geladen...</div>
+          </div>
+        )}
+        {mapLoadError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background/85 backdrop-blur-sm z-[700]">
+            <div className="text-sm text-red-500 font-medium text-center px-4">{mapLoadError}</div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
+
+

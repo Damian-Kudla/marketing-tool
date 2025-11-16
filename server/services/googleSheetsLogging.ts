@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import { AuthenticatedRequest } from '../middleware/auth';
+import { getBerlinDate, getBerlinTimestamp } from '../utils/timezone';
 
 let sheetsClient: any = null;
 let sheetsEnabled = false;
@@ -160,7 +161,7 @@ export class GoogleSheetsLoggingService {
       }
 
       const logRow = [
-        new Date().toISOString(), // Timestamp
+        getBerlinTimestamp(), // Timestamp
         req.userId, // User ID
         req.username, // Username
         req.path, // Endpoint
@@ -252,7 +253,7 @@ export class GoogleSheetsLoggingService {
       }
 
       const authLogRow = [
-        new Date().toISOString(),
+        getBerlinTimestamp(),
         ip,
         success ? 'SUCCESS' : 'FAILED',
         username || 'unknown',
@@ -412,7 +413,9 @@ export class GoogleSheetsLoggingService {
           data: row[9] || ''
         }));
 
-      console.log(`[GoogleSheetsLoggingService] Found ${logsForDate.length} log entries for ${username} on ${date.toISOString().split('T')[0]}`);
+      console.log(
+        `[GoogleSheetsLoggingService] Found ${logsForDate.length} log entries for ${username} on ${getBerlinDate(date)}`
+      );
       return logsForDate;
     } catch (error) {
       console.error(`[GoogleSheetsLoggingService] Error loading logs for ${username}:`, error);

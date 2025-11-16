@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Lock, Eye, EyeOff } from "lucide-react";
 import { authAPI } from '@/services/api';
+import { deviceFingerprintService } from '@/services/deviceFingerprint';
 
 interface LoginProps {
   onLogin: () => void;
@@ -18,9 +19,16 @@ export function Login({ onLogin }: LoginProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // Initialize device fingerprint on component mount
+  useEffect(() => {
+    deviceFingerprintService.getDeviceId().then(deviceId => {
+      console.log('[Login] Device fingerprint initialized:', deviceId);
+    });
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!password.trim()) {
       setError('Bitte geben Sie ein Passwort ein');
       return;
@@ -30,6 +38,7 @@ export function Login({ onLogin }: LoginProps) {
     setError('');
 
     try {
+      // Device info is automatically included in authAPI.login
       const response = await authAPI.login(password.trim());
       const data = await response.json();
 

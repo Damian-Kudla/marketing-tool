@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import puppeteer from 'puppeteer';
 import { scrapeDayData } from './historicalDataScraper';
 import type { DailyUserData, UserReport, DailyReport } from '../../shared/trackingTypes';
+import { getBerlinDate } from '../utils/timezone';
 
 /**
  * PDF Report Generator V3.0 - HTML Based (On-Demand)
@@ -76,7 +77,11 @@ export async function generateDailyReport(date: string): Promise<string> {
   }
 
   // Sort by activity score (LOWEST first as requested!)
-  users.sort((a, b) => a.activityScore - b.activityScore);
+  users.sort(
+    (a, b) =>
+      (a.activityScore ?? Number.MAX_SAFE_INTEGER) -
+      (b.activityScore ?? Number.MAX_SAFE_INTEGER)
+  );
 
   console.log(`[ReportGenerator] Generating report for ${users.length} users`);
 
@@ -126,7 +131,7 @@ function createUserReport(userData: DailyUserData): UserReport {
     userId: userData.userId,
     username: userData.username,
     date: userData.date,
-    activityScore: userData.activityScore,
+    activityScore: userData.activityScore ?? 0,
     summary: {
       totalDistance: userData.totalDistance,
       uniqueAddresses: userData.uniqueAddresses.size,
@@ -188,11 +193,12 @@ function generateHTML(report: DailyReport): string {
     const total = Array.from(u.summary.statusChanges.values()).reduce((s, c) => s + c, 0);
     const dist = (u.summary.totalDistance / 1000).toFixed(1);
     const conv = u.summary.conversionRate.toFixed(0);
-    const cls = u.activityScore >= 75 ? 'score-high' : u.activityScore >= 50 ? 'score-medium' : 'score-low';
+    const score = u.activityScore ?? 0;
+    const cls = score >= 75 ? 'score-high' : score >= 50 ? 'score-medium' : 'score-low';
     return `<tr>
       <td style="text-align:center;font-weight:600">${i + 1}</td>
       <td style="font-weight:600">${u.username}</td>
-      <td><span class="score ${cls}">${u.activityScore}</span></td>
+      <td><span class="score ${cls}">${score}</span></td>
       <td style="text-align:center">${u.summary.totalActions}</td>
       <td style="text-align:center">${total}</td>
       <td style="text-align:center">${dist} km</td>
@@ -291,7 +297,7 @@ function formatTime(timestamp: number): string {
  */
 function getCurrentDate(): string {
   const now = new Date();
-  return now.toISOString().split('T')[0];
+  return getBerlinDate(now);
 }
 
 /**

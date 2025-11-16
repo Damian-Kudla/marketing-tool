@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { Request } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth';
+import { getBerlinTimestamp } from '../utils/timezone';
 
 export interface LogEntry {
   timestamp: string;
@@ -38,7 +39,7 @@ export class LoggingService {
     this.ensureLogsDirectory();
 
     const logEntry: LogEntry = {
-      timestamp: new Date().toISOString(),
+      timestamp: getBerlinTimestamp(),
       userId: req.userId,
       endpoint: req.path,
       method: req.method,
@@ -83,7 +84,7 @@ export class LoggingService {
     this.ensureLogsDirectory();
 
     const logEntry = {
-      timestamp: new Date().toISOString(),
+      timestamp: getBerlinTimestamp(),
       type: 'auth_attempt',
       ip,
       success,

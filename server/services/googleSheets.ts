@@ -3,19 +3,16 @@ import crypto from 'crypto';
 import type { AddressDataset, EditableResident } from '../../shared/schema';
 import { checkRateLimit, incrementRateLimit } from '../middleware/rateLimit';
 import { LOG_CONFIG } from '../config/logConfig';
+import { getBerlinDate, getBerlinTimestamp } from '../utils/timezone';
 
 // Helper function to get current time in Berlin timezone (MEZ/MESZ)
 function getBerlinTime(): Date {
-  // IMPORTANT: Always use UTC Date objects internally
-  // This ensures consistent time calculations across different server timezones
   return new Date();
 }
 
 // Helper function to format date for Berlin timezone as ISO string
 function formatBerlinTimeISO(date: Date): string {
-  // Return ISO string in UTC (standardized storage format)
-  // This avoids timezone confusion when reading back from Google Sheets
-  return date.toISOString();
+  return getBerlinTimestamp(date);
 }
 
 // RAM Cache for Address Datasets
@@ -1191,7 +1188,7 @@ class AddressDatasetService implements AddressSheetsService {
         if (row[0]) { // Has ID
           // Parse createdAt: The ISO string in Sheets is Berlin time, but we store it as Date object
           // We need to parse it correctly to avoid timezone issues
-          const createdAtStr = row[7] || new Date().toISOString();
+          const createdAtStr = row[7] || getBerlinTimestamp();
           const createdAtDate = new Date(createdAtStr);
           
           const dataset: AddressDataset = {
@@ -1285,25 +1282,25 @@ class AddressDatasetService implements AddressSheetsService {
 export const googleSheetsService = new GoogleSheetsService();
 export const addressDatasetService = new AddressDatasetService();
 
-// Initialize caches on startup
-if (sheetsEnabled) {
+// Export initialization functions for controlled startup sequence
+export async function initializeGoogleSheetsCaches(): Promise<void> {
+  if (!sheetsEnabled) {
+    console.warn('[GoogleSheets] Sheets API disabled, skipping cache initialization');
+    return;
+  }
+
   // Initialize user auth cache (FIRST - required for authentication)
-  userAuthCache.initialize(googleSheetsService)
-    .then(() => console.log('[UserAuthCache] Cache initialization complete'))
-    .catch((error) => console.error('[UserAuthCache] Cache initialization failed:', error));
+  await userAuthCache.initialize(googleSheetsService);
+  console.log('[UserAuthCache] ✅ Cache initialization complete');
 
   // Initialize dataset cache
-  datasetCache.initialize(addressDatasetService)
-    .then(() => console.log('[DatasetCache] Cache initialization complete'))
-    .catch((error) => console.error('[DatasetCache] Cache initialization failed:', error));
+  await datasetCache.initialize(addressDatasetService);
+  console.log('[DatasetCache] ✅ Cache initialization complete');
 
   // Initialize validated street cache (loads all street names from "Adressen" sheet)
-  validatedStreetCache.initialize(addressDatasetService)
-    .then(() => {
-      const stats = validatedStreetCache.getStats();
-      console.log(`[ValidatedStreetCache] Initialization complete - ${stats.totalAddresses} validated addresses loaded`);
-    })
-    .catch((error) => console.error('[ValidatedStreetCache] Initialization failed:', error));
+  await validatedStreetCache.initialize(addressDatasetService);
+  const stats = validatedStreetCache.getStats();
+  console.log(`[ValidatedStreetCache] ✅ Initialization complete - ${stats.totalAddresses} validated addresses loaded`);
 }
 
 // Category Change Logging Service
@@ -1685,7 +1682,7 @@ class AppointmentService {
   // Get upcoming appointments for a user
   async getUpcomingAppointments(username: string): Promise<any[]> {
     const allAppointments = await this.getUserAppointments(username);
-    const today = new Date().toISOString().split('T')[0];
+    const today = getBerlinDate();
 
     return allAppointments.filter(apt => apt.appointmentDate >= today);
   }

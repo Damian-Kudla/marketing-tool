@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import type { PluginOption } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -9,7 +10,7 @@ const __dirname = path.dirname(__filename);
 
 export default defineConfig(async ({ mode }) => {
   const isProduction = mode === "production";
-  const plugins = [react()];
+  const plugins: PluginOption[] = [react()];
 
   if (!isProduction) {
     const [{ default: runtimeErrorOverlay }, cartographerModule, devBannerModule] =
@@ -26,7 +27,8 @@ export default defineConfig(async ({ mode }) => {
     plugins.push(runtimeErrorOverlay());
 
     if (process.env.REPL_ID !== undefined && cartographerModule && devBannerModule) {
-      plugins.push(cartographerModule.cartographer(), devBannerModule.devBanner());
+      plugins.push(cartographerModule.cartographer());
+      plugins.push(devBannerModule.devBanner());
     }
   }
 

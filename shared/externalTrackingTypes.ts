@@ -30,6 +30,8 @@ export interface LocationData {
   deviceName: string | null;
   deviceModel: string | null;
   osVersion: string | null;
+  deviceUniqueId: string | null;      // Eindeutige Geräte-ID (UUID - IMMER verfügbar)
+  deviceSerialNumber: string | null;  // Hardware-Seriennummer (meist null)
 
   // Netzwerk-Info (OPTIONAL)
   isConnected: boolean;

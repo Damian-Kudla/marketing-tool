@@ -4,6 +4,7 @@ import { addressDatasetService, normalizeAddress } from '../services/googleSheet
 import { logUserActivityWithRetry } from '../services/enhancedLogging';
 import { storage } from '../storage';
 import { dailyDataStore } from '../services/dailyDataStore';
+import { getBerlinTimestamp } from '../utils/timezone';
 
 // ==================== LOCK MECHANISM FOR RACE CONDITION PREVENTION ====================
 // In-memory lock map to prevent concurrent dataset creation for the same address
@@ -786,10 +787,10 @@ router.get('/:id', async (req, res) => {
     if (!canEdit) {
       console.log('[GET /:id] ❌ Edit NOT allowed:', {
         datasetId: id,
-        createdAt: creationDate.toISOString(),
+        createdAt: getBerlinTimestamp(creationDate),
         createdBy: dataset.createdBy,
         requestingUser: username,
-        now: now.toISOString(),
+        now: getBerlinTimestamp(now),
         timeDiff: now.getTime() - creationDate.getTime(),
         daysSince: Math.floor((now.getTime() - creationDate.getTime()) / (1000 * 60 * 60 * 24)),
         isEditable,

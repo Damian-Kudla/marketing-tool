@@ -32,6 +32,14 @@ export interface ActionLog {
   previousStatus?: 'interessiert' | 'nicht_interessiert' | 'nicht_angetroffen' | 'termin_vereinbart'; // For tracking actual status changes
 }
 
+export interface DeviceInfo {
+  deviceId: string;
+  deviceName: string;
+  platform: string;
+  userAgent: string;
+  screenResolution: string;
+}
+
 export interface DeviceStatus {
   batteryLevel?: number;
   isCharging?: boolean;
@@ -40,6 +48,7 @@ export interface DeviceStatus {
   screenOrientation?: string;
   memoryUsage?: number;
   timestamp: number;
+  deviceId?: string; // Device fingerprint ID
 }
 
 export interface TrackingData {
@@ -49,6 +58,7 @@ export interface TrackingData {
   gps?: GPSCoordinates;
   session?: Partial<SessionData>;
   device?: DeviceStatus;
+  deviceInfo?: DeviceInfo; // Device fingerprint information
 }
 
 // Daily Aggregated Data (stored in RAM)
@@ -92,6 +102,7 @@ export interface DailyUserData {
   scansPerHour: number;
   avgTimePerAddress: number; // milliseconds
   conversionRate: number; // percentage
+  activityScore?: number;
   
   // Raw logs for PDF generation
   rawLogs: TrackingData[];
@@ -102,6 +113,7 @@ export interface UserReport {
   userId: string;
   username: string;
   date: string;
+  activityScore?: number;
   
   summary: {
     totalDistance: number;

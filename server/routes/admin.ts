@@ -1,16 +1,18 @@
 /**
  * Admin Dashboard API Routes
- * 
+ *
  * Stellt Endpunkte für das Admin-Dashboard bereit:
  * - Live-Daten (aktueller Tag aus RAM)
- * - Historische Daten (vergangene Tage aus Google Sheets)
+ * - Historische Daten (vergangene Tage aus SQLite + Drive)
  * - PDF-Reports (Download & Status)
  */
 
 import { Router, Response } from 'express';
 import { requireAuth, AuthenticatedRequest } from '../middleware/auth';
 import { dailyDataStore } from '../services/dailyDataStore';
-import { scrapeDayData, clearHistoricalCache, getCacheStats } from '../services/historicalDataScraper';
+import { scrapeDayDataFromSQLite as scrapeDayData, clearHistoricalCache, getCacheStats } from '../services/sqliteHistoricalData';
+import { getCETDate } from '../services/sqliteLogService';
+import { getBerlinDate, getBerlinHour, getBerlinTimestamp } from '../utils/timezone';
 import fs from 'fs';
 import path from 'path';
 import type { DailyUserData, DashboardLiveData, TrackingData, ActionLog } from '../../shared/trackingTypes';
@@ -37,9 +39,10 @@ function calculateActionDetails(userData: DailyUserData): {
     ocrCorrections: userData.actionsByType.get('bulk_residents_update') || 0,
     datasetCreates: userData.actionsByType.get('dataset_create') || 0,
     geocodes: userData.actionsByType.get('geocode') || 0,
-    edits: userData.actionsByType.get('edit') || 0,
-    saves: userData.actionsByType.get('save') || 0,
-    deletes: userData.actionsByType.get('delete') || 0,
+    // Map actual action types to expected frontend names
+    edits: userData.actionsByType.get('resident_update') || 0,
+    saves: 0, // Deprecated: bulk updates are now tracked as ocrCorrections
+    deletes: userData.actionsByType.get('resident_delete') || 0,
     statusChanges: userData.actionsByType.get('status_change') || 0,
     navigations: userData.actionsByType.get('navigate') || 0,
     other: 0
@@ -48,7 +51,7 @@ function calculateActionDetails(userData: DailyUserData): {
   // Calculate "other" by summing all remaining unmapped action types
   const knownActions = new Set([
     'scan', 'bulk_residents_update', 'dataset_create', 'geocode',
-    'edit', 'save', 'delete', 'status_change', 'navigate'
+    'resident_update', 'resident_delete', 'status_change', 'navigate'
   ]);
   userData.actionsByType.forEach((count, actionType) => {
     if (!knownActions.has(actionType)) {
@@ -69,7 +72,7 @@ function calculatePeakTime(rawLogs: TrackingData[]): string | undefined {
   const hourlyActivity = new Map<number, number>();
   
   for (const log of rawLogs) {
-    const hour = new Date(log.timestamp).getHours();
+    const hour = getBerlinHour(log.timestamp);
     hourlyActivity.set(hour, (hourlyActivity.get(hour) || 0) + 1);
   }
 
@@ -260,7 +263,7 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
 
     res.json({
       ...response,
-      date: new Date().toISOString().split('T')[0],
+      date: getBerlinDate(),
       totalUsers: usersArray.length,
       activeUsers: usersArray.filter(u => u.activeTime > 0).length,
       totalStatusChanges,
@@ -381,6 +384,17 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
       };
     });
 
+    // DEBUG: Log response for Raphael to verify uniquePhotos is sent
+    const raphaelUser = dashboardUsers.find(u => u.username === 'Raphael');
+    if (raphaelUser) {
+      console.log(`[Admin API] 🔍 Raphael response for ${date}:`, {
+        username: raphaelUser.username,
+        totalActions: raphaelUser.todayStats.totalActions,
+        uniquePhotos: raphaelUser.todayStats.uniquePhotos,
+        statusChangesCount: Object.keys(raphaelUser.todayStats.statusChanges).length
+      });
+    }
+
     const totalStatusChanges = userData.reduce((sum, u) => {
       return sum + Array.from(u.statusChanges.values()).reduce((s, c) => s + c, 0);
     }, 0);
@@ -412,7 +426,7 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
     const errorDetails = {
       error: errorMessage,
       date,
-      timestamp: new Date().toISOString(),
+      timestamp: getBerlinTimestamp(),
     };
     
     // Log vollständigen Fehler-Stack für Server-Debugging
@@ -438,12 +452,12 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
 
     const dateStr = date as string;
     const userIdStr = userId as string;
-    const sourceFilter = source as string | undefined; // 'native', 'followmee', 'external', or undefined (all)
+    const sourceFilter = source as string | undefined; // 'native', 'followmee', 'external', 'external_app', or undefined (all)
 
     console.log(`[Admin API] Fetching route data for user ${userIdStr} on ${dateStr} (source: ${sourceFilter || 'all'})`);
 
     // Prüfe ob es heute ist (Live-Daten) oder historische Daten
-    const today = new Date().toISOString().split('T')[0];
+    const today = getBerlinDate();
     let gpsPoints: any[] = [];
     let photoTimestamps: number[] = [];
     let username = '';
@@ -457,63 +471,48 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
       username = user.username;
     }
 
-    // Lade native/followmee Daten nur wenn nicht ausschließlich external gewünscht
-    if (sourceFilter !== 'external') {
-      if (dateStr === today) {
-        // Live-Daten aus RAM
-        const userData = dailyDataStore.getUserDailyData(userIdStr);
-        if (userData) {
-          gpsPoints = userData.gpsPoints;
-          if (!username) username = userData.username;
-          photoTimestamps = userData.photoTimestamps || [];
-        }
-      } else {
-        // Historische Daten aus Google Sheets
-        const historicalData = await scrapeDayData(dateStr, userIdStr);
+    // Lade Daten (native/followmee/external_app aus Logs/SQLite)
+    if (dateStr === today) {
+      // Live-Daten aus RAM
+      const userData = dailyDataStore.getUserDailyData(userIdStr);
+      if (userData) {
+        gpsPoints = userData.gpsPoints;
+        if (!username) username = userData.username;
+        photoTimestamps = userData.photoTimestamps || [];
+      }
+    } else {
+      // Historische Daten aus SQLite
+      const historicalData = await scrapeDayData(dateStr, userIdStr);
 
-        if (historicalData && historicalData.length > 0) {
-          const userData = historicalData[0];
-          gpsPoints = userData.gpsPoints;
-          if (!username) username = userData.username;
-          photoTimestamps = userData.photoTimestamps || [];
-        }
+      if (historicalData && historicalData.length > 0) {
+        const userData = historicalData[0];
+        gpsPoints = userData.gpsPoints;
+        if (!username) username = userData.username;
+        photoTimestamps = userData.photoTimestamps || [];
       }
     }
 
-    // Lade externe Tracking-Daten, falls gewünscht
-    if ((sourceFilter === 'external' || sourceFilter === undefined) && user) {
-      const { externalTrackingService } = await import('../services/externalTrackingService');
+    // Externe Tracking-Daten sind bereits in gpsPoints enthalten (aus SQLite mit source: 'external_app')
+    // Kein separates Laden mehr nötig
 
-      const externalData = await externalTrackingService.getExternalTrackingDataFromUserLog(
-        user.username,
-        new Date(dateStr)
-      );
-
-      // Konvertiere externe Daten in GPS-Points mit source: 'external'
-      const externalGpsPoints = externalData.map(point => ({
-        latitude: point.latitude,
-        longitude: point.longitude,
-        accuracy: 10, // Standard-Genauigkeit für externe Daten
-        timestamp: new Date(point.timestamp).getTime(),
-        source: 'external' as const
-      }));
-
-      if (sourceFilter === 'external') {
-        // Nur externe Daten
-        gpsPoints = externalGpsPoints;
-        console.log(`[Admin API] Loaded ${externalGpsPoints.length} external tracking points`);
+    // Filter GPS points by source if specified
+    if (sourceFilter && sourceFilter !== 'all') {
+      if (sourceFilter === 'external' || sourceFilter === 'external_app') {
+        // Für external/external_app: zeige nur Punkte mit source 'external_app'
+        gpsPoints = gpsPoints.filter(point => point.source === 'external_app');
+        console.log(`[Admin API] Filtered to ${gpsPoints.length} external_app GPS points`);
       } else {
-        // Alle Daten (native + followmee + external)
-        gpsPoints = [...gpsPoints, ...externalGpsPoints];
-        console.log(`[Admin API] Added ${externalGpsPoints.length} external tracking points to existing ${gpsPoints.length - externalGpsPoints.length} points`);
+        // Für native/followmee: exakte Filterung
+        gpsPoints = gpsPoints.filter(point => point.source === sourceFilter);
+        console.log(`[Admin API] Filtered to ${gpsPoints.length} ${sourceFilter} GPS points`);
       }
     }
 
-    // Filter GPS points by source if specified (native oder followmee)
-    if (sourceFilter && (sourceFilter === 'native' || sourceFilter === 'followmee')) {
-      gpsPoints = gpsPoints.filter(point => point.source === sourceFilter);
-      console.log(`[Admin API] Filtered to ${gpsPoints.length} ${sourceFilter} GPS points`);
-    }
+    // Ignore GPS points recorded before 06:00 local time
+    gpsPoints = gpsPoints.filter(point => {
+      const hour = getBerlinHour(point.timestamp);
+      return hour >= 6;
+    });
 
     // Gebe immer 200 zurück, auch wenn keine Daten gefunden wurden
     // (verhindert Service Worker Cache-Probleme)
@@ -538,6 +537,121 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
     console.error('[Admin API] ❌ Error fetching route data:', error);
     res.status(500).json({ 
       error: error.message || 'Failed to fetch route data' 
+    });
+  }
+});
+
+/**
+ * POST /api/admin/dashboard/snap-to-roads
+ * Snap GPS points to roads using Google Roads API with intelligent caching
+ */
+router.post('/dashboard/snap-to-roads', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { userId, date, source, points, segments } = req.body;
+
+    if (!userId || !date || !points || !Array.isArray(points)) {
+      return res.status(400).json({
+        error: 'userId, date, and points array are required'
+      });
+    }
+
+    console.log(`[Admin API] Snap-to-roads request for ${userId}/${date}/${source || 'all'} with ${points.length} points`);
+
+    // Import service
+    const { googleRoadsService } = await import('../services/googleRoadsService');
+
+    // Get cache info first
+    const cacheInfo = googleRoadsService.getCacheInfo(userId, date, source || 'all');
+
+    // Snap points (uses cache automatically)
+    const result = await googleRoadsService.snapToRoads(userId, date, points, source || 'all', segments);
+
+    // Save cache to disk
+    await googleRoadsService.saveCache();
+
+    const formattedCost = Number.isFinite(result.costCents) ? result.costCents.toFixed(2) : '0.00';
+    console.log(`[Admin API] Snap-to-roads completed: ${result.totalSegments} segments (${result.apiCallsUsed} API calls, ${formattedCost}ct)`);
+
+    res.json({
+      segments: result.snappedSegments,
+      segmentCount: result.segmentCount,
+      apiCallsUsed: result.apiCallsUsed,
+      costCents: result.costCents,
+      fromCache: result.fromCache,
+      cacheHitRatio: result.cacheHitRatio,
+      stats: {
+        totalSegments: result.totalSegments,
+        cachedSegments: result.cachedSegments
+      },
+      cacheInfo: {
+        cached: cacheInfo.cached,
+        cachedPointCount: cacheInfo.cachedPointCount,
+        cachedSegmentCount: cacheInfo.cachedSegmentCount,
+        lastProcessedTimestamp: cacheInfo.lastProcessedTimestamp,
+        totalApiCallsUsed: cacheInfo.apiCallsUsed,
+        totalCostCents: cacheInfo.costCents,
+        segmentKeys: cacheInfo.segmentKeys
+      }
+    });
+
+  } catch (error: any) {
+    console.error('[Admin API] ❌ Error in snap-to-roads:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to snap points to roads'
+    });
+  }
+});
+
+/**
+ * GET /api/admin/dashboard/snap-to-roads/cache-info
+ * Get cache information for a specific route without processing
+ */
+router.get('/dashboard/snap-to-roads/cache-info', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { userId, date, source } = req.query;
+
+    if (!userId || !date) {
+      return res.status(400).json({ error: 'userId and date are required' });
+    }
+
+    const { googleRoadsService } = await import('../services/googleRoadsService');
+    const cacheInfo = googleRoadsService.getCacheInfo(
+      userId as string,
+      date as string,
+      (source as string) || 'all'
+    );
+
+    res.json(cacheInfo);
+
+  } catch (error: any) {
+    console.error('[Admin API] ❌ Error getting cache info:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to get cache info'
+    });
+  }
+});
+
+/**
+ * POST /api/admin/dashboard/snap-to-roads/calculate-cost
+ * Calculate cost for snapping without actually calling the API
+ */
+router.post('/dashboard/snap-to-roads/calculate-cost', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { segmentCount } = req.body;
+
+    if (typeof segmentCount !== 'number' || segmentCount < 0) {
+      return res.status(400).json({ error: 'Valid segmentCount is required' });
+    }
+
+    const { googleRoadsService } = await import('../services/googleRoadsService');
+    const cost = googleRoadsService.calculateCost(segmentCount);
+
+    res.json(cost);
+
+  } catch (error: any) {
+    console.error('[Admin API] ❌ Error calculating cost:', error);
+    res.status(500).json({
+      error: error.message || 'Failed to calculate cost'
     });
   }
 });
@@ -746,7 +860,7 @@ router.post('/reset-daily-data', requireAuth, requireAdmin, async (req: Authenti
     res.json({ 
       success: true, 
       message: 'Daily data has been reset. All tracking data cleared.',
-      resetTime: new Date().toISOString()
+      resetTime: getBerlinTimestamp()
     });
   } catch (error) {
     console.error('[Admin API] Error resetting data:', error);
@@ -786,7 +900,7 @@ router.post('/followmee/sync', requireAuth, requireAdmin, async (req: Authentica
     res.json({ 
       success: true, 
       message: 'FollowMee sync started in background',
-      startTime: new Date().toISOString()
+      startTime: getBerlinTimestamp()
     });
   } catch (error) {
     console.error('[Admin API] Error triggering FollowMee sync:', error);
@@ -853,6 +967,55 @@ router.get('/external-tracking/:username/:date', requireAuth, requireAdmin, asyn
   } catch (error) {
     console.error('[Admin API] Error loading external tracking data:', error);
     res.status(500).json({ error: 'Failed to load external tracking data' });
+  }
+});
+
+/**
+ * GET /api/admin/google-maps-config
+ * Returns Google Maps API key for client-side use
+ */
+router.get('/google-maps-config', requireAuth, requireAdmin, (_req, res) => {
+  const apiKey = process.env.GOOGLE_GEOCODING_API_KEY || '';
+  res.json({ apiKey });
+});
+
+/**
+ * POST /api/admin/test-tracking-reconciliation
+ * Test endpoint to manually trigger external tracking data reconciliation
+ * without needing to restart the server
+ */
+router.post('/test-tracking-reconciliation', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    console.log('[Admin API] Manual external tracking reconciliation requested by', req.username);
+
+    const { externalTrackingReconciliationService } = await import('../services/externalTrackingReconciliation');
+
+    // Run reconciliation
+    const stats = await externalTrackingReconciliationService.reconcileUnassignedTrackingData();
+
+    console.log('[Admin API] Reconciliation completed:', stats);
+
+    res.json({
+      success: true,
+      message: 'External tracking reconciliation completed',
+      timestamp: getBerlinTimestamp(),
+      stats: {
+        devicesProcessed: stats.devicesProcessed,
+        devicesAssigned: stats.devicesAssigned,
+        devicesRemaining: stats.devicesRemaining,
+        totalDataPoints: stats.totalDataPoints,
+        historicalDataPoints: stats.historicalDataPoints,
+        currentDataPoints: stats.currentDataPoints,
+        errorCount: stats.errors.length,
+        errors: stats.errors
+      }
+    });
+  } catch (error) {
+    console.error('[Admin API] Error running external tracking reconciliation:', error);
+    res.status(500).json({
+      error: 'Failed to run external tracking reconciliation',
+      details: error instanceof Error ? error.message : String(error)
+    });
   }
 });
 

@@ -1,75 +1,67 @@
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
-
-// Store active session tokens in memory (in production, use Redis or database)
-const activeSessions = new Map<string, { userId: string, password: string, username: string, isAdmin: boolean, createdAt: Date }>();
+import { cookieStorageService } from '../services/cookieStorageService';
+import type { DeviceInfo } from '../../shared/trackingTypes';
 
 export interface AuthenticatedRequest extends Request {
   userId?: string;
   userPassword?: string;
   username?: string;
   isAdmin?: boolean;
+  deviceInfo?: DeviceInfo;
 }
 
 export class AuthService {
-  // Generate a secure token for the session
-  static generateSessionToken(password: string, username: string, isAdmin: boolean = false): string {
+  // Generate a secure token for the session (1 month validity)
+  static generateSessionToken(password: string, username: string, isAdmin: boolean = false, deviceInfo?: DeviceInfo): string {
     const sessionId = crypto.randomUUID();
     const userId = crypto.createHash('sha256').update(password).digest('hex').substring(0, 8);
-    
-    activeSessions.set(sessionId, {
-      userId,
-      password,
-      username,
-      isAdmin,
-      createdAt: new Date()
-    });
 
-    // Clean up old sessions (older than 24 hours)
-    this.cleanupOldSessions();
-    
+    // Store in cookie storage service with 1 month expiration and device info
+    cookieStorageService.addCookie(sessionId, userId, password, username, isAdmin, deviceInfo);
+
     return sessionId;
   }
 
   // Validate session token and return user info
   static validateSessionToken(token: string): { userId: string, password: string, username: string, isAdmin: boolean } | null {
-    const session = activeSessions.get(token);
-    if (!session) {
+    const cookie = cookieStorageService.getCookie(token);
+
+    if (!cookie) {
       return null;
     }
 
-    // Check if session is expired (24 hours)
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    if (session.createdAt < twentyFourHoursAgo) {
-      activeSessions.delete(token);
-      return null;
-    }
-
-    return { userId: session.userId, password: session.password, username: session.username, isAdmin: session.isAdmin };
+    return {
+      userId: cookie.userId,
+      password: cookie.password,
+      username: cookie.username,
+      isAdmin: cookie.isAdmin
+    };
   }
 
   // Remove session token
   static revokeSessionToken(token: string): void {
-    activeSessions.delete(token);
-  }
-
-  // Clean up sessions older than 24 hours
-  private static cleanupOldSessions(): void {
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    
-    const tokensToDelete: string[] = [];
-    activeSessions.forEach((session, token) => {
-      if (session.createdAt < twentyFourHoursAgo) {
-        tokensToDelete.push(token);
-      }
-    });
-    
-    tokensToDelete.forEach(token => activeSessions.delete(token));
+    cookieStorageService.removeCookie(token);
   }
 
   // Get user ID from password (for consistent logging)
   static getUserIdFromPassword(password: string): string {
     return crypto.createHash('sha256').update(password).digest('hex').substring(0, 8);
+  }
+
+  // Get all active cookies for a user
+  static getUserCookies(userId: string): string[] {
+    return cookieStorageService.getUserCookies(userId);
+  }
+
+  // Get cookie storage statistics
+  static getCookieStats(): { totalCookies: number; activeUsers: number } {
+    return cookieStorageService.getStats();
+  }
+
+  // Get all devices for a user
+  static getUserDevices(userId: string): Array<{ sessionId: string; deviceInfo?: DeviceInfo; createdAt: Date; expiresAt: Date }> {
+    return cookieStorageService.getUserDevices(userId);
   }
 }
 

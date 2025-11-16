@@ -30,10 +30,10 @@ async function testStatusEndpoint() {
 }
 
 async function testLocationEndpoint() {
-  console.log('\n🧪 Test 2: Location Data Endpoint');
+  console.log('\n🧪 Test 2: Location Data Endpoint (Altes Schema - ohne deviceUniqueId)');
   console.log('=' .repeat(50));
 
-  // Beispiel-Location-Daten
+  // Beispiel-Location-Daten im ALTEN Format (Abwärtskompatibilität)
   const testLocationData: LocationData = {
     timestamp: new Date().toISOString(),
     latitude: 52.520008,
@@ -43,18 +43,20 @@ async function testLocationEndpoint() {
     altitudeAccuracy: 3.0,
     heading: 180.5,
     speed: 1.5,
-    userName: "Test User",
+    userName: "Test User Old Schema",
     batteryLevel: 85.5,
     batteryState: "UNPLUGGED",
     isCharging: false,
     deviceName: "iPhone 14 Pro",
     deviceModel: "iPhone15,2",
     osVersion: "17.2",
+    deviceUniqueId: null,  // ALTE APP: Sendet null
+    deviceSerialNumber: null,
     isConnected: true,
     connectionType: "wifi"
   };
 
-  console.log('Sende Location-Daten:', JSON.stringify(testLocationData, null, 2));
+  console.log('Sende Location-Daten (ALTES Schema):', JSON.stringify(testLocationData, null, 2));
 
   try {
     const response = await fetch(`${API_BASE_URL}/location`, {
@@ -68,7 +70,60 @@ async function testLocationEndpoint() {
     const data = await response.json();
 
     if (response.ok) {
-      console.log('\n✅ Location-Daten erfolgreich gesendet');
+      console.log('\n✅ Location-Daten erfolgreich gesendet (Abwärtskompatibilität funktioniert!)');
+      console.log('Response:', JSON.stringify(data, null, 2));
+    } else {
+      console.log('\n❌ Fehler beim Senden der Location-Daten');
+      console.log('Status:', response.status);
+      console.log('Response:', JSON.stringify(data, null, 2));
+    }
+  } catch (error: any) {
+    console.error('❌ Fehler beim Location-Test:', error.message);
+  }
+}
+
+async function testNewSchemaWithDeviceId() {
+  console.log('\n🧪 Test 2b: Location Data Endpoint (NEUES Schema - mit deviceUniqueId)');
+  console.log('=' .repeat(50));
+
+  // Beispiel-Location-Daten im NEUEN Format
+  const testLocationData: LocationData = {
+    timestamp: new Date().toISOString(),
+    latitude: 52.520008,
+    longitude: 13.404954,
+    altitude: 34.5,
+    accuracy: 5.0,
+    altitudeAccuracy: 3.0,
+    heading: 180.5,
+    speed: 1.5,
+    userName: "Test User New Schema",
+    batteryLevel: 85.5,
+    batteryState: "UNPLUGGED",
+    isCharging: false,
+    deviceName: "iPhone 15 Pro",
+    deviceModel: "iPhone15,3",
+    osVersion: "17.3",
+    deviceUniqueId: "12345678-ABCD-EFGH-1234-567890ABCDEF",  // NEU!
+    deviceSerialNumber: null,  // Meist null
+    isConnected: true,
+    connectionType: "wifi"
+  };
+
+  console.log('Sende Location-Daten (NEUES Schema):', JSON.stringify(testLocationData, null, 2));
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/location`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(testLocationData),
+    });
+
+    const data = await response.json();
+
+    if (response.ok) {
+      console.log('\n✅ Location-Daten mit deviceUniqueId erfolgreich gesendet');
       console.log('Response:', JSON.stringify(data, null, 2));
     } else {
       console.log('\n❌ Fehler beim Senden der Location-Daten');
@@ -123,15 +178,18 @@ async function runTests() {
   console.log('=' .repeat(50));
 
   await testStatusEndpoint();
-  await testLocationEndpoint();
+  await testLocationEndpoint();  // Test mit ALTEM Schema (Abwärtskompatibilität)
+  await testNewSchemaWithDeviceId();  // Test mit NEUEM Schema (deviceUniqueId)
   await testInvalidData();
 
   console.log('\n' + '=' .repeat(50));
   console.log('✅ Alle Tests abgeschlossen!');
   console.log('=' .repeat(50));
   console.log('\n📊 Prüfe jetzt das Google Sheet mit ID: 1OspTbAfG6TM4SiUIHeRAF_QlODy3oHjubbiUTRGDo3Y');
-  console.log('   → Es sollte ein neues Tabellenblatt "Test User" existieren');
+  console.log('   → Es sollte ein neues Tabellenblatt "Test User Old Schema" existieren (alte Daten)');
+  console.log('   → Es sollte ein neues Tabellenblatt "Test User New Schema" existieren (neue Daten mit deviceUniqueId)');
   console.log('   → Die gesendeten Daten sollten dort eingetragen sein\n');
+  console.log('   → Die Spalten "Device Unique ID" und "Device Serial Number" sollten vorhanden sein\n');
 
   process.exit(0);
 }

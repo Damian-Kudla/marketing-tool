@@ -30,6 +30,7 @@ import {
   checkImageAspectRatio,
   type OrientationAnalysisResult 
 } from "./services/imageOrientation";
+import { getBerlinTimestamp } from "./utils/timezone";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -274,11 +275,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/health", (req, res) => {
-    res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+    res.status(200).json({ status: "ok", timestamp: getBerlinTimestamp() });
   });
 
   app.get("/api/health", (req, res) => {
-    res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+    res.status(200).json({ status: "ok", timestamp: getBerlinTimestamp() });
   });
   
   app.post("/api/geocode", requireAuth, rateLimitMiddleware('geocoding'), async (req: AuthenticatedRequest, res) => {
@@ -296,13 +297,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const response = await fetch(url);
     const data = await response.json();
 
+    console.log(`[Geocode] Request: lat=${latitude}, lng=${longitude}`);
+    console.log(`[Geocode] Google API status: ${data.status}`);
+
     if (data.status !== "OK") {
-      return res.status(400).json({ error: "Geocoding failed" });
+      console.error(`[Geocode] ❌ Google API error: ${data.status}`);
+      console.error(`[Geocode] ❌ Full error message: ${data.error_message || 'No error message'}`);
+      console.error(`[Geocode] ❌ Full response:`, JSON.stringify(data, null, 2));
+      return res.status(400).json({
+        error: "Geocoding failed",
+        details: data.status,
+        message: data.error_message
+      });
     }
 
     if (!data.results || data.results.length === 0) {
+      console.error(`[Geocode] No results found for lat=${latitude}, lng=${longitude}`);
       return res.status(400).json({ error: "No geocoding results found" });
     }
+
+    console.log(`[Geocode] Found ${data.results.length} results`);
 
     // Hilfsfunktion zur Bewertung eines Results: Priorisiere Results mit street_number, street_address/premise-Typen und hoher Genauigkeit (ROOFTOP > RANGE_INTERPOLATED > andere).
     const scoreResult = (result: any): number => {
@@ -599,14 +613,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Prepare address string for logging
       const addressString = address ? `${address.street} ${address.number}, ${address.city} ${address.postal}`.trim() : undefined;
 
-      // Track unique photo submission (deduplicated by prospect data - Column G)
+      // Track unique photo submission (deduplicated by prospect data - Column G + H)
       // Photos with identical prospect data are counted as 1 photo
+      // WICHTIG: Adresse NICHT im Hash - User könnte Adresse ändern!
       if (req.userId && req.username) {
         dailyDataStore.trackOCRPhoto(req.userId, req.username, {
           newProspects,
-          existingCustomers: existingCustomers.map(c => ({ id: c.id, name: c.name })),
-          address: addressString,
-          timestamp: Date.now()
+          existingCustomers: existingCustomers.map(c => ({ id: c.id, name: c.name }))
         });
       }
 
@@ -665,14 +678,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const addressString = address ? `${address.street} ${address.number}, ${address.city} ${address.postal}`.trim() : undefined;
 
       // Track unique photo submission for OCR correction too
-      if (req.userId && req.username) {
-        dailyDataStore.trackOCRPhoto(req.userId, req.username, {
-          newProspects,
-          existingCustomers: existingCustomers.map(c => ({ id: c.id, name: c.name })),
-          address: addressString,
-          timestamp: Date.now()
-        });
-      }
+      // ACHTUNG: ocr-correct sollte KEIN Photo tracken - das ist nur Textkorrektur!
+      // Entfernt, da ocr-correct kein neues Foto bedeutet
+      // if (req.userId && req.username) {
+      //   dailyDataStore.trackOCRPhoto(req.userId, req.username, {
+      //     newProspects,
+      //     existingCustomers: existingCustomers.map(c => ({ id: c.id, name: c.name }))
+      //   });
+      // }
 
       // Log the OCR correction request with results
       await logUserActivityWithRetry(req, addressString, newProspects, existingCustomers);

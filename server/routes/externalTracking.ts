@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import type { LocationData } from '../../shared/externalTrackingTypes';
 import { externalTrackingService } from '../services/externalTrackingService';
+import { getBerlinTimestamp } from '../utils/timezone';
 
 const router = Router();
 
@@ -89,7 +90,7 @@ router.get('/status', async (req: Request, res: Response) => {
     res.json({
       status: 'online',
       service: 'External Tracking API',
-      timestamp: new Date().toISOString()
+      timestamp: getBerlinTimestamp()
     });
   } catch (error) {
     console.error('[External Tracking] Error getting status:', error);

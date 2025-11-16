@@ -9,21 +9,24 @@
  * 1. INITIAL SYNC (Server Start):
  *    - Fetch 24h FollowMee data for all devices
  *    - For each user with FollowMee device:
- *      - Load last 10,000 logs from Google Sheets
- *      - If logs cover < 25h and exactly 10k logs: fetch more (until < 10k or > 25h coverage)
+ *      - Load logs from Google Sheets until we reach yesterday's date
+ *      - Filter to ONLY today's logs (CET date)
  *      - Compare FollowMee data timestamps with existing logs
  *      - Queue new GPS data via batchLogger (not direct write)
- *    - Store ALL FollowMee data in cache
+ *    - Store ONLY today's FollowMee data in cache
  *
  * 2. CRON JOB (Every 5 minutes):
  *    - Fetch 24h FollowMee data
+ *    - Filter to ONLY today's logs (CET date)
  *    - Compare with cached data (by timestamp)
  *    - Queue only NEW data via batchLogger
- *    - Update cache
+ *    - Update cache (keep only today)
  */
 
 import { batchLogger } from './batchLogger';
-import type { LogEntry } from './googleSheetsLogging';
+import type { LogEntry } from './fallbackLogging';
+import { getBerlinTimestamp } from '../utils/timezone';
+import { getCETDate } from './sqliteLogService';
 
 const FOLLOWMEE_API_KEY = process.env.FOLLOWMEE_API;
 const FOLLOWMEE_USERNAME = process.env.FOLLOWMEE_USERNAME || 'Saskia.zucht';
@@ -167,7 +170,7 @@ class FollowMeeApiService {
    * Convert FollowMee location to LogEntry format
    */
   private locationToLogEntry(location: FollowMeeLocation, mapping: UserFollowMeeMapping): LogEntry {
-    const timestamp = new Date(location.Date).toISOString();
+    const timestamp = getBerlinTimestamp(new Date(location.Date));
 
     return {
       timestamp,
@@ -235,9 +238,9 @@ class FollowMeeApiService {
         return [];
       }
 
-      // Load logs in batches of 10,000 until we have 25h coverage
+      // Load logs in batches of 10,000 until we have today's logs
       const allLogs: LogEntry[] = [];
-      const twentyFiveHoursAgo = Date.now() - (25 * 60 * 60 * 1000);
+      const today = getCETDate(); // YYYY-MM-DD format for today (CET timezone)
       let offset = 2; // Start after header row
       let continueLoading = true;
 
@@ -277,29 +280,33 @@ class FollowMeeApiService {
 
         allLogs.push(...parsedLogs);
 
-        // Check if oldest log in this batch is older than 25h
-        const oldestTimestamp = new Date(parsedLogs[parsedLogs.length - 1].timestamp).getTime();
+        // Get oldest timestamp in this batch
+        const oldestTimestamp = parsedLogs.length > 0
+          ? new Date(parsedLogs[parsedLogs.length - 1].timestamp).getTime()
+          : Date.now();
+        const oldestDate = getCETDate(oldestTimestamp);
 
-        // Stop if:
-        // 1. We got less than 10k rows (end of data)
-        // 2. OR oldest log is older than 25h
-        if (rows.length < 10000 || oldestTimestamp < twentyFiveHoursAgo) {
+        // Stop loading if:
+        // 1. Less than 10k logs (end of data)
+        // 2. OR oldest log is from a previous day (not today)
+        if (rows.length < 10000 || oldestDate < today) {
+          console.log(`[FollowMee] Loaded ${allLogs.length} logs for ${mapping.username} (covers today or end reached)`);
           continueLoading = false;
-          console.log(`[FollowMee] Loaded ${allLogs.length} logs for ${mapping.username} (covers > 25h or end reached)`);
         } else {
           offset += 10000;
           console.log(`[FollowMee] Loaded ${allLogs.length} logs so far, continuing...`);
         }
       }
 
-      // Filter to only last 25 hours
-      const logsLast25h = allLogs.filter(log => {
+      // Filter to only today's logs (CET date)
+      const logsToday = allLogs.filter(log => {
         const timestamp = new Date(log.timestamp).getTime();
-        return timestamp >= twentyFiveHoursAgo;
+        const logDate = getCETDate(timestamp);
+        return logDate === today;
       });
 
-      console.log(`[FollowMee] Filtered to ${logsLast25h.length} logs from last 25h for ${mapping.username}`);
-      return logsLast25h;
+      console.log(`[FollowMee] Filtered to ${logsToday.length} logs from today (${today}) for ${mapping.username}`);
+      return logsToday;
 
     } catch (error) {
       console.error(`[FollowMee] Error loading logs for ${mapping.username}:`, error);
@@ -351,7 +358,7 @@ class FollowMeeApiService {
       console.log(`[FollowMee] Found data for ${locationsByDevice.size} devices`);
 
       // Process each user
-      for (const mapping of this.userMappings.values()) {
+      for (const mapping of Array.from(this.userMappings.values())) {
         const deviceLocations = locationsByDevice.get(mapping.followMeeDeviceId);
 
         if (!deviceLocations || deviceLocations.length === 0) {
@@ -362,7 +369,7 @@ class FollowMeeApiService {
 
         console.log(`[FollowMee] Processing ${deviceLocations.length} FollowMee locations for ${mapping.username}`);
 
-        // Load existing logs from Google Sheets (last 25h)
+        // Load existing logs from Google Sheets (only today)
         const existingLogs = await this.loadUserLogsFromSheets(mapping);
 
         // Build set of existing timestamps (for fast lookup)
@@ -400,8 +407,15 @@ class FollowMeeApiService {
           batchLogger.addUserActivity(logEntry);
         }
 
-        // Build cache with ALL FollowMee data (sorted by timestamp)
-        const cacheData: CachedGPSData[] = deviceLocations
+        // Build cache with ONLY today's FollowMee data (sorted by timestamp)
+        const today = getCETDate();
+        const todaysLocations = deviceLocations.filter(loc => {
+          const timestamp = this.parseFollowMeeDate(loc.Date);
+          const logDate = getCETDate(timestamp);
+          return logDate === today;
+        });
+
+        const cacheData: CachedGPSData[] = todaysLocations
           .map(loc => ({
             timestamp: this.parseFollowMeeDate(loc.Date),
             location: loc,
@@ -412,7 +426,7 @@ class FollowMeeApiService {
         this.gpsDataCache.set(mapping.userId, cacheData);
 
         console.log(`[FollowMee] ✅ Queued ${newLocations.length} new locations for ${mapping.username}`);
-        console.log(`[FollowMee] 📦 Cached ${cacheData.length} total locations for ${mapping.username}`);
+        console.log(`[FollowMee] 📦 Cached ${cacheData.length} total locations for ${mapping.username} (today: ${today})`);
       }
 
       this.initialSyncCompleted = true;
@@ -464,7 +478,7 @@ class FollowMeeApiService {
       }
 
       // Process each user
-      for (const mapping of this.userMappings.values()) {
+      for (const mapping of Array.from(this.userMappings.values())) {
         const deviceLocations = locationsByDevice.get(mapping.followMeeDeviceId);
 
         if (!deviceLocations || deviceLocations.length === 0) {
@@ -509,14 +523,17 @@ class FollowMeeApiService {
         const updatedCache = [...cachedData, ...newCacheEntries]
           .sort((a, b) => a.timestamp - b.timestamp);
 
-        // Keep only last 24h in cache (to prevent memory growth)
-        const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
-        const trimmedCache = updatedCache.filter(d => d.timestamp >= twentyFourHoursAgo);
+        // Keep only today's data in cache (to prevent memory growth)
+        const today = getCETDate();
+        const trimmedCache = updatedCache.filter(d => {
+          const logDate = getCETDate(d.timestamp);
+          return logDate === today;
+        });
 
         this.gpsDataCache.set(mapping.userId, trimmedCache);
 
         console.log(`[FollowMee] ✅ Queued ${newLocations.length} new locations for ${mapping.username}`);
-        console.log(`[FollowMee] 📦 Cache updated: ${trimmedCache.length} locations (trimmed to 24h)`);
+        console.log(`[FollowMee] 📦 Cache updated: ${trimmedCache.length} locations (trimmed to today: ${today})`);
       }
 
       this.lastSyncTime = Date.now();

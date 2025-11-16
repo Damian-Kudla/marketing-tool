@@ -1,4 +1,5 @@
 import type { DeviceStatus } from '../../../shared/trackingTypes';
+import { deviceFingerprintService } from './deviceFingerprint';
 
 class DeviceTrackingService {
   private syncInterval: number | null = null;
@@ -66,8 +67,12 @@ class DeviceTrackingService {
    * Get current device status
    */
   private async getDeviceStatus(): Promise<DeviceStatus> {
+    // Get device ID
+    const deviceId = await deviceFingerprintService.getDeviceId();
+
     const status: DeviceStatus = {
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      deviceId
     };
 
     // Battery Status

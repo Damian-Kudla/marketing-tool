@@ -1,4 +1,5 @@
 import { withRetry, testNetworkConnection, type RetryConfig } from '@/utils/networkRetry';
+import { deviceFingerprintService } from './deviceFingerprint';
 
 // API configuration
 const API_BASE_URL = '/api';
@@ -28,11 +29,15 @@ class ApiService {
 
     const url = `${API_BASE_URL}${endpoint}`;
 
+    // Get device ID for tracking
+    const deviceId = deviceFingerprintService.getDeviceIdSync();
+
     // Default options
     const defaultOptions: RequestInit = {
       credentials: 'include', // Always include cookies for auth
       headers: {
         'Content-Type': 'application/json',
+        ...(deviceId ? { 'X-Device-ID': deviceId } : {}),
         ...fetchOptions.headers,
       },
       ...fetchOptions,
@@ -210,15 +215,21 @@ export const customerAPI = {
 
 export const authAPI = {
   login: async (password: string) => {
-    const response = await apiService.post('/auth/login', { password }, { requireAuth: false });
+    // Get device info before login
+    const deviceInfo = await deviceFingerprintService.getDeviceInfo();
+
+    const response = await apiService.post('/auth/login', {
+      password,
+      deviceInfo
+    }, { requireAuth: false });
     return response;
   },
-  
+
   logout: async () => {
     const response = await apiService.post('/auth/logout', undefined, { requireAuth: false });
     return response;
   },
-  
+
   checkAuth: async () => {
     const response = await apiService.get('/auth/check', { requireAuth: false });
     return response;

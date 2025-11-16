@@ -37,7 +37,7 @@ interface CategoryChangeLogEntry {
 type AnyLogEntry = LogEntry | AuthLogEntry | CategoryChangeLogEntry;
 
 // Export types for use in other modules
-export type { LogEntry, AuthLogEntry, CategoryChangeLogEntry };
+export type { LogEntry, AuthLogEntry, CategoryChangeLogEntry, AnyLogEntry };
 
 class FallbackLogger {
   private logFile = path.join(process.cwd(), 'logs', 'failed-logs.jsonl');
@@ -62,9 +62,13 @@ class FallbackLogger {
         'utf-8'
       );
       
+      const userId = 'userId' in logEntry ? logEntry.userId : 'auth';
+      const username =
+        'username' in logEntry && logEntry.username ? logEntry.username : 'unknown';
+
       console.warn(`[FallbackLogger] Log saved to file:`, {
-        userId: 'userId' in logEntry ? logEntry.userId : 'auth',
-        username: logEntry.username || 'unknown',
+        userId,
+        username,
         timestamp: logEntry.timestamp
       });
     } catch (error) {

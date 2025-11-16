@@ -1,12 +1,17 @@
-import type { 
-  TrackingData, 
-  DailyUserData, 
-  GPSCoordinates, 
-  SessionData, 
-  DeviceStatus, 
-  ActionLog 
+import type {
+  TrackingData,
+  DailyUserData,
+  GPSCoordinates,
+  SessionData,
+  DeviceStatus,
+  ActionLog
 } from '../../shared/trackingTypes';
 import crypto from 'crypto';
+import {
+  getBerlinDate,
+  getBerlinTimestamp,
+  getNextBerlinMidnight
+} from '../utils/timezone';
 
 /**
  * In-Memory Daily Data Store
@@ -30,28 +35,26 @@ class DailyDataStore {
    * Get current date in YYYY-MM-DD format
    */
   private getCurrentDate(): string {
-    const now = new Date();
-    return now.toISOString().split('T')[0];
+    return getBerlinDate();
   }
 
   /**
-   * Schedule automatic reset at midnight
+   * Schedule automatic reset at midnight (CET/CEST)
    */
   private scheduleMidnightReset(): void {
     const now = new Date();
-    const midnight = new Date(now);
-    midnight.setHours(24, 0, 0, 0); // Next midnight
-    
-    const msUntilMidnight = midnight.getTime() - now.getTime();
+    const nextMidnight = getNextBerlinMidnight(now);
+    const msUntilMidnight = Math.max(nextMidnight.getTime() - now.getTime(), 0);
 
     this.midnightResetTimer = setTimeout(() => {
-      console.log('[DailyStore] Midnight reached, resetting daily data...');
+      console.log('[DailyStore] CET/CEST Midnight reached, resetting daily data...');
       this.reset();
-      // Schedule next reset
       this.scheduleMidnightReset();
     }, msUntilMidnight);
 
-    console.log(`[DailyStore] Scheduled midnight reset in ${Math.round(msUntilMidnight / 1000 / 60)} minutes`);
+    console.log(
+      `[DailyStore] Scheduled midnight reset for ${getBerlinTimestamp(nextMidnight)} (in ${Math.round(msUntilMidnight / 60000)} minutes)`
+    );
   }
 
   /**
@@ -115,7 +118,7 @@ class DailyDataStore {
     // BUGFIX: Validate GPS timestamp is from today
     // Reject GPS points from previous days (delayed sync)
     const gpsDate = new Date(gps.timestamp);
-    const gpsDateStr = gpsDate.toISOString().split('T')[0];
+    const gpsDateStr = getBerlinDate(gpsDate);
     const today = this.getCurrentDate();
     
     if (gpsDateStr !== today) {
@@ -138,6 +141,9 @@ class DailyDataStore {
       userData.totalDistance += distance;
     }
 
+    // Recalculate active time after each GPS update
+    this.recalculateActiveTime(userId, username);
+
     // Store raw log
     userData.rawLogs.push({
       userId,
@@ -145,6 +151,51 @@ class DailyDataStore {
       timestamp: gps.timestamp,
       gps
     });
+  }
+
+  /**
+   * Recalculate active time from native GPS points
+   * Active Time = Time span between first and last native app GPS point - break times
+   * Breaks = Gaps between native GPS points > 20 minutes
+   */
+  private recalculateActiveTime(userId: string, username: string): void {
+    const userData = this.data.get(userId);
+    if (!userData) return;
+
+    // Filter only native GPS points (no FollowMee or external)
+    const nativeGpsPoints = userData.gpsPoints.filter(p => p.source === 'native' || !p.source);
+    
+    if (nativeGpsPoints.length >= 2) {
+      // Time span between first and last native point
+      nativeGpsPoints.sort((a, b) => a.timestamp - b.timestamp);
+      const firstTimestamp = nativeGpsPoints[0].timestamp;
+      const lastTimestamp = nativeGpsPoints[nativeGpsPoints.length - 1].timestamp;
+      const totalTimeSpan = lastTimestamp - firstTimestamp;
+      
+      // Calculate breaks (gaps > 20 minutes between native points)
+      const MIN_BREAK_MS = 20 * 60 * 1000; // 20 minutes
+      let totalBreakTime = 0;
+      
+      for (let i = 1; i < nativeGpsPoints.length; i++) {
+        const gap = nativeGpsPoints[i].timestamp - nativeGpsPoints[i - 1].timestamp;
+        if (gap >= MIN_BREAK_MS) {
+          totalBreakTime += gap;
+        }
+      }
+      
+      // Active time = total span - break times
+      userData.activeTime = totalTimeSpan - totalBreakTime;
+    } else if (nativeGpsPoints.length === 1) {
+      // Only one native point - no time span calculable
+      userData.activeTime = 0;
+    } else {
+      // No native GPS points - fallback to session data if available
+      if (userData.totalSessionTime > 0) {
+        userData.activeTime = userData.totalSessionTime - userData.totalIdleTime;
+      } else {
+        userData.activeTime = 0;
+      }
+    }
   }
 
   /**
@@ -157,7 +208,7 @@ class DailyDataStore {
     // Check if session has a valid timestamp to determine date
     const sessionTimestamp = session.lastActivity || Date.now();
     const sessionDate = new Date(sessionTimestamp);
-    const sessionDateStr = sessionDate.toISOString().split('T')[0];
+    const sessionDateStr = getBerlinDate(sessionDate);
     const today = this.getCurrentDate();
     
     if (sessionDateStr !== today) {
@@ -171,10 +222,7 @@ class DailyDataStore {
 
     if (session.idleTime !== undefined) {
       userData.totalIdleTime = session.idleTime;
-      userData.activeTime = userData.totalSessionTime - userData.totalIdleTime;
-    } else if (userData.totalSessionTime > 0 && userData.activeTime === 0) {
-      // If no idle time data available, use total session time as active time
-      userData.activeTime = userData.totalSessionTime;
+      // NOTE: activeTime wird aus nativen GPS-Punkten berechnet, nicht hier!
     }
 
     if (session.actions && session.actions.length > 0) {
@@ -188,7 +236,7 @@ class DailyDataStore {
       session.actions.forEach((action: ActionLog) => {
         // BUGFIX: Validate action timestamp is from today
         const actionDate = new Date(action.timestamp);
-        const actionDateStr = actionDate.toISOString().split('T')[0];
+        const actionDateStr = getBerlinDate(actionDate);
         
         if (actionDateStr !== today) {
           console.warn(`[DailyStore] Rejected action from wrong date: ${actionDateStr} (today: ${today}), user: ${username}, action: ${action.action}`);

@@ -2,6 +2,7 @@
 // Installiere vorher: npm install noip-client
 require('dotenv').config({ path: '../.env' });
 const NoIP = require('noip-client');
+const { DateTime } = require('luxon');
 
 const hostname = process.env.NOIP_HOSTNAME;
 const username = process.env.NOIP_USERNAME;
@@ -14,12 +15,16 @@ if (!hostname || !username || !password) {
 
 const client = new NoIP({ hostname, username, password });
 
+function getBerlinTimestamp() {
+  return DateTime.now().setZone('Europe/Berlin').toISO();
+}
+
 async function updateLoop() {
   try {
     await client.update();
-    console.log(`[${new Date().toISOString()}] No-IP Update erfolgreich für Host: ${hostname}`);
+    console.log(`[${getBerlinTimestamp()}] No-IP Update erfolgreich für Host: ${hostname}`);
   } catch (err) {
-    console.error(`[${new Date().toISOString()}] Fehler beim No-IP Update:`, err);
+    console.error(`[${getBerlinTimestamp()}] Fehler beim No-IP Update:`, err);
   }
 }
 

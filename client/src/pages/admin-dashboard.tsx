@@ -10,7 +10,7 @@
  * - PDF-Report Download
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { format } from 'date-fns';
@@ -170,7 +170,7 @@ export default function AdminDashboard() {
   const [selectedUsername, setSelectedUsername] = useState<string | null>(null);
   const [routeData, setRouteData] = useState<any>(null);
   const [loadingRoute, setLoadingRoute] = useState(false);
-  const [gpsSource, setGpsSource] = useState<'all' | 'native' | 'followmee' | 'external'>('all');
+  const [gpsSource, setGpsSource] = useState<'all' | 'native' | 'followmee' | 'external' | 'external_app'>('all');
 
   // Lock background scroll while the route modal is open
   useEffect(() => {
@@ -232,6 +232,20 @@ export default function AdminDashboard() {
       }
 
       const result = await response.json();
+      
+      // DEBUG: Log Raphael's data
+      const raphaelUser = result.users?.find((u: any) => u.username === 'Raphael');
+      if (raphaelUser) {
+        console.log(`[Frontend] 📦 Raphael data received for ${date}:`, {
+          username: raphaelUser.username,
+          totalActions: raphaelUser.todayStats.totalActions,
+          uniquePhotos: raphaelUser.todayStats.uniquePhotos,
+          statusChangesCount: Object.keys(raphaelUser.todayStats.statusChanges || {}).length
+        });
+        console.log(`[Frontend] 🔍 FULL todayStats for Raphael:`, raphaelUser.todayStats);
+        console.log(`[Frontend] 🔍 uniquePhotos type: ${typeof raphaelUser.todayStats.uniquePhotos}, value: ${raphaelUser.todayStats.uniquePhotos}`);
+      }
+      
       setData(result);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch historical data');
@@ -268,7 +282,7 @@ export default function AdminDashboard() {
   };
 
   // Fetch route data for selected user
-  const fetchRouteData = async (userId: string, date: string, source?: 'all' | 'native' | 'followmee' | 'external') => {
+  const fetchRouteData = async (userId: string, date: string, source?: 'all' | 'native' | 'followmee' | 'external' | 'external_app') => {
     setLoadingRoute(true);
     try {
       const sourceParam = source && source !== 'all' ? `&source=${source}` : '';
@@ -304,7 +318,7 @@ export default function AdminDashboard() {
   };
 
   // Handle GPS source change
-  const handleGpsSourceChange = (newSource: 'all' | 'native' | 'followmee' | 'external') => {
+  const handleGpsSourceChange = (newSource: 'all' | 'native' | 'followmee' | 'external' | 'external_app') => {
     setGpsSource(newSource);
     // Re-fetch route data if modal is open
     if (showRouteReplay && selectedUserId) {
@@ -813,8 +827,8 @@ export default function AdminDashboard() {
                     const isExpanded = expandedRows.has(user.userId);
 
                     return (
-                      <>
-                        <tr key={user.userId} className="border-b hover:bg-muted/50">
+                      <Fragment key={user.userId}>
+                        <tr className="border-b hover:bg-muted/50">
                           <td className="p-2">
                             <button
                               onClick={() => toggleExpandRow(user.userId)}
@@ -840,7 +854,7 @@ export default function AdminDashboard() {
                           </td>
                           <td className="p-2 text-right">{user.todayStats.totalActions}</td>
                           <td className="p-2 text-right">
-                            {user.todayStats.actionDetails?.scans || 0}
+                            {user.todayStats.uniquePhotos || 0}
                           </td>
                           <td className="p-2 text-right">{totalStatusChanges}</td>
                           <td className="p-2 text-right">
@@ -939,16 +953,6 @@ export default function AdminDashboard() {
                                                   <div className="flex justify-between">
                                                     <span className="text-muted-foreground">🗑️ Gelöscht:</span>
                                                     <span className="font-medium">{user.todayStats.actionDetails.deletes}</span>
-                                                  </div>
-                                                )}
-                                                {/* Show info if no breakdown available */}
-                                                {user.todayStats.actionDetails.statusChanges === 0 && 
-                                                 user.todayStats.actionDetails.edits === 0 && 
-                                                 user.todayStats.actionDetails.saves === 0 && 
-                                                 user.todayStats.actionDetails.deletes === 0 && (
-                                                  <div className="text-xs text-muted-foreground italic">
-                                                    Alle Updates wurden als Bulk-Updates erfasst.<br />
-                                                    Detaillierte Aufschlüsselung nur für neue Sessions verfügbar.
                                                   </div>
                                                 )}
                                                 {/* Show total */}
@@ -1090,7 +1094,7 @@ export default function AdminDashboard() {
                             </td>
                           </tr>
                         )}
-                      </>
+                      </Fragment>
                     );
                   })}
                 </tbody>
@@ -1343,8 +1347,10 @@ export default function AdminDashboard() {
               ) : routeData && routeData.gpsPoints && routeData.gpsPoints.length > 0 ? (
                 <RouteReplayMap
                   username={selectedUsername || 'Unbekannt'}
+                  userId={selectedUserId || ''}
                   gpsPoints={routeData.gpsPoints}
                   photoTimestamps={routeData.photoTimestamps || []}
+                  source={routeData.source || gpsSource}
                   date={mode === 'live' ? new Date().toISOString().split('T')[0] : selectedDate}
                 />
               ) : (

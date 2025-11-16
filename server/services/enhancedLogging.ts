@@ -3,7 +3,14 @@ import { GoogleSheetsLoggingService } from './googleSheetsLogging';
 import { fallbackLogger } from './fallbackLogging';
 import { pushoverService } from './pushover';
 import { batchLogger } from './batchLogger';
-import type { LogEntry, AuthLogEntry } from './fallbackLogging';
+import { getCETDate, insertLog, LogInsertData } from './sqliteLogService';
+import { getBerlinTimestamp } from '../utils/timezone';
+import type {
+  LogEntry,
+  AuthLogEntry,
+  CategoryChangeLogEntry,
+  AnyLogEntry
+} from './fallbackLogging';
 
 class LoggingMetrics {
   private successCount = 0;
@@ -54,6 +61,16 @@ class LoggingMetrics {
 }
 
 const loggingMetrics = new LoggingMetrics();
+type CategoryChangeLoggingService = typeof import('./googleSheets')['categoryChangeLoggingService'];
+let cachedCategoryLoggingService: CategoryChangeLoggingService | null = null;
+
+async function getCategoryLoggingService(): Promise<CategoryChangeLoggingService> {
+  if (!cachedCategoryLoggingService) {
+    const module = await import('./googleSheets');
+    cachedCategoryLoggingService = module.categoryChangeLoggingService;
+  }
+  return cachedCategoryLoggingService;
+}
 
 // Helper function: Sleep/delay
 function sleep(ms: number): Promise<void> {
@@ -112,7 +129,7 @@ export async function logUserActivityWithRetry(
   data?: any
 ): Promise<void> {
   const logEntry: LogEntry = {
-    timestamp: new Date().toISOString(),
+    timestamp: getBerlinTimestamp(),
     userId: req.userId!,
     username: req.username!,
     endpoint: req.originalUrl || req.path, // Use originalUrl to include full path with router mount
@@ -124,8 +141,52 @@ export async function logUserActivityWithRetry(
     data
   };
 
-  // Add to batch queue
+  // Add to batch queue (for Google Sheets backup)
   batchLogger.addUserActivity(logEntry);
+
+  // ALSO write to SQLite immediately (atomic, no flush needed)
+  try {
+    const date = getCETDate();
+    const sqliteLog: LogInsertData = {
+      userId: req.userId!,
+      username: req.username!,
+      timestamp: new Date(logEntry.timestamp).getTime(),
+      logType: inferLogTypeFromEndpoint(req.originalUrl || req.path, data),
+      data: {
+        endpoint: logEntry.endpoint,
+        method: logEntry.method,
+        address: logEntry.address,
+        newProspects: logEntry.newProspects,
+        existingCustomers: logEntry.existingCustomers,
+        userAgent: logEntry.userAgent,
+        data: logEntry.data
+      }
+    };
+
+    insertLog(date, sqliteLog);
+  } catch (error) {
+    console.error('[EnhancedLogging] Error writing to SQLite:', error);
+    // Don't throw - fallback to Sheets still works
+  }
+}
+
+/**
+ * Helper: Infer log type from endpoint and data
+ */
+function inferLogTypeFromEndpoint(endpoint: string, data?: any): 'gps' | 'session' | 'action' | 'device' {
+  if (endpoint.includes('/tracking/gps') || data?.gps || data?.latitude) {
+    return 'gps';
+  }
+
+  if (endpoint.includes('/tracking/session') || data?.session || data?.actions) {
+    return 'session';
+  }
+
+  if (endpoint.includes('/tracking/device') || data?.device || data?.batteryLevel) {
+    return 'device';
+  }
+
+  return 'action'; // default for other endpoints
 }
 
 // Enhanced log auth attempt with retry and fallback
@@ -137,7 +198,7 @@ export async function logAuthAttemptWithRetry(
   reason?: string
 ): Promise<void> {
   const logEntry: AuthLogEntry = {
-    timestamp: new Date().toISOString(),
+    timestamp: getBerlinTimestamp(),
     ipAddress: ip,
     success,
     username,
@@ -160,7 +221,7 @@ export async function logCategoryChangeWithRetry(
   addressDatasetSnapshot: string
 ): Promise<void> {
   const logEntry: import('./fallbackLogging').CategoryChangeLogEntry = {
-    timestamp: new Date().toISOString(),
+    timestamp: getBerlinTimestamp(),
     datasetId,
     residentOriginalName,
     residentCurrentName,
@@ -190,13 +251,12 @@ export async function retryFailedLogs(): Promise<void> {
     const failedLogs = await fallbackLogger.getFailedLogs();
     console.log(`[RetryFailedLogs] Found ${failedLogs.length} failed logs`);
 
-    const successfulLogs: (LogEntry | AuthLogEntry)[] = [];
+    const successfulLogs: AnyLogEntry[] = [];
 
     for (const log of failedLogs) {
       try {
         if ('ipAddress' in log) {
-          // Auth log
-          await retryWithBackoff(() => 
+          await retryWithBackoff(() =>
             GoogleSheetsLoggingService.logAuthAttempt(
               log.ipAddress,
               log.success,
@@ -205,14 +265,34 @@ export async function retryFailedLogs(): Promise<void> {
               log.reason
             )
           );
-        } else {
-          // User activity log
+          successfulLogs.push(log);
+          continue;
+        }
+
+        if ('datasetId' in log) {
+          const categoryService = await getCategoryLoggingService();
+          await retryWithBackoff(() =>
+            categoryService.logCategoryChange(
+              log.datasetId,
+              log.residentOriginalName,
+              log.residentCurrentName,
+              log.oldCategory,
+              log.newCategory,
+              log.changedBy,
+              log.addressDatasetSnapshot
+            )
+          );
+          successfulLogs.push(log);
+          continue;
+        }
+
+        if ('userId' in log && 'endpoint' in log) {
           const mockReq = {
             userId: log.userId,
             username: log.username,
             path: log.endpoint,
             method: log.method,
-            get: (header: string) => log.userAgent
+            get: (_header: string) => log.userAgent
           } as AuthenticatedRequest;
 
           await retryWithBackoff(() =>
@@ -224,9 +304,11 @@ export async function retryFailedLogs(): Promise<void> {
               log.data
             )
           );
+          successfulLogs.push(log);
+          continue;
         }
 
-        successfulLogs.push(log);
+        console.warn('[RetryFailedLogs] Unknown log shape, skipping entry', log);
       } catch (error) {
         console.error('[RetryFailedLogs] Failed to retry log:', error);
         // Keep in failed logs for next retry
@@ -238,8 +320,7 @@ export async function retryFailedLogs(): Promise<void> {
       await fallbackLogger.removeSuccessfulLogs(successfulLogs);
       console.log(`[RetryFailedLogs] Successfully retried ${successfulLogs.length} logs`);
       
-      // Send success notification
-      await pushoverService.sendRecoverySuccess(successfulLogs.length);
+      // No Pushover notification for successful recovery - only errors need attention
     }
 
     const remainingFailed = failedLogs.length - successfulLogs.length;
