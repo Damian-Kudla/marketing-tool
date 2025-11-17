@@ -156,7 +156,7 @@ class ExternalTrackingReconciliationService {
           // 6. Verarbeite historische Daten (SQLite)
           const modifiedDatabases = new Set<string>(); // Geänderte DBs für Upload
 
-          for (const [date, dataPoints] of dataByDate) {
+          for (const [date, dataPoints] of Array.from(dataByDate)) {
             if (date === today) {
               // Heutige Daten → Google Sheets Log (über batchLogger)
               console.log(`[ExternalTrackingReconciliation] Processing ${dataPoints.length} points for TODAY (${date})`);
@@ -323,8 +323,8 @@ class ExternalTrackingReconciliationService {
         endpoint: '/api/external-tracking/location',
         method: 'POST',
         address: '',
-        newProspects: '',
-        existingCustomers: '',
+        newProspects: [],
+        existingCustomers: [],
         userAgent: 'External Tracking App',
         data: {
           latitude: dataPoint.latitude,
