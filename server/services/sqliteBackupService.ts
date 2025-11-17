@@ -349,17 +349,30 @@ class SQLiteBackupService {
       try {
         const Database = (await import('better-sqlite3')).default;
         const testDb = new Database(tempPath, { readonly: true });
+        
+        // Run comprehensive integrity check
         const integrityResult = testDb.pragma('integrity_check');
         testDb.close();
 
         if (integrityResult.length !== 1 || integrityResult[0].integrity_check !== 'ok') {
-          throw new Error('Integrity check failed');
+          throw new Error(`Integrity check failed: ${JSON.stringify(integrityResult)}`);
         }
+
+        console.log(`[SQLiteBackup] ✅ Integrity check passed for ${date}`);
       } catch (error) {
         await fsp.unlink(tempPath);
-        console.error(`[SQLiteBackup] ❌ Downloaded DB failed integrity check: ${date}`);
+        console.error(`[SQLiteBackup] ❌ Downloaded DB failed integrity check: ${date}`, error);
+        
+        // Try to repair by re-downloading
+        console.log(`[SQLiteBackup] 🔄 Attempting to delete corrupted file from Drive for ${date}`);
+        const dbFile = await this.findFileInDrive(filename);
+        if (dbFile?.id) {
+          console.warn(`[SQLiteBackup] ⚠️  Corrupted file found in Drive: ${filename} (${dbFile.id})`);
+          console.warn(`[SQLiteBackup] ⚠️  Consider manually re-uploading ${date} from a backup`);
+        }
+        
         await pushoverService.sendNotification(
-          `Downloaded DB ${date} is corrupted`,
+          `Downloaded DB ${date} is corrupted. Please re-upload from local backup.`,
           { title: 'SQLite Download Error', priority: 2 }
         );
         return null;

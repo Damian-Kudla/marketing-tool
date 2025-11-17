@@ -352,8 +352,24 @@ export function getAllUserIds(date: string): string[] {
     db.close();
 
     return rows.map(row => row.user_id);
-  } catch (error) {
+  } catch (error: any) {
     console.error(`[SQLite] Error getting user IDs for ${date}:`, error);
+    
+    // Check if database is corrupted
+    if (error?.code === 'SQLITE_CORRUPT' || error?.message?.includes('malformed')) {
+      console.error(`[SQLite] ⚠️  Database corruption detected for ${date} - attempting recovery...`);
+      
+      // Delete corrupted local DB and try to re-download from Drive
+      try {
+        const dbPath = getDBPath(date);
+        fs.unlinkSync(dbPath);
+        console.log(`[SQLite] 🗑️  Deleted corrupted local DB: ${dbPath}`);
+        console.warn(`[SQLite] ℹ️  Please restart the app to re-download ${date} from Google Drive`);
+      } catch (deleteError) {
+        console.error(`[SQLite] Error deleting corrupted DB:`, deleteError);
+      }
+    }
+    
     return [];
   }
 }
