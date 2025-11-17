@@ -801,29 +801,62 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
 
   console.log(`[HistoricalDataScraper] 📊 Final stats: ${data.totalActions} actions, ${Array.from(data.statusChanges.values()).reduce((s,c) => s+c, 0)} status changes, ${(data.activeTime/1000/60).toFixed(1)}min active`);
 
-  // Calculate distance from native GPS points during active time only (same logic as dailyDataStore)
-  const nativeGpsForDistance = data.gpsPoints.filter(p => p.source === 'native' || !p.source);
-  if (nativeGpsForDistance.length >= 2) {
-    nativeGpsForDistance.sort((a, b) => a.timestamp - b.timestamp);
+  // Calculate distance: Use ALL GPS points, but only within active time periods (determined from native GPS)
+  const nativeGpsForPeriods = data.gpsPoints.filter(p => p.source === 'native' || !p.source);
+  
+  if (nativeGpsForPeriods.length >= 2) {
+    nativeGpsForPeriods.sort((a, b) => a.timestamp - b.timestamp);
     
+    // Build active time periods from native GPS points (segments excluding breaks ≥ 20 min)
     const MIN_BREAK_MS = 20 * 60 * 1000;
+    const activePeriods: Array<{start: number, end: number}> = [];
+    let periodStart = nativeGpsForPeriods[0].timestamp;
+    
+    for (let i = 1; i < nativeGpsForPeriods.length; i++) {
+      const gap = nativeGpsForPeriods[i].timestamp - nativeGpsForPeriods[i - 1].timestamp;
+      
+      if (gap >= MIN_BREAK_MS) {
+        activePeriods.push({ start: periodStart, end: nativeGpsForPeriods[i - 1].timestamp });
+        periodStart = nativeGpsForPeriods[i].timestamp;
+      }
+    }
+    activePeriods.push({ start: periodStart, end: nativeGpsForPeriods[nativeGpsForPeriods.length - 1].timestamp });
+    
+    // Now use ALL GPS points for distance calculation, but only within active periods
+    const allGpsForDistance = [...data.gpsPoints];
+    allGpsForDistance.sort((a, b) => a.timestamp - b.timestamp);
+    
+    const WALKING_SPEED_KMH = 8;
     let totalDistance = 0;
     
-    for (let i = 1; i < nativeGpsForDistance.length; i++) {
-      const gap = nativeGpsForDistance[i].timestamp - nativeGpsForDistance[i - 1].timestamp;
+    const isInActivePeriod = (timestamp: number): boolean => {
+      return activePeriods.some(period => timestamp >= period.start && timestamp <= period.end);
+    };
+    
+    for (let i = 1; i < allGpsForDistance.length; i++) {
+      const prevPoint = allGpsForDistance[i - 1];
+      const currPoint = allGpsForDistance[i];
       
-      // Skip distance during breaks (≥ 20 min)
-      if (gap >= MIN_BREAK_MS) continue;
+      // Only calculate distance if BOTH points are within active periods
+      if (!isInActivePeriod(prevPoint.timestamp) || !isInActivePeriod(currPoint.timestamp)) {
+        continue;
+      }
       
-      const distance = calculateDistance(
-        nativeGpsForDistance[i - 1],
-        nativeGpsForDistance[i]
-      );
-      totalDistance += distance;
+      const gap = currPoint.timestamp - prevPoint.timestamp;
+      const distance = calculateDistance(prevPoint, currPoint);
+      
+      // Calculate speed in km/h
+      const timeDiffHours = gap / (1000 * 60 * 60);
+      const speedKmh = timeDiffHours > 0 ? (distance / 1000) / timeDiffHours : 0;
+      
+      // Only count distance if walking speed (< 8 km/h)
+      if (speedKmh < WALKING_SPEED_KMH) {
+        totalDistance += distance;
+      }
     }
     
     data.totalDistance = totalDistance;
-    console.log(`[HistoricalDataScraper] ${username} distance: ${(totalDistance / 1000).toFixed(2)} km (from ${nativeGpsForDistance.length} native GPS points, excluding breaks)`);
+    console.log(`[HistoricalDataScraper] ${username} distance: ${(totalDistance / 1000).toFixed(2)} km (walking speed only, ${allGpsForDistance.length} GPS points in ${activePeriods.length} active periods)`);
   } else {
     data.totalDistance = 0;
   }

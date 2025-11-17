@@ -274,13 +274,14 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentTimestamp, setCurrentTimestamp] = useState(0); // Current GPS timestamp for smooth interpolation
-  const [showFullRoute, setShowFullRoute] = useState(true);
   const [activePhotoFlash, setActivePhotoFlash] = useState<number | null>(null);
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [snapToRoadsEnabled, setSnapToRoadsEnabled] = useState(false); // Snap-to-roads toggle
   const [secondsPerHour, setSecondsPerHour] = useState(5); // Animation speed: 5 real seconds per GPS hour
   const [autoZoomEnabled, setAutoZoomEnabled] = useState(true); // Auto-Zoom toggle
+  const [showRouteLines, setShowRouteLines] = useState(true); // Toggle für Linien-Anzeige
+  const [showMovementMode, setShowMovementMode] = useState(true); // Toggle für Fußgänger/Auto-Emoji
   const [snapSegments, setSnapSegments] = useState<SnapSegment[] | null>(null);
   const [snapStats, setSnapStats] = useState<{ apiCallsUsed: number; costCents: number; segmentCount: number } | null>(null);
   const [snapError, setSnapError] = useState<string | null>(null);
@@ -491,6 +492,37 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
            (p.source === 'followmee' || p.source === 'external' || p.source === 'external_app')
     );
   }, [basePoints, pauseMode, stationaryPeriods]);
+
+  // Check if there are any external GPS points in the dataset
+  const hasExternalGPS = useMemo(() => {
+    return basePoints.some(p => p.source === 'followmee' || p.source === 'external' || p.source === 'external_app');
+  }, [basePoints]);
+
+  // Calculate speed between two GPS points (km/h)
+  const calculateSpeed = (point1: GPSPoint, point2: GPSPoint): number => {
+    const timeDiffHours = (point2.timestamp - point1.timestamp) / (1000 * 60 * 60);
+    if (timeDiffHours === 0) return 0;
+    
+    const distance = calculateDistance(point1, point2); // meters
+    const speedKmh = (distance / 1000) / timeDiffHours;
+    return speedKmh;
+  };
+
+  // Determine movement mode based on speed (walking < 8 km/h, driving >= 8 km/h)
+  const getMovementMode = (currentIndex: number): 'walking' | 'driving' => {
+    if (currentIndex <= 0 || currentIndex >= displayPoints.length - 1) return 'walking';
+    
+    const prevPoint = displayPoints[currentIndex - 1];
+    const currentPoint = displayPoints[currentIndex];
+    const nextPoint = displayPoints[currentIndex + 1];
+    
+    // Calculate average speed from previous and next point
+    const speedPrev = calculateSpeed(prevPoint, currentPoint);
+    const speedNext = calculateSpeed(currentPoint, nextPoint);
+    const avgSpeed = (speedPrev + speedNext) / 2;
+    
+    return avgSpeed >= 8 ? 'driving' : 'walking';
+  };
 
   const baseRouteSignature = useMemo(() => buildRouteSignature(basePoints), [basePoints]);
 
@@ -1117,7 +1149,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     const overlays = mapOverlaysRef.current;
     clearPolylineList(overlays.fullRoutes);
 
-    if (!showFullRoute) return;
+    if (!showRouteLines) return;
 
     overlays.fullRoutes = fullRouteSegments.map(segment => {
       const sourceColor = SOURCE_COLORS[segment.source || 'native'];
@@ -1132,12 +1164,12 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
         map,
         path: segment.points.map(([lat, lng]) => ({ lat, lng })),
         strokeColor: sourceColor,
-        strokeOpacity: pauseMode.active ? 0.15 : 0.5,
+        strokeOpacity: pauseMode.active ? 0.1 : 0.3,
         strokeWeight: 2,
         zIndex: 50,
       });
     });
-  }, [fullRouteSegments, showFullRoute, mapsApiLoaded]);
+  }, [fullRouteSegments, showRouteLines, mapsApiLoaded, pauseMode.active]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1571,22 +1603,82 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     }
 
     if (!overlays.currentMarker) {
-      overlays.currentMarker = new googleMaps.Marker({
-        map,
-        icon: {
+      // Determine if we should show emoji (only if external GPS data exists and toggle is on)
+      const shouldShowEmoji = hasExternalGPS && showMovementMode;
+      
+      if (shouldShowEmoji) {
+        // Create marker with emoji icon
+        const movementMode = getMovementMode(currentIndex);
+        const emoji = movementMode === 'walking' ? '🚶' : '🚗';
+        
+        overlays.currentMarker = new googleMaps.Marker({
+          map,
+          label: {
+            text: emoji,
+            fontSize: '48px',
+            className: 'emoji-marker-label',
+          },
+          icon: {
+            path: googleMaps.SymbolPath.CIRCLE,
+            fillColor: '#FFFFFF',
+            fillOpacity: 0.9,
+            strokeColor: '#000000',
+            strokeWeight: 3,
+            scale: 20,
+          },
+          zIndex: 450,
+        });
+      } else {
+        // Create normal circle marker
+        overlays.currentMarker = new googleMaps.Marker({
+          map,
+          icon: {
+            path: googleMaps.SymbolPath.CIRCLE,
+            fillColor: '#000000', // Schwarz für bessere Sichtbarkeit
+            fillOpacity: 1,
+            strokeColor: '#ffffff',
+            strokeWeight: 3,
+            scale: 12, // Größerer Marker
+          },
+          zIndex: 450,
+        });
+      }
+    } else {
+      // Update existing marker icon/label based on mode
+      const shouldShowEmoji = hasExternalGPS && showMovementMode;
+      
+      if (shouldShowEmoji) {
+        const movementMode = getMovementMode(currentIndex);
+        const emoji = movementMode === 'walking' ? '🚶' : '🚗';
+        
+        overlays.currentMarker.setLabel({
+          text: emoji,
+          fontSize: '48px',
+          className: 'emoji-marker-label',
+        });
+        overlays.currentMarker.setIcon({
           path: googleMaps.SymbolPath.CIRCLE,
-          fillColor: '#000000', // Schwarz für bessere Sichtbarkeit
+          fillColor: '#FFFFFF',
+          fillOpacity: 0.9,
+          strokeColor: '#000000',
+          strokeWeight: 3,
+          scale: 20,
+        });
+      } else {
+        overlays.currentMarker.setLabel(null);
+        overlays.currentMarker.setIcon({
+          path: googleMaps.SymbolPath.CIRCLE,
+          fillColor: '#000000',
           fillOpacity: 1,
           strokeColor: '#ffffff',
           strokeWeight: 3,
-          scale: 12, // Größerer Marker
-        },
-        zIndex: 450,
-      });
+          scale: 12,
+        });
+      }
     }
 
     overlays.currentMarker.setPosition({ lat: currentPosition.latitude, lng: currentPosition.longitude });
-  }, [currentPosition, currentIndex, displayPoints.length, mapsApiLoaded]);
+  }, [currentPosition, currentIndex, displayPoints.length, mapsApiLoaded, hasExternalGPS, showMovementMode]);
 
   // GPS-Marker: Nur basierend auf baseRouteSignature (ändert sich nur bei Route-Wechsel)
   useEffect(() => {
@@ -1609,10 +1701,10 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
           icon: {
             path: googleMaps.SymbolPath.CIRCLE,
             fillColor: SOURCE_COLORS[point.source || 'native'],
-            fillOpacity: pauseMode.active ? 0.15 : 0.9, // Stark ausgegraut im Pause-Modus
+            fillOpacity: pauseMode.active ? 0.1 : 0.5,
             strokeColor: '#ffffff',
             strokeWeight: 1,
-            scale: 4,
+            scale: 3.5,
           },
           title: format(new Date(point.timestamp), 'HH:mm:ss', { locale: de }),
         });
@@ -2112,6 +2204,44 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
                   : 'Manuelle Kamerasteuerung aktiv'}
               </p>
             </div>
+
+            {/* Route Lines Toggle */}
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showRouteLines}
+                  onChange={(e) => setShowRouteLines(e.target.checked)}
+                  className="rounded"
+                />
+                <span>Routen-Linien</span>
+              </label>
+              <p className="text-[10px] text-muted-foreground">
+                {showRouteLines
+                  ? 'Linien werden angezeigt'
+                  : 'Linien ausgeblendet'}
+              </p>
+            </div>
+
+            {/* Movement Mode Emoji Toggle (only when external GPS data exists) */}
+            {hasExternalGPS && (
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showMovementMode}
+                    onChange={(e) => setShowMovementMode(e.target.checked)}
+                    className="rounded"
+                  />
+                  <span>Bewegungsmodus 🚶🚗</span>
+                </label>
+                <p className="text-[10px] text-muted-foreground">
+                  {showMovementMode
+                    ? 'Zeigt Fußgänger/Auto-Icon basierend auf Geschwindigkeit'
+                    : 'Bewegungsmodus ausgeblendet'}
+                </p>
+              </div>
+            )}
 
             {/* Geschwindigkeitsregler */}
             <div className="pt-3 border-t space-y-2">

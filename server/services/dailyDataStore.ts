@@ -216,7 +216,7 @@ class DailyDataStore {
     const userData = this.data.get(userId);
     if (!userData) return;
 
-    // Filter ONLY native GPS points
+    // Step 1: Determine active time periods from NATIVE GPS points
     const nativeGpsPoints = userData.gpsPoints.filter(p => 
       p.source === 'native' || !p.source
     );
@@ -226,32 +226,71 @@ class DailyDataStore {
       return;
     }
 
-    // Sort by timestamp
     nativeGpsPoints.sort((a, b) => a.timestamp - b.timestamp);
     
+    // Build active time periods (segments between native points, excluding breaks ≥ 20 min)
     const MIN_BREAK_MS = 20 * 60 * 1000; // 20 minutes
-    let totalDistance = 0;
+    const activePeriods: Array<{start: number, end: number}> = [];
+    
+    let periodStart = nativeGpsPoints[0].timestamp;
     
     for (let i = 1; i < nativeGpsPoints.length; i++) {
       const gap = nativeGpsPoints[i].timestamp - nativeGpsPoints[i - 1].timestamp;
       
-      // Skip distance calculation if this is a break (≥ 20 min gap)
       if (gap >= MIN_BREAK_MS) {
+        // Break detected: close current period
+        activePeriods.push({ start: periodStart, end: nativeGpsPoints[i - 1].timestamp });
+        // Start new period after break
+        periodStart = nativeGpsPoints[i].timestamp;
+      }
+    }
+    
+    // Add final period
+    activePeriods.push({ start: periodStart, end: nativeGpsPoints[nativeGpsPoints.length - 1].timestamp });
+    
+    // Step 2: Use ALL GPS points (native + external) but ONLY within active periods
+    const allGpsPoints = [...userData.gpsPoints];
+    allGpsPoints.sort((a, b) => a.timestamp - b.timestamp);
+    
+    const WALKING_SPEED_KMH = 8; // Walking threshold
+    let totalDistance = 0;
+    
+    // Helper function to check if timestamp is within any active period
+    const isInActivePeriod = (timestamp: number): boolean => {
+      return activePeriods.some(period => timestamp >= period.start && timestamp <= period.end);
+    };
+    
+    for (let i = 1; i < allGpsPoints.length; i++) {
+      const prevPoint = allGpsPoints[i - 1];
+      const currPoint = allGpsPoints[i];
+      
+      // Only calculate distance if BOTH points are within active periods
+      if (!isInActivePeriod(prevPoint.timestamp) || !isInActivePeriod(currPoint.timestamp)) {
         continue;
       }
       
-      // Calculate distance between consecutive points (only during active time)
+      const gap = currPoint.timestamp - prevPoint.timestamp;
+      
+      // Calculate distance between consecutive points
       const distance = this.calculateDistance(
-        nativeGpsPoints[i - 1].latitude,
-        nativeGpsPoints[i - 1].longitude,
-        nativeGpsPoints[i].latitude,
-        nativeGpsPoints[i].longitude
+        prevPoint.latitude,
+        prevPoint.longitude,
+        currPoint.latitude,
+        currPoint.longitude
       );
       
-      totalDistance += distance;
+      // Calculate speed in km/h
+      const timeDiffHours = gap / (1000 * 60 * 60);
+      const speedKmh = timeDiffHours > 0 ? (distance / 1000) / timeDiffHours : 0;
+      
+      // Only count distance if walking speed (< 8 km/h)
+      if (speedKmh < WALKING_SPEED_KMH) {
+        totalDistance += distance;
+      }
     }
     
     userData.totalDistance = totalDistance;
+    console.log(`[DailyStore] ${username} distance: ${(totalDistance / 1000).toFixed(2)} km (walking speed only, from ${allGpsPoints.length} GPS points in ${activePeriods.length} active periods)`);
   }
 
   /**
