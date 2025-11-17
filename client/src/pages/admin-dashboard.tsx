@@ -393,6 +393,10 @@ export default function AdminDashboard() {
 
   // Format duration
   const formatDuration = (ms: number): string => {
+    // -1 indicates "App not used" (no native GPS data)
+    if (ms === -1) {
+      return 'App nicht genutzt';
+    }
     const hours = Math.floor(ms / (1000 * 60 * 60));
     const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
     return `${hours}h ${minutes}m`;

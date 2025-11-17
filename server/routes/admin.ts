@@ -115,16 +115,25 @@ function calculatePeakTime(rawLogs: TrackingData[]): string | undefined {
 }
 
 /**
- * Calculate all breaks longer than 20 minutes (time gaps between activities)
+ * Calculate all breaks longer than 20 minutes (time gaps between GPS tracking)
  * A break is considered significant if it's at least 20 minutes
+ * Only uses GPS logs to match the route visualization
  */
 function calculateBreaks(rawLogs: TrackingData[]): Array<{ start: number; end: number; duration: number }> {
   if (rawLogs.length < 2) return [];
 
-  // Sort logs by timestamp
-  const sortedLogs = [...rawLogs].sort((a, b) => a.timestamp - b.timestamp);
+  // Filter to only NATIVE GPS logs (matching activeTime calculation)
+  const gpsLogs = rawLogs.filter(log => 
+    log.gps !== undefined && 
+    (log.gps.source === 'native' || !log.gps.source)
+  );
 
-  // Calculate all gaps
+  if (gpsLogs.length < 2) return [];
+
+  // Sort GPS logs by timestamp
+  const sortedLogs = [...gpsLogs].sort((a, b) => a.timestamp - b.timestamp);
+
+  // Calculate all gaps between GPS updates
   const gaps: Array<{ start: number; end: number; duration: number }> = [];
 
   for (let i = 1; i < sortedLogs.length; i++) {
@@ -222,6 +231,11 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
       // Calculate peak time and breaks
       const peakTime = calculatePeakTime(userData.rawLogs);
       const breaks = calculateBreaks(userData.rawLogs);
+
+      // Debug: Log if breaks are empty but rawLogs exist
+      if (breaks.length === 0 && userData.rawLogs.length > 0) {
+        console.log(`[Admin API] No breaks found for ${userData.username} despite ${userData.rawLogs.length} logs`);
+      }
 
       // Determine if user is currently active (last activity within 15 minutes)
       const lastActivityTime = userData.rawLogs.length > 0 

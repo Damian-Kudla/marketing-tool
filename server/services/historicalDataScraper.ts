@@ -570,12 +570,6 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
 
       data.gpsPoints.push(coord);
 
-      // Berechne Distanz
-      if (lastGpsCoord) {
-        const distance = calculateDistance(lastGpsCoord, coord);
-        data.totalDistance += distance;
-      }
-
       lastGpsCoord = coord;
 
       // Store raw log
@@ -754,26 +748,85 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
     data.avgBatteryLevel = batterySum / batteryCount;
   }
 
-  // Calculate activeTime if not set
-  if (data.activeTime === 0) {
-    if (data.totalSessionTime > 0) {
-      // Use session time minus idle time
-      data.activeTime = data.totalSessionTime - data.totalIdleTime;
-      console.log(`[HistoricalDataScraper] ⏱️ ActiveTime calculated from session: ${data.activeTime}ms (${(data.activeTime/1000/60).toFixed(1)}min)`);
-    } else if (logs.length > 1) {
-      // Fallback: Calculate from first to last log timestamp (for old logs without session events)
-      const firstLog = logs[0].timestamp.getTime();
-      const lastLog = logs[logs.length - 1].timestamp.getTime();
-      const totalTime = lastLog - firstLog;
-      data.activeTime = totalTime - data.totalIdleTime;
-      data.totalSessionTime = totalTime; // Also set totalSessionTime for consistency
-      console.log(`[HistoricalDataScraper] ⏱️ ActiveTime calculated from log span: ${data.activeTime}ms (${(data.activeTime/1000/60).toFixed(1)}min)`);
-    } else {
-      console.log(`[HistoricalDataScraper] ⚠️ No activeTime data - only ${logs.length} log(s)`);
+  // Calculate activeTime from native GPS points (same logic as dailyDataStore)
+  // Filter ONLY native GPS points
+  const nativeGpsPoints = data.gpsPoints.filter(p => p.source === 'native' || !p.source);
+  
+  if (nativeGpsPoints.length >= 2) {
+    // Time span between first and last native point
+    nativeGpsPoints.sort((a, b) => a.timestamp - b.timestamp);
+    const firstTimestamp = nativeGpsPoints[0].timestamp;
+    const lastTimestamp = nativeGpsPoints[nativeGpsPoints.length - 1].timestamp;
+    const totalTimeSpan = lastTimestamp - firstTimestamp;
+    
+    // Calculate breaks (gaps > 20 minutes between native points)
+    const MIN_BREAK_MS = 20 * 60 * 1000; // 20 minutes
+    let totalBreakTime = 0;
+    const breaks: Array<{start: string, end: string, durationMin: number}> = [];
+    
+    for (let i = 1; i < nativeGpsPoints.length; i++) {
+      const gap = nativeGpsPoints[i].timestamp - nativeGpsPoints[i - 1].timestamp;
+      if (gap >= MIN_BREAK_MS) {
+        totalBreakTime += gap;
+        breaks.push({
+          start: new Date(nativeGpsPoints[i - 1].timestamp).toLocaleTimeString('de-DE'),
+          end: new Date(nativeGpsPoints[i].timestamp).toLocaleTimeString('de-DE'),
+          durationMin: Math.round(gap / 60000)
+        });
+      }
     }
+    
+    // Active time = total span - break times
+    data.activeTime = totalTimeSpan - totalBreakTime;
+    
+    const activeHours = Math.floor(data.activeTime / (1000 * 60 * 60));
+    const activeMinutes = Math.floor((data.activeTime % (1000 * 60 * 60)) / (1000 * 60));
+    const firstTime = new Date(firstTimestamp).toLocaleTimeString('de-DE');
+    const lastTime = new Date(lastTimestamp).toLocaleTimeString('de-DE');
+    
+    console.log(`[HistoricalDataScraper] ${username} activeTime:`, {
+      nativePoints: nativeGpsPoints.length,
+      firstPoint: firstTime,
+      lastPoint: lastTime,
+      totalSpanMin: Math.round(totalTimeSpan / 60000),
+      breaks: breaks,
+      totalBreakMin: Math.round(totalBreakTime / 60000),
+      activeTime: `${activeHours}h ${activeMinutes}m`
+    });
+  } else {
+    // 0 or 1 native points: Set to -1 to indicate "App not used"
+    data.activeTime = -1;
+    console.log(`[HistoricalDataScraper] ${username}: No active time (only ${nativeGpsPoints.length} native GPS point(s))`);
   }
 
   console.log(`[HistoricalDataScraper] 📊 Final stats: ${data.totalActions} actions, ${Array.from(data.statusChanges.values()).reduce((s,c) => s+c, 0)} status changes, ${(data.activeTime/1000/60).toFixed(1)}min active`);
+
+  // Calculate distance from native GPS points during active time only (same logic as dailyDataStore)
+  const nativeGpsForDistance = data.gpsPoints.filter(p => p.source === 'native' || !p.source);
+  if (nativeGpsForDistance.length >= 2) {
+    nativeGpsForDistance.sort((a, b) => a.timestamp - b.timestamp);
+    
+    const MIN_BREAK_MS = 20 * 60 * 1000;
+    let totalDistance = 0;
+    
+    for (let i = 1; i < nativeGpsForDistance.length; i++) {
+      const gap = nativeGpsForDistance[i].timestamp - nativeGpsForDistance[i - 1].timestamp;
+      
+      // Skip distance during breaks (≥ 20 min)
+      if (gap >= MIN_BREAK_MS) continue;
+      
+      const distance = calculateDistance(
+        nativeGpsForDistance[i - 1],
+        nativeGpsForDistance[i]
+      );
+      totalDistance += distance;
+    }
+    
+    data.totalDistance = totalDistance;
+    console.log(`[HistoricalDataScraper] ${username} distance: ${(totalDistance / 1000).toFixed(2)} km (from ${nativeGpsForDistance.length} native GPS points, excluding breaks)`);
+  } else {
+    data.totalDistance = 0;
+  }
 
   // Berechne KPIs
   const totalStatusChangesCount = Array.from(data.statusChanges.values()).reduce((sum, count) => sum + count, 0);

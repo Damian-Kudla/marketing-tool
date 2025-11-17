@@ -80,7 +80,7 @@ class DailyDataStore {
         uniqueAddresses: new Set(),
         totalSessionTime: 0,
         totalIdleTime: 0,
-        activeTime: 0,
+        activeTime: -1, // -1 indicates "App not used" (no native GPS data)
         sessionCount: 0,
         totalActions: 0,
         actionsByType: new Map(),
@@ -129,20 +129,9 @@ class DailyDataStore {
     // Add GPS point
     userData.gpsPoints.push(gps);
 
-    // Calculate distance from last point
-    if (userData.gpsPoints.length > 1) {
-      const lastPoint = userData.gpsPoints[userData.gpsPoints.length - 2];
-      const distance = this.calculateDistance(
-        lastPoint.latitude,
-        lastPoint.longitude,
-        gps.latitude,
-        gps.longitude
-      );
-      userData.totalDistance += distance;
-    }
-
-    // Recalculate active time after each GPS update
+    // Recalculate active time and distance after each GPS update
     this.recalculateActiveTime(userId, username);
+    this.recalculateDistance(userId, username);
 
     // Store raw log
     userData.rawLogs.push({
@@ -162,8 +151,12 @@ class DailyDataStore {
     const userData = this.data.get(userId);
     if (!userData) return;
 
-    // Filter only native GPS points (no FollowMee or external)
-    const nativeGpsPoints = userData.gpsPoints.filter(p => p.source === 'native' || !p.source);
+    // Filter ONLY native GPS points
+    // Include points without source (old data before source field was added - all native)
+    // Exclude: 'followmee', 'external_app', 'external'
+    const nativeGpsPoints = userData.gpsPoints.filter(p => 
+      p.source === 'native' || !p.source
+    );
     
     if (nativeGpsPoints.length >= 2) {
       // Time span between first and last native point
@@ -172,30 +165,93 @@ class DailyDataStore {
       const lastTimestamp = nativeGpsPoints[nativeGpsPoints.length - 1].timestamp;
       const totalTimeSpan = lastTimestamp - firstTimestamp;
       
+      // Debug: Log first and last point times
+      const firstTime = new Date(firstTimestamp).toLocaleTimeString('de-DE');
+      const lastTime = new Date(lastTimestamp).toLocaleTimeString('de-DE');
+      
       // Calculate breaks (gaps > 20 minutes between native points)
       const MIN_BREAK_MS = 20 * 60 * 1000; // 20 minutes
       let totalBreakTime = 0;
+      const breaks: Array<{start: string, end: string, durationMin: number}> = [];
       
       for (let i = 1; i < nativeGpsPoints.length; i++) {
         const gap = nativeGpsPoints[i].timestamp - nativeGpsPoints[i - 1].timestamp;
         if (gap >= MIN_BREAK_MS) {
           totalBreakTime += gap;
+          breaks.push({
+            start: new Date(nativeGpsPoints[i - 1].timestamp).toLocaleTimeString('de-DE'),
+            end: new Date(nativeGpsPoints[i].timestamp).toLocaleTimeString('de-DE'),
+            durationMin: Math.round(gap / 60000)
+          });
         }
       }
       
       // Active time = total span - break times
       userData.activeTime = totalTimeSpan - totalBreakTime;
-    } else if (nativeGpsPoints.length === 1) {
-      // Only one native point - no time span calculable
-      userData.activeTime = 0;
+      
+      const activeHours = Math.floor(userData.activeTime / (1000 * 60 * 60));
+      const activeMinutes = Math.floor((userData.activeTime % (1000 * 60 * 60)) / (1000 * 60));
+      
+      console.log(`[DailyStore] ${username} activeTime calculation:`, {
+        nativePoints: nativeGpsPoints.length,
+        firstPoint: firstTime,
+        lastPoint: lastTime,
+        totalSpanMin: Math.round(totalTimeSpan / 60000),
+        breaks: breaks,
+        totalBreakMin: Math.round(totalBreakTime / 60000),
+        activeTime: `${activeHours}h ${activeMinutes}m`
+      });
     } else {
-      // No native GPS points - fallback to session data if available
-      if (userData.totalSessionTime > 0) {
-        userData.activeTime = userData.totalSessionTime - userData.totalIdleTime;
-      } else {
-        userData.activeTime = 0;
-      }
+      // 0 or 1 native points: Set to -1 to indicate "App not used"
+      userData.activeTime = -1;
+      console.log(`[DailyStore] No active time for ${username}: only ${nativeGpsPoints.length} native GPS point(s)`);
     }
+  }
+
+  /**
+   * Recalculate distance from native GPS points during active time only
+   * Distance = Sum of distances between consecutive native GPS points, excluding breaks ≥ 20 min
+   */
+  private recalculateDistance(userId: string, username: string): void {
+    const userData = this.data.get(userId);
+    if (!userData) return;
+
+    // Filter ONLY native GPS points
+    const nativeGpsPoints = userData.gpsPoints.filter(p => 
+      p.source === 'native' || !p.source
+    );
+    
+    if (nativeGpsPoints.length < 2) {
+      userData.totalDistance = 0;
+      return;
+    }
+
+    // Sort by timestamp
+    nativeGpsPoints.sort((a, b) => a.timestamp - b.timestamp);
+    
+    const MIN_BREAK_MS = 20 * 60 * 1000; // 20 minutes
+    let totalDistance = 0;
+    
+    for (let i = 1; i < nativeGpsPoints.length; i++) {
+      const gap = nativeGpsPoints[i].timestamp - nativeGpsPoints[i - 1].timestamp;
+      
+      // Skip distance calculation if this is a break (≥ 20 min gap)
+      if (gap >= MIN_BREAK_MS) {
+        continue;
+      }
+      
+      // Calculate distance between consecutive points (only during active time)
+      const distance = this.calculateDistance(
+        nativeGpsPoints[i - 1].latitude,
+        nativeGpsPoints[i - 1].longitude,
+        nativeGpsPoints[i].latitude,
+        nativeGpsPoints[i].longitude
+      );
+      
+      totalDistance += distance;
+    }
+    
+    userData.totalDistance = totalDistance;
   }
 
   /**
@@ -408,10 +464,17 @@ class DailyDataStore {
 
   /**
    * Get unique photo count for user
+   * Falls back to photoTimestamps length if hash tracking was reset
    */
   getUniquePhotoCount(userId: string): number {
     const userHashes = this.uniquePhotoHashes.get(userId);
-    return userHashes ? userHashes.size : 0;
+    if (userHashes && userHashes.size > 0) {
+      return userHashes.size;
+    }
+
+    // Fallback: Use photoTimestamps count (used after server restart)
+    const userData = this.data.get(userId);
+    return userData?.photoTimestamps?.length || 0;
   }
 
   /**
