@@ -130,6 +130,39 @@ export function checkDBIntegrity(date: string): boolean {
 }
 
 /**
+ * Schließt eine DB und entfernt sie aus dem Cache
+ * WICHTIG: Muss aufgerufen werden bevor eine DB-Datei überschrieben wird!
+ */
+export function closeDB(date: string): void {
+  if (dbCache.has(date)) {
+    try {
+      const db = dbCache.get(date)!;
+      db.close();
+      dbCache.delete(date);
+      console.log(`[SQLite] Closed and removed ${date} from cache`);
+    } catch (error) {
+      console.error(`[SQLite] Error closing ${date}:`, error);
+      // Force remove from cache even if close fails
+      dbCache.delete(date);
+    }
+  }
+
+  // Also check old DB cache
+  if (oldDBCache.has(date)) {
+    try {
+      const cached = oldDBCache.get(date)!;
+      cached.db.close();
+      oldDBCache.delete(date);
+      console.log(`[SQLite] Closed and removed ${date} from old DB cache`);
+    } catch (error) {
+      console.error(`[SQLite] Error closing ${date} from old cache:`, error);
+      // Force remove from cache even if close fails
+      oldDBCache.delete(date);
+    }
+  }
+}
+
+/**
  * Initialisiert oder öffnet eine DB für ein bestimmtes Datum
  */
 export function initDB(date: string, readonly = false): Database.Database {

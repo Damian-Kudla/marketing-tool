@@ -164,6 +164,10 @@ class ExternalTrackingService {
         // ✅ Verwende GPS-Timestamp aus dem Request-Body, NICHT Server-Zeit!
         const gpsTimestamp = getBerlinTimestamp(new Date(locationData.timestamp));
         
+        // Debug: Check precision of received coordinates
+        console.log(`[ExternalTrackingService] Received coordinates - lat: ${locationData.latitude} (type: ${typeof locationData.latitude}), lon: ${locationData.longitude} (type: ${typeof locationData.longitude})`);
+        console.log(`[ExternalTrackingService] Coordinates as string: lat="${locationData.latitude.toString()}", lon="${locationData.longitude.toString()}"`);
+
         // Erstelle Log-Eintrag mit GPS-Daten im data-Feld
         const logEntry = {
           timestamp: gpsTimestamp, // ✅ GPS-Zeit verwenden
@@ -180,6 +184,8 @@ class ExternalTrackingService {
             receivedAt: getBerlinTimestamp() // Optional: Server-Empfangszeit
           }
         };
+
+        console.log(`[ExternalTrackingService] LogEntry data field:`, JSON.stringify(logEntry.data));
 
         // Schreibe in Nutzer-Log über batchLogger
         batchLogger.addUserActivity(logEntry);

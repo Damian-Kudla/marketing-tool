@@ -34,6 +34,13 @@ export async function scrapeDayDataFromSQLite(date: string, userId?: string): Pr
       if (daysAgo > 7) {
         console.log(`[SQLiteHistorical] ${date} is >7 days old, downloading from Drive...`);
 
+        // Check if backup service is ready
+        if (!sqliteBackupService.isReady()) {
+          console.error(`[SQLiteHistorical] Backup service not ready - cannot download ${date}`);
+          console.error(`[SQLiteHistorical] This usually means GOOGLE_DRIVE_LOG_FOLDER_ID is not set or Drive initialization failed`);
+          return [];
+        }
+
         // Download from Drive
         const downloaded = await sqliteBackupService.downloadDB(date);
 

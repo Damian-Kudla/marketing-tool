@@ -269,12 +269,19 @@ class ExternalTrackingReconciliationService {
         if (!row[0] || row[0] === 'Timestamp') continue;
 
         const timestamp = row[0]?.trim();
-        const latitude = parseFloat(row[1]);
-        const longitude = parseFloat(row[2]);
+
+        // Google Sheets kann Zahlen mit Komma als Dezimaltrennzeichen zurückgeben (europäisches Format)
+        // parseFloat() erwartet Punkt als Dezimaltrennzeichen
+        const latitudeStr = String(row[1] || '').replace(',', '.');
+        const longitudeStr = String(row[2] || '').replace(',', '.');
+
+        const latitude = parseFloat(latitudeStr);
+        const longitude = parseFloat(longitudeStr);
 
         // Validierung
         if (!timestamp || isNaN(latitude) || isNaN(longitude)) {
           console.warn(`[ExternalTrackingReconciliation] Invalid row in "${worksheetName}":`, row);
+          console.warn(`[ExternalTrackingReconciliation] Raw values: lat="${row[1]}", lon="${row[2]}", parsed: lat=${latitude}, lon=${longitude}`);
           continue;
         }
 

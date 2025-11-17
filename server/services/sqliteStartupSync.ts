@@ -19,6 +19,7 @@ import {
   insertLogsBatch,
   getDBPath,
   checkDBIntegrity,
+  closeDB,
   LogInsertData
 } from './sqliteLogService';
 import { sqliteBackupService } from './sqliteBackupService';
@@ -159,6 +160,9 @@ class SQLiteStartupSyncService {
           console.error(`[Phase 1] ❌ Corrupted DB detected: ${date}`);
           stats.errors.push(`Corrupted DB: ${date}`);
 
+          // Close DB before attempting to replace it
+          closeDB(date);
+
           // Try to download from Drive as fallback
           if (sqliteBackupService.isReady()) {
             console.log(`[Phase 1] Attempting to restore ${date} from Drive...`);
@@ -242,6 +246,9 @@ class SQLiteStartupSyncService {
         // Get Drive modified time
         // (simplified: always prefer Drive in case of conflict - it's the "source of truth")
         console.log(`[Phase 3] Resolving conflict: downloading ${date} from Drive (Drive = source of truth)`);
+
+        // Close DB before attempting to replace it
+        closeDB(date);
 
         const downloaded = await sqliteBackupService.downloadDB(date);
 

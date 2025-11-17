@@ -273,7 +273,9 @@ class SQLiteBackupService {
    */
   async downloadDB(date: string, targetPath?: string): Promise<string | null> {
     if (!this.driveClient) {
-      console.warn('[SQLiteBackup] Download skipped – Drive not initialized');
+      console.error('[SQLiteBackup] Download skipped – Drive not initialized');
+      console.error('[SQLiteBackup] Make sure GOOGLE_SHEETS_KEY and GOOGLE_DRIVE_LOG_FOLDER_ID are set');
+      console.error('[SQLiteBackup] initialized:', this.initialized);
       return null;
     }
 

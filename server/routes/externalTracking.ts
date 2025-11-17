@@ -62,6 +62,7 @@ router.post('/location', async (req: Request, res: Response) => {
     // Speichere die Daten in Google Sheets
     console.log(`[External Tracking] Received location data from user: ${locationData.userName}`);
     console.log(`[External Tracking] Location: ${locationData.latitude}, ${locationData.longitude}`);
+    console.log(`[External Tracking] Full location data:`, JSON.stringify(locationData, null, 2));
 
     await externalTrackingService.saveLocationData(locationData);
 

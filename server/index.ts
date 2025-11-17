@@ -137,9 +137,19 @@ app.use((req, res, next) => {
     try {
       const { externalTrackingReconciliationService } = await import('./services/externalTrackingReconciliation');
       const stats = await externalTrackingReconciliationService.reconcileUnassignedTrackingData();
-      
+
       if (stats.devicesProcessed > 0) {
         log(`External Tracking Reconciliation: ${stats.devicesAssigned} devices assigned, ${stats.devicesRemaining} remaining, ${stats.totalDataPoints} GPS points processed`);
+
+        // If we added current-day data, flush batchLogger and reload DailyStore
+        if (stats.currentDataPoints > 0) {
+          log('Flushing new GPS data to Google Sheets...');
+          await batchLogger.flushNow();
+
+          log('Reloading DailyStore with updated tracking data...');
+          await dailyDataStore.initializeFromLogs();
+          log(`✅ DailyStore updated with ${stats.currentDataPoints} new GPS points`);
+        }
       } else {
         log('No unassigned external tracking data found');
       }

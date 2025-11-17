@@ -230,7 +230,8 @@ function parseLogEntry(row: any[]): ParsedLog | null {
     // status_change can come from /api/tracking/session but must be treated as 'action'
     if (action === 'status_change') {
       type = 'action';
-    } else if (action === 'gps_update' || endpoint === '/api/tracking/gps') {
+    } else if (action === 'gps_update' || endpoint === '/api/tracking/gps' || endpoint === '/api/external-tracking/location' || parsedData.latitude !== undefined) {
+      // Also recognize external tracking and any log with latitude/longitude as GPS
       type = 'gps';
     } else if (action === 'session_start' || action === 'session_end' || action === 'idle_detected' || action === 'active_resumed' || action === 'session_update' || endpoint === '/api/tracking/session') {
       type = 'session';
@@ -238,7 +239,7 @@ function parseLogEntry(row: any[]): ParsedLog | null {
       type = 'device';
     } else if (endpoint === '/api/ocr' || endpoint === '/api/ocr-correct') {
       type = 'photo';
-    } else if (endpoint === '/api/address-datasets' || endpoint === '/api/search-address' || 
+    } else if (endpoint === '/api/address-datasets' || endpoint === '/api/search-address' ||
                endpoint?.startsWith('/api/address-datasets/') || endpoint?.startsWith('/api/datasets/')) {
       // Recognize API actions from endpoints even if not sent via /api/tracking/session
       type = 'action';
