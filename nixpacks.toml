@@ -1,0 +1,5 @@
+[phases.setup]
+nixPkgs = ['python3', 'nodejs', 'npm']
+
+[phases.build]
+cmds = ['npm ci']
