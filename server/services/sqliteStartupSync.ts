@@ -158,7 +158,6 @@ class SQLiteStartupSyncService {
 
         if (!isValid) {
           console.error(`[Phase 1] ❌ Corrupted DB detected: ${date}`);
-          stats.errors.push(`Corrupted DB: ${date}`);
 
           // Close DB before attempting to replace it
           closeDB(date);
@@ -170,9 +169,13 @@ class SQLiteStartupSyncService {
 
             if (downloaded) {
               console.log(`[Phase 1] ✅ Restored ${date} from Drive backup`);
+              // Don't add to errors if successfully restored
             } else {
               console.error(`[Phase 1] ❌ Could not restore ${date} from Drive`);
+              stats.errors.push(`Failed to restore corrupted DB: ${date}`);
             }
+          } else {
+            stats.errors.push(`Corrupted DB: ${date} (Drive not available)`);
           }
         } else {
           console.log(`[Phase 1] ✓ ${date} OK`);
