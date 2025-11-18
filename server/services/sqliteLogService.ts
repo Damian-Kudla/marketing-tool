@@ -109,24 +109,91 @@ export async function getDBChecksum(date: string): Promise<string | null> {
 
 /**
  * Prüft Integrität einer DB
+ * CRITICAL: DB must be closed from cache before calling this function
  */
 export function checkDBIntegrity(date: string): boolean {
-  try {
-    const db = new Database(getDBPath(date), { readonly: true });
-    const result = db.pragma('integrity_check');
-    db.close();
+  const maxRetries = 3;
+  let lastError: any = null;
 
-    const isValid = result.length === 1 && result[0].integrity_check === 'ok';
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    let db: Database.Database | null = null;
+    
+    try {
+      // Small delay before opening to let other processes finish
+      if (attempt > 1) {
+        const waitMs = attempt * 150; // Increased delay
+        const now = Date.now();
+        while (Date.now() - now < waitMs) { /* busy wait */ }
+      }
 
-    if (!isValid) {
-      console.error(`[SQLite] Integrity check FAILED for ${date}:`, result);
+      // CRITICAL: Open in read-write mode to allow checkpoint
+      db = new Database(getDBPath(date), { fileMustExist: true });
+      
+      // CRITICAL: Try PASSIVE checkpoint first (less aggressive)
+      // This doesn't block if other processes are using the DB
+      try {
+        const checkpointResult = db.pragma('wal_checkpoint(PASSIVE)');
+        // Result: [0=SQLITE_OK, pages_in_wal, pages_checkpointed]
+        // If pages_in_wal > 0 and pages_checkpointed === 0, WAL is locked
+      } catch (walError: any) {
+        // Checkpoint failed - WAL might be locked
+        const isLocked = 
+          walError?.message?.includes('SQLITE_BUSY') ||
+          walError?.message?.includes('database is locked');
+        
+        if (isLocked && attempt < maxRetries) {
+          console.log(`[SQLite] WAL checkpoint locked for ${date} (attempt ${attempt}/${maxRetries}), retrying...`);
+          if (db) db.close();
+          continue;
+        }
+        // Non-lock errors: continue with integrity check anyway
+      }
+      
+      const result = db.pragma('integrity_check');
+      db.close();
+      db = null;
+
+      // Check multiple possible response formats from better-sqlite3
+      const isValid = 
+        (result.length === 1 && result[0].integrity_check === 'ok') || // Format 1: { integrity_check: 'ok' }
+        (result.length === 1 && result[0] === 'ok') ||                  // Format 2: ['ok']
+        (Array.isArray(result) && result[0]?.integrity_check === 'ok'); // Format 3: [{ integrity_check: 'ok' }]
+
+      // btreeInitPage errors are usually concurrent access issues, not real corruption
+      if (!isValid) {
+        const resultStr = JSON.stringify(result, null, 2);
+        const isConcurrentAccessIssue = resultStr.includes('btreeInitPage') && resultStr.includes('error code 11');
+        
+        if (isConcurrentAccessIssue && attempt < maxRetries) {
+          console.log(`[SQLite] DB ${date} concurrent access detected (attempt ${attempt}/${maxRetries}), retrying...`);
+          continue; // Retry
+        }
+        
+        console.error(`[SQLite] Integrity check FAILED for ${date}:`, resultStr);
+      }
+
+      return isValid;
+    } catch (error: any) {
+      lastError = error;
+      
+      // SQLITE_BUSY (database locked) errors during concurrent access
+      const isConcurrentAccessError = 
+        error?.message?.includes('SQLITE_BUSY') ||
+        error?.message?.includes('database is locked') ||
+        error?.code === 'SQLITE_BUSY';
+
+      if (isConcurrentAccessError && attempt < maxRetries) {
+        console.log(`[SQLite] DB ${date} locked (attempt ${attempt}/${maxRetries}), retrying...`);
+        continue;
+      }
+
+      // Not a concurrent access error or max retries reached
+      break;
     }
-
-    return isValid;
-  } catch (error) {
-    console.error(`[SQLite] Error checking integrity for ${date}:`, error);
-    return false;
   }
+
+  console.error(`[SQLite] Error checking integrity for ${date} (after ${maxRetries} attempts):`, lastError);
+  return false;
 }
 
 /**
@@ -492,8 +559,14 @@ export async function cleanupOldDBs(daysToKeep = 7): Promise<number> {
  */
 export function checkpointDB(date: string): void {
   try {
-    const db = initDB(date);
+    // CRITICAL: Close DB from cache before checkpoint to release all locks
+    closeDB(date);
+    
+    // Open fresh connection for checkpoint
+    const db = initDB(date, false); // Read-write mode
     db.pragma('wal_checkpoint(TRUNCATE)');
+    db.close();
+    
     console.log(`[SQLite] Checkpointed WAL for ${date}`);
   } catch (error) {
     console.error(`[SQLite] Error checkpointing ${date}:`, error);

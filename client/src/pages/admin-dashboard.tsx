@@ -1124,27 +1124,43 @@ export default function AdminDashboard() {
                                     {user.todayStats.breaks && user.todayStats.breaks.length > 0 && (
                                       <div className="mt-2">
                                         <div className="text-muted-foreground font-medium mb-1">Pausen:</div>
-                                        {user.todayStats.breaks.map((breakItem, idx) => (
-                                          <div key={idx} className="mb-2 pb-2 border-b last:border-0">
-                                            <div className="flex justify-between text-sm">
-                                              <span className="text-muted-foreground">
-                                                {format(breakItem.start, 'HH:mm', { locale: de })} - {format(breakItem.end, 'HH:mm', { locale: de })}
-                                              </span>
-                                              <span className="font-medium">{formatDuration(breakItem.duration)}</span>
-                                            </div>
-                                            {breakItem.locations && breakItem.locations.length > 0 && (
+                                        {(() => {
+                                          console.log(`[Dashboard] ${user.username}: ${user.todayStats.breaks.length} breaks`, user.todayStats.breaks);
+                                          return user.todayStats.breaks.map((breakItem, idx) => (
+                                            <div key={idx} className="mb-2 pb-2 border-b last:border-0">
+                                              <div className="flex justify-between text-sm">
+                                                <span className="text-muted-foreground">
+                                                  {format(breakItem.start, 'HH:mm', { locale: de })} - {format(breakItem.end, 'HH:mm', { locale: de })}
+                                                </span>
+                                                <span className="font-medium">{formatDuration(breakItem.duration)}</span>
+                                              </div>
+                                              {(() => {
+                                                console.log(`[Dashboard]   Break ${idx}: locations=${breakItem.locations?.length || 0}`, breakItem.locations);
+                                                return null;
+                                              })()}
+                                              {breakItem.locations && breakItem.locations.length > 0 && (
                                               <div className="mt-1 space-y-1">
                                                 {breakItem.locations.map((loc, locIdx) => (
                                                   <div key={locIdx} className="text-xs text-muted-foreground pl-2 border-l-2 border-blue-300">
-                                                    <div className="font-semibold text-blue-600">{loc.poi_name}</div>
-                                                    {loc.address && <div>{loc.address}</div>}
-                                                    {loc.poi_type && <div className="italic">{loc.poi_type}</div>}
+                                                    <div className="flex justify-between items-start">
+                                                      <div className="flex-1">
+                                                        <div className="font-semibold text-blue-600">{loc.poi_name}</div>
+                                                        {loc.address && <div>{loc.address}</div>}
+                                                        {loc.poi_type && <div className="italic">{loc.poi_type}</div>}
+                                                      </div>
+                                                      {loc.durationAtLocation !== undefined && loc.durationAtLocation > 0 && (
+                                                        <div className="ml-2 text-xs font-medium text-orange-600 whitespace-nowrap">
+                                                          {loc.durationAtLocation} min
+                                                        </div>
+                                                      )}
+                                                    </div>
                                                   </div>
                                                 ))}
                                               </div>
                                             )}
                                           </div>
-                                        ))}
+                                        ));
+                                        })()}
                                       </div>
                                     )}
                                     {(!user.todayStats.peakTime && (!user.todayStats.breaks || user.todayStats.breaks.length === 0)) && (
@@ -1414,6 +1430,7 @@ export default function AdminDashboard() {
                   photoTimestamps={routeData.photoTimestamps || []}
                   source={routeData.source || gpsSource}
                   date={mode === 'live' ? new Date().toISOString().split('T')[0] : selectedDate}
+                  breaks={routeData.breaks || []}
                 />
               ) : (
                 <div className="flex min-h-full items-center justify-center py-16">

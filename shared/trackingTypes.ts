@@ -9,7 +9,7 @@ export interface GPSCoordinates {
   heading?: number;
   speed?: number;
   timestamp: number;
-  source?: 'native' | 'followmee'; // GPS data source
+  source?: 'native' | 'followmee' | 'external_app'; // GPS data source (native = background, followmee = external service, external_app = tracking app)
 }
 
 export interface SessionData {

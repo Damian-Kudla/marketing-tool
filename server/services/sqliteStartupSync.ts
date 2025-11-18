@@ -99,7 +99,14 @@ class SQLiteStartupSyncService {
       await this.phase4_MergeSheetsLogs(stats);
 
       // PHASE 5: Batch upload changed DBs
-      if (sqliteBackupService.isReady() && stats.logsMerged > 0) {
+      // CRITICAL: Check both Phase 3 and Phase 4 upload lists
+      // - Phase 3: DBs with checksum mismatch (local newer than Drive)
+      // - Phase 4: DBs with new/updated logs from Sheets
+      const phase3Dates = (stats as any)._phase3DatesToUpload || [];
+      const phase4Dates = (stats as any)._datesNeedingUpload || [];
+      const hasUploads = phase3Dates.length > 0 || phase4Dates.length > 0;
+      
+      if (sqliteBackupService.isReady() && hasUploads) {
         console.log('\n--- Phase 5: Upload Changed DBs ---');
         await this.phase5_UploadChangedDBs(stats);
       }
@@ -153,14 +160,15 @@ class SQLiteStartupSyncService {
       const exists = await dbExists(date);
 
       if (exists) {
+        // CRITICAL: Close DB from cache BEFORE integrity check
+        // This ensures WAL checkpoint can complete without locks
+        closeDB(date);
+
         // Integrity check
         const isValid = checkDBIntegrity(date);
 
         if (!isValid) {
           console.error(`[Phase 1] ❌ Corrupted DB detected: ${date}`);
-
-          // Close DB before attempting to replace it
-          closeDB(date);
 
           // Try to download from Drive as fallback
           if (sqliteBackupService.isReady()) {
@@ -232,6 +240,8 @@ class SQLiteStartupSyncService {
 
     console.log('[Phase 3] Comparing checksums...');
 
+    const datesToUpload: string[] = []; // Track DBs that need uploading
+
     for (const date of last7Days) {
       const exists = await dbExists(date);
       if (!exists) continue;
@@ -263,7 +273,8 @@ class SQLiteStartupSyncService {
 
         await this.sleep(1000);
       } else if (comparison.action === 'upload') {
-        console.log(`[Phase 3] Local ${date} newer than Drive, will upload later`);
+        console.log(`[Phase 3] Local ${date} newer than Drive, marking for upload`);
+        datesToUpload.push(date);
       } else if (comparison.action === 'download') {
         console.log(`[Phase 3] Drive ${date} newer, downloading...`);
         await sqliteBackupService.downloadDB(date);
@@ -273,6 +284,9 @@ class SQLiteStartupSyncService {
         console.log(`[Phase 3] ✓ ${date} in sync`);
       }
     }
+
+    // Store dates for upload (will be merged with Phase 4 uploads)
+    (stats as any)._phase3DatesToUpload = datesToUpload;
   }
 
   /**
@@ -403,15 +417,18 @@ class SQLiteStartupSyncService {
       console.log(`[Phase 4] Merging logs into ${logsByDate.size} DBs...`);
 
       const datesNeedingUpload: string[] = [];
+      const newlyCreatedDBs: string[] = []; // Track DBs created during this phase
 
       for (const [date, logs] of logsByDate.entries()) {
         console.log(`[Phase 4] Merging ${logs.length} logs into ${date}...`);
 
         // Check if DB exists locally
         let dbPath = getDBPath(date);
-        let needsDownload = false;
+        let wasCreatedNow = false;
 
         if (!(await dbExists(date))) {
+          wasCreatedNow = true; // Mark as newly created
+          
           // DB not local, check if >7 days old
           const daysAgo = Math.floor(
             (new Date(today).getTime() - new Date(date).getTime()) / (1000 * 60 * 60 * 24)
@@ -419,12 +436,13 @@ class SQLiteStartupSyncService {
 
           if (daysAgo > 7) {
             console.log(`[Phase 4]   ${date} is >7 days old, downloading from Drive...`);
-            needsDownload = true;
 
             // Try to download
             const downloaded = await sqliteBackupService.downloadDB(date, dbPath);
 
-            if (!downloaded) {
+            if (downloaded) {
+              wasCreatedNow = false; // Downloaded from Drive, not newly created
+            } else {
               console.log(`[Phase 4]   Not in Drive, creating new DB for ${date}`);
             }
           } else {
@@ -438,15 +456,24 @@ class SQLiteStartupSyncService {
 
         console.log(`[Phase 4]   ✅ Merged ${inserted}/${logs.length} logs into ${date}`);
 
-        // Mark for upload (only past days, not today)
-        if (date !== today && inserted > 0) {
+        // Mark for upload if:
+        // 1. New logs were inserted (inserted > 0), OR
+        // 2. DB was newly created (not in Drive yet)
+        if (date !== today && (inserted > 0 || wasCreatedNow)) {
           datesNeedingUpload.push(date);
+          if (wasCreatedNow && inserted > 0) {
+            newlyCreatedDBs.push(date);
+          }
         }
 
         await this.sleep(100);
       }
 
       console.log(`[Phase 4] ✅ Merged ${stats.logsMerged} logs from Sheets`);
+      
+      if (newlyCreatedDBs.length > 0) {
+        console.log(`[Phase 4] ℹ️  Created ${newlyCreatedDBs.length} new DBs: ${newlyCreatedDBs.join(', ')}`);
+      }
 
       // Store dates for upload in next phase
       (stats as any)._datesNeedingUpload = datesNeedingUpload;
@@ -461,16 +488,26 @@ class SQLiteStartupSyncService {
    * PHASE 5: Upload geänderte DBs nach Drive
    */
   private async phase5_UploadChangedDBs(stats: SyncStats): Promise<void> {
-    const datesNeedingUpload = (stats as any)._datesNeedingUpload || [];
+    const phase3Dates = (stats as any)._phase3DatesToUpload || [];
+    const phase4Dates = (stats as any)._datesNeedingUpload || [];
 
-    if (datesNeedingUpload.length === 0) {
+    // Merge and deduplicate
+    const allDates = [...new Set([...phase3Dates, ...phase4Dates])];
+
+    if (allDates.length === 0) {
       console.log('[Phase 5] No DBs need uploading');
       return;
     }
 
-    console.log(`[Phase 5] Uploading ${datesNeedingUpload.length} changed DBs...`);
+    console.log(`[Phase 5] Uploading ${allDates.length} changed DBs...`);
+    if (phase3Dates.length > 0) {
+      console.log(`[Phase 5]   - ${phase3Dates.length} from Phase 3 (checksum mismatch)`);
+    }
+    if (phase4Dates.length > 0) {
+      console.log(`[Phase 5]   - ${phase4Dates.length} from Phase 4 (new/updated logs)`);
+    }
 
-    for (const date of datesNeedingUpload) {
+    for (const date of allDates) {
       const success = await sqliteBackupService.uploadDB(date);
 
       if (success) {

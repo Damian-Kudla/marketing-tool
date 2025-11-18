@@ -63,6 +63,14 @@ function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
 class PauseLocationCacheService {
   private cache: Map<string, POIInfo> = new Map();
   private initialized = false;
+  
+  // Cache statistics
+  private stats = {
+    hits: 0,
+    misses: 0,
+    apiCalls: 0,
+    savedPOIs: 0,
+  };
 
   /**
    * Initialize cache by loading from Google Sheets
@@ -86,16 +94,28 @@ class PauseLocationCacheService {
       });
 
       const rows = response.data.values || [];
+      const seenPlaceIds = new Set<string>();
       
       for (const row of rows) {
         if (row.length < 7) continue; // Skip incomplete rows
 
-        const [lat, lng, name, type, address, placeId, createdAt] = row;
-        const key = this.getCacheKey(parseFloat(lat), parseFloat(lng));
-
-        this.cache.set(key, {
-          lat: parseFloat(lat),
-          lng: parseFloat(lng),
+        const [latStr, lngStr, name, type, address, placeId, createdAt] = row;
+        
+        // Skip duplicates (same place_id already loaded)
+        if (seenPlaceIds.has(placeId)) {
+          console.log(`[PauseLocationCache] Skipping duplicate place_id: ${placeId} (${name})`);
+          continue;
+        }
+        seenPlaceIds.add(placeId);
+        
+        // Parse coordinates with German decimal separator support (comma → dot)
+        const lat = parseFloat(latStr.toString().replace(',', '.'));
+        const lng = parseFloat(lngStr.toString().replace(',', '.'));
+        
+        // Use place_id as cache key (unique identifier)
+        this.cache.set(placeId, {
+          lat,
+          lng,
           name,
           type,
           address,
@@ -105,7 +125,7 @@ class PauseLocationCacheService {
       }
 
       this.initialized = true;
-      console.log(`[PauseLocationCache] Loaded ${this.cache.size} locations from sheet`);
+      console.log(`[PauseLocationCache] Loaded ${this.cache.size} unique locations from sheet (${seenPlaceIds.size} place_ids)`);
     } catch (error) {
       console.error('[PauseLocationCache] Failed to initialize:', error);
       throw error;
@@ -163,36 +183,41 @@ class PauseLocationCacheService {
     }
   }
 
-  /**
-   * Generate cache key from coordinates (rounded to 6 decimals ~0.11m precision)
-   */
-  private getCacheKey(lat: number, lng: number): string {
-    const latRounded = Math.round(lat * 1000000) / 1000000;
-    const lngRounded = Math.round(lng * 1000000) / 1000000;
-    return `${latRounded},${lngRounded}`;
-  }
+  // Cache key is now place_id (removed getCacheKey method)
 
   /**
    * Find cached location within 50m radius
+   * Returns the CLOSEST POI within radius (not just first match)
    */
   findNearby(lat: number, lng: number, radiusMeters: number = 50): POIInfo | null {
     const entries = Array.from(this.cache.values());
+    let closestPOI: POIInfo | null = null;
+    let closestDistance = Infinity;
+    
     for (const poi of entries) {
       const distance = calculateDistance(lat, lng, poi.lat, poi.lng);
-      if (distance <= radiusMeters) {
-        return { ...poi, distance: Math.round(distance) };
+      if (distance <= radiusMeters && distance < closestDistance) {
+        closestDistance = distance;
+        closestPOI = { ...poi, distance: Math.round(distance) };
       }
     }
-    return null;
+    
+    if (closestPOI) {
+      console.log(`[PauseLocationCache] Found nearby POI: ${closestPOI.name} at ${closestPOI.distance}m`);
+    }
+    
+    return closestPOI;
   }
 
   /**
    * Fetch POI from Google Places API
    */
   private async fetchFromPlacesAPI(lat: number, lng: number): Promise<POIInfo[]> {
+    this.stats.apiCalls++;
+    
     const url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=50&key=${API_KEY}&language=de`;
 
-    console.log(`[PauseLocationCache] Places API request for ${lat}, ${lng}`);
+    console.log(`[PauseLocationCache] Places API request for ${lat}, ${lng} (Total: ${this.stats.apiCalls})`);
 
     const response = await fetch(url);
     const data = await response.json();
@@ -249,39 +274,55 @@ class PauseLocationCacheService {
   }
 
   /**
-   * Save POI to cache and Google Sheets
+   * Save multiple POIs to cache and Google Sheets (batch)
+   * Checks for duplicate place_id to prevent redundant saves
    */
-  private async savePOI(poi: POIInfo): Promise<void> {
-    const key = this.getCacheKey(poi.lat, poi.lng);
+  private async savePOIs(pois: POIInfo[]): Promise<void> {
+    if (pois.length === 0) return;
 
-    // Save to RAM cache
-    this.cache.set(key, poi);
+    // Filter out duplicates (already in cache)
+    const newPOIs = pois.filter(poi => !this.cache.has(poi.placeId));
+    
+    if (newPOIs.length === 0) {
+      console.log(`[PauseLocationCache] All ${pois.length} POIs already in cache, skipping save`);
+      return;
+    }
+    
+    this.stats.savedPOIs += newPOIs.length;
+    console.log(`[PauseLocationCache] Saving ${newPOIs.length}/${pois.length} new POIs (${pois.length - newPOIs.length} duplicates skipped)`);
 
-    // Save to Google Sheets
+    // Save to RAM cache using place_id as key
+    for (const poi of newPOIs) {
+      this.cache.set(poi.placeId, poi);
+    }
+
+    // Batch save to Google Sheets (only new POIs)
     try {
       const auth = getGoogleAuth();
       const sheets = google.sheets({ version: 'v4', auth });
+
+      const rows = newPOIs.map(poi => [
+        poi.lat,
+        poi.lng,
+        poi.name,
+        poi.type,
+        poi.address,
+        poi.placeId,
+        poi.createdAt,
+      ]);
 
       await sheets.spreadsheets.values.append({
         spreadsheetId: SHEET_ID,
         range: `${SHEET_NAME}!A:G`,
         valueInputOption: 'RAW',
         requestBody: {
-          values: [[
-            poi.lat,
-            poi.lng,
-            poi.name,
-            poi.type,
-            poi.address,
-            poi.placeId,
-            poi.createdAt,
-          ]],
+          values: rows,
         },
       });
 
-      console.log(`[PauseLocationCache] Saved POI to sheet: ${poi.name}`);
+      console.log(`[PauseLocationCache] Batch saved ${newPOIs.length} POIs to sheet (Total: ${this.stats.savedPOIs})`);
     } catch (error) {
-      console.error('[PauseLocationCache] Failed to save POI to sheet:', error);
+      console.error('[PauseLocationCache] Failed to batch save POIs to sheet:', error);
       // Continue anyway - at least it's in RAM cache
     }
   }
@@ -298,12 +339,17 @@ class PauseLocationCacheService {
     // Check cache first
     const cached = this.findNearby(lat, lng);
     if (cached) {
-      console.log(`[PauseLocationCache] Cache HIT: ${cached.name} (${cached.distance}m away)`);
+      this.stats.hits++;
+      const hitRate = ((this.stats.hits / (this.stats.hits + this.stats.misses)) * 100).toFixed(1);
+      console.log(`[PauseLocationCache] Cache HIT: ${cached.name} (${cached.distance}m) | Hit rate: ${hitRate}%`);
       return [cached];
     }
 
     // Cache miss - fetch from Places API
-    console.log(`[PauseLocationCache] Cache MISS - fetching from Places API`);
+    this.stats.misses++;
+    const hitRate = ((this.stats.hits / (this.stats.hits + this.stats.misses)) * 100).toFixed(1);
+    console.log(`[PauseLocationCache] Cache MISS (${this.stats.misses}) | Hit rate: ${hitRate}%`);
+    
     const pois = await this.fetchFromPlacesAPI(lat, lng);
 
     if (pois.length === 0) {
@@ -311,10 +357,8 @@ class PauseLocationCacheService {
       return [];
     }
 
-    // Save all POIs to cache (they might be useful for nearby queries)
-    for (const poi of pois) {
-      await this.savePOI(poi);
-    }
+    // Batch save all POIs to cache
+    await this.savePOIs(pois);
 
     return pois;
   }
@@ -323,9 +367,31 @@ class PauseLocationCacheService {
    * Get cache statistics
    */
   getStats() {
+    const hitRate = this.stats.hits + this.stats.misses > 0
+      ? ((this.stats.hits / (this.stats.hits + this.stats.misses)) * 100).toFixed(1)
+      : '0.0';
+
     return {
       cacheSize: this.cache.size,
       initialized: this.initialized,
+      hits: this.stats.hits,
+      misses: this.stats.misses,
+      hitRate: `${hitRate}%`,
+      apiCalls: this.stats.apiCalls,
+      savedPOIs: this.stats.savedPOIs,
+      estimatedCost: `$${(this.stats.apiCalls * 0.017).toFixed(2)}`,
+    };
+  }
+
+  /**
+   * Reset statistics (useful for testing)
+   */
+  resetStats() {
+    this.stats = {
+      hits: 0,
+      misses: 0,
+      apiCalls: 0,
+      savedPOIs: 0,
     };
   }
 }

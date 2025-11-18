@@ -367,7 +367,22 @@ class FollowMeeApiService {
           continue;
         }
 
-        console.log(`[FollowMee] Processing ${deviceLocations.length} FollowMee locations for ${mapping.username}`);
+        // CRITICAL: Filter to ONLY today's locations BEFORE duplicate check
+        // This prevents importing yesterday's data that gets deleted later by SQLite sync
+        const today = getCETDate();
+        const todaysLocations = deviceLocations.filter(loc => {
+          const timestamp = this.parseFollowMeeDate(loc.Date);
+          const locDate = getCETDate(timestamp);
+          return locDate === today;
+        });
+
+        console.log(`[FollowMee] Processing ${deviceLocations.length} FollowMee locations (24h) → ${todaysLocations.length} from today (${today}) for ${mapping.username}`);
+
+        if (todaysLocations.length === 0) {
+          console.log(`[FollowMee] No locations from today for ${mapping.username}`);
+          this.gpsDataCache.set(mapping.userId, []);
+          continue;
+        }
 
         // Load existing logs from Google Sheets (only today)
         const existingLogs = await this.loadUserLogsFromSheets(mapping);
@@ -388,8 +403,8 @@ class FollowMeeApiService {
 
         console.log(`[FollowMee] Found ${existingTimestamps.size} existing FollowMee entries in logs for ${mapping.username}`);
 
-        // Filter new locations (not in existing logs)
-        const newLocations = deviceLocations.filter(loc => {
+        // Filter new locations (not in existing logs) - using today's locations only
+        const newLocations = todaysLocations.filter(loc => {
           const timestamp = this.parseFollowMeeDate(loc.Date);
           return !existingTimestamps.has(timestamp);
         });
@@ -407,13 +422,7 @@ class FollowMeeApiService {
           batchLogger.addUserActivity(logEntry);
         }
 
-        // Build cache with ONLY today's FollowMee data (sorted by timestamp)
-        const today = getCETDate();
-        const todaysLocations = deviceLocations.filter(loc => {
-          const timestamp = this.parseFollowMeeDate(loc.Date);
-          const logDate = getCETDate(timestamp);
-          return logDate === today;
-        });
+        // Build cache with today's FollowMee data (sorted by timestamp) - already filtered above
 
         const cacheData: CachedGPSData[] = todaysLocations
           .map(loc => ({
@@ -426,7 +435,7 @@ class FollowMeeApiService {
         this.gpsDataCache.set(mapping.userId, cacheData);
 
         console.log(`[FollowMee] ✅ Queued ${newLocations.length} new locations for ${mapping.username}`);
-        console.log(`[FollowMee] 📦 Cached ${cacheData.length} total locations for ${mapping.username} (today: ${today})`);
+        console.log(`[FollowMee] 📦 Cached ${todaysLocations.length} total locations for ${mapping.username} (today: ${today})`);
       }
 
       this.initialSyncCompleted = true;

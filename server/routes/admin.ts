@@ -116,74 +116,228 @@ function calculatePeakTime(rawLogs: TrackingData[]): string | undefined {
 }
 
 /**
+ * Calculate distance between two GPS points (Haversine formula, in meters)
+ */
+function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const earthRadiusMeters = 6371e3;
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lng2 - lng1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return earthRadiusMeters * c;
+}
+
+/**
  * Calculate all breaks longer than 20 minutes (time gaps between GPS tracking)
- * A break is considered significant if it's at least 20 minutes
- * Only uses GPS logs to match the route visualization
+ * 
+ * POI lookup rules (to minimize API calls):
+ * 1. Break must be ≥20 minutes (native GPS gap - background tracking every 5min)
+ * 2. External tracking data (separate native app via /api/external-tracking/location) must be available during the break
+ * 3. User must stay within 50m radius for ≥3 seconds during the break (from external tracking data)
+ * 
+ * Only when ALL conditions are met, a POI lookup is performed.
  */
 async function calculateBreaks(rawLogs: TrackingData[]): Promise<Array<{ 
   start: number; 
   end: number; 
   duration: number;
+  location?: { lat: number; lng: number }; // Center of stationary period
   locations?: Array<{
     poi_name: string;
     poi_type: string;
     address: string;
     place_id: string;
+    durationAtLocation?: number;
   }>;
 }>> {
-  if (rawLogs.length < 2) return [];
+  if (rawLogs.length < 2) {
+    console.log('[calculateBreaks] ❌ Not enough logs:', rawLogs.length);
+    return [];
+  }
+
+  // Check if POI lookups are enabled
+  const poiEnabled = process.env.ENABLE_POI_LOOKUPS !== 'false';
+  console.log('[calculateBreaks] 🔧 POI lookups enabled:', poiEnabled);
 
   // Filter to only NATIVE GPS logs (matching activeTime calculation)
-  const gpsLogs = rawLogs.filter(log => 
+  const nativeGpsLogs = rawLogs.filter(log => 
     log.gps !== undefined && 
     (log.gps.source === 'native' || !log.gps.source)
   );
 
-  if (gpsLogs.length < 2) return [];
+  console.log(`[calculateBreaks] 📊 Total logs: ${rawLogs.length}, Native GPS: ${nativeGpsLogs.length}`);
 
-  // Sort GPS logs by timestamp
-  const sortedLogs = [...gpsLogs].sort((a, b) => a.timestamp - b.timestamp);
+  if (nativeGpsLogs.length < 2) {
+    console.log('[calculateBreaks] ❌ Not enough native GPS logs');
+    return [];
+  }
 
-  // Calculate all gaps between GPS updates
-  const gaps: Array<{ start: number; end: number; duration: number; gps?: { lat: number; lng: number } }> = [];
+  // Sort native GPS logs by timestamp
+  const sortedNativeLogs = [...nativeGpsLogs].sort((a, b) => a.timestamp - b.timestamp);
 
-  for (let i = 1; i < sortedLogs.length; i++) {
-    const gap = sortedLogs[i].timestamp - sortedLogs[i - 1].timestamp;
+  // Calculate all gaps between native GPS updates
+  const gaps: Array<{ 
+    start: number; 
+    end: number; 
+    duration: number; 
+  }> = [];
+
+  for (let i = 1; i < sortedNativeLogs.length; i++) {
+    const gap = sortedNativeLogs[i].timestamp - sortedNativeLogs[i - 1].timestamp;
     const minBreakDuration = 20 * 60 * 1000; // 20 minutes
 
     if (gap >= minBreakDuration) {
-      // Use the GPS coordinates at the start of the break
-      const gps = sortedLogs[i - 1].gps;
       gaps.push({
-        start: sortedLogs[i - 1].timestamp,
-        end: sortedLogs[i].timestamp,
+        start: sortedNativeLogs[i - 1].timestamp,
+        end: sortedNativeLogs[i].timestamp,
         duration: gap,
-        gps: gps ? { lat: gps.lat, lng: gps.lng } : undefined
       });
     }
   }
 
-  // Sort by duration (largest first)
-  const sortedGaps = gaps.sort((a, b) => b.duration - a.duration);
+  // Sort chronologically (by start time) to maintain correct order
+  const sortedGaps = gaps.sort((a, b) => a.start - b.start);
 
-  // Enrich with POI information
+  console.log(`[calculateBreaks] 🔍 Found ${sortedGaps.length} gaps (≥20min)`);
+
+  // Enrich with POI information (only if conditions are met)
   const enrichedGaps = await Promise.all(
     sortedGaps.map(async (gap) => {
-      if (!gap.gps) {
+      const gapMinutes = Math.round(gap.duration / 60000);
+      console.log(`[calculateBreaks]   Gap: ${gapMinutes}min (${new Date(gap.start).toLocaleTimeString()} - ${new Date(gap.end).toLocaleTimeString()})`);
+
+      // Skip POI lookup if disabled
+      if (!poiEnabled) {
+        console.log('[calculateBreaks]     ⏭️  POI lookup disabled');
         return { start: gap.start, end: gap.end, duration: gap.duration };
       }
 
+      // Rule 1: Check if external tracking data (separate native tracking app) is available during the break
+      // External tracking app sends high-frequency GPS data via /api/external-tracking/location
+      const externalTrackingLogs = rawLogs.filter(log => 
+        log.gps?.source === 'external_app' &&
+        log.timestamp >= gap.start && 
+        log.timestamp <= gap.end &&
+        typeof log.gps.latitude === 'number' && 
+        typeof log.gps.longitude === 'number' &&
+        !isNaN(log.gps.latitude) && 
+        !isNaN(log.gps.longitude)
+      );
+
+      console.log(`[calculateBreaks]     External GPS points: ${externalTrackingLogs.length}`);
+
+      if (externalTrackingLogs.length === 0) {
+        // No external tracking data during break - skip POI lookup
+        console.log('[calculateBreaks]     ❌ No external tracking data');
+        return { start: gap.start, end: gap.end, duration: gap.duration };
+      }
+
+      // Rule 2: Check if user stayed within 50m radius for ≥3 seconds
+      const sortedExternalLogs = externalTrackingLogs.sort((a, b) => a.timestamp - b.timestamp);
+      
+      let stationaryPeriod: { lat: number; lng: number; duration: number } | null = null;
+      
+      for (let i = 0; i < sortedExternalLogs.length; i++) {
+        const startLog = sortedExternalLogs[i];
+        let maxDuration = 0;
+        let endIndex = i;
+        
+        // Find how long user stayed within 50m of this point
+        for (let j = i + 1; j < sortedExternalLogs.length; j++) {
+          const currentLog = sortedExternalLogs[j];
+          const distance = calculateDistance(
+            startLog.gps!.latitude, startLog.gps!.longitude,
+            currentLog.gps!.latitude, currentLog.gps!.longitude
+          );
+          
+          if (distance <= 50) {
+            endIndex = j;
+            maxDuration = currentLog.timestamp - startLog.timestamp;
+          } else {
+            break; // Left the 50m radius
+          }
+        }
+        
+        // Check if stayed ≥3 seconds
+        if (maxDuration >= 3000 && (!stationaryPeriod || maxDuration > stationaryPeriod.duration)) {
+          stationaryPeriod = {
+            lat: startLog.gps!.latitude,
+            lng: startLog.gps!.longitude,
+            duration: maxDuration
+          };
+        }
+      }
+
+      if (!stationaryPeriod) {
+        // User didn't stay in 50m radius for ≥3 seconds - skip POI lookup
+        console.log('[calculateBreaks]     ❌ No stationary period (≥3s in 50m radius)');
+        return { start: gap.start, end: gap.end, duration: gap.duration };
+      }
+
+      console.log(`[calculateBreaks]     ✅ Stationary period found: ${Math.round(stationaryPeriod.duration / 1000)}s at [${stationaryPeriod.lat.toFixed(5)}, ${stationaryPeriod.lng.toFixed(5)}]`);
+
+      // All conditions met - perform POI lookup
       try {
-        const poiInfo = await pauseLocationCache.getPOIInfo(gap.gps.lat, gap.gps.lng);
+        const poiInfo = await pauseLocationCache.getPOIInfo(stationaryPeriod.lat, stationaryPeriod.lng);
+        console.log(`[calculateBreaks]     🏪 POI lookup returned ${poiInfo.length} places`);
+        
+        // Calculate actual time spent within 50m of each POI
+        const enrichedPOIs = poiInfo.map(poi => {
+          // Find all external tracking points within 50m of THIS POI (not stationary period center)
+          const pointsNearPOI = sortedExternalLogs.filter(log => {
+            const distance = calculateDistance(
+              log.gps!.latitude,
+              log.gps!.longitude,
+              poi.lat,
+              poi.lng
+            );
+            return distance <= 50;
+          });
+
+          let timeAtPOI = 0;
+          if (pointsNearPOI.length > 0) {
+            const firstPoint = pointsNearPOI[0].timestamp;
+            const lastPoint = pointsNearPOI[pointsNearPOI.length - 1].timestamp;
+            timeAtPOI = Math.round((lastPoint - firstPoint) / 60000); // minutes
+            
+            // Edge case: Single point or very short duration
+            if (timeAtPOI === 0 && pointsNearPOI.length > 0) {
+              timeAtPOI = 1; // At least 1 minute if user was detected there
+            }
+          }
+
+          return {
+            poi_name: poi.name,
+            poi_type: poi.type,
+            address: poi.address,
+            place_id: poi.placeId,
+            durationAtLocation: timeAtPOI
+          };
+        });
+
+        console.log(`[calculateBreaks] POI lookup for ${Math.round(stationaryPeriod.duration / 1000)}s stationary period, found ${enrichedPOIs.length} POIs`);
+        
         return {
           start: gap.start,
           end: gap.end,
           duration: gap.duration,
-          locations: poiInfo.length > 0 ? poiInfo : undefined
+          location: { lat: stationaryPeriod.lat, lng: stationaryPeriod.lng }, // Add GPS coordinates
+          locations: enrichedPOIs.length > 0 ? enrichedPOIs : undefined
         };
       } catch (error) {
         console.error('[calculateBreaks] Error fetching POI info:', error);
-        return { start: gap.start, end: gap.end, duration: gap.duration };
+        return { 
+          start: gap.start, 
+          end: gap.end, 
+          duration: gap.duration,
+          location: { lat: stationaryPeriod.lat, lng: stationaryPeriod.lng } // Include location even on error
+        };
       }
     })
   );
@@ -269,10 +423,19 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
       // Calculate peak time and breaks (await breaks)
       const peakTime = calculatePeakTime(userData.rawLogs);
       const breaks = await calculateBreaks(userData.rawLogs);
+      
+      console.log(`[Admin API LIVE] 📍 User ${userData.username}: Calculated ${breaks.length} breaks from ${userData.rawLogs.length} logs`);
+      if (breaks.length > 0) {
+        breaks.forEach((b, idx) => {
+          console.log(`[Admin API LIVE]   Break ${idx + 1}: ${Math.round(b.duration / 60000)}min, locations: ${b.locations?.length || 0}, hasLocation: ${!!b.location}`);
+        });
+      }
 
       // Debug: Log if breaks are empty but rawLogs exist
       if (breaks.length === 0 && userData.rawLogs.length > 0) {
-        console.log(`[Admin API] No breaks found for ${userData.username} despite ${userData.rawLogs.length} logs`);
+        const nativeGps = userData.rawLogs.filter(log => log.gps && (log.gps.source === 'native' || !log.gps.source));
+        const externalGps = userData.rawLogs.filter(log => log.gps?.source === 'external_app');
+        console.log(`[Admin API] ⚠️  No breaks for ${userData.username}: ${nativeGps.length} native GPS, ${externalGps.length} external GPS`);
       }
 
       // Determine if user is currently active (last activity within 15 minutes)
@@ -408,6 +571,13 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
       // Calculate peak time and breaks (await breaks)
       const peakTime = calculatePeakTime(user.rawLogs);
       const breaks = await calculateBreaks(user.rawLogs);
+      
+      console.log(`[Admin API] 📍 User ${user.username}: Calculated ${breaks.length} breaks`);
+      if (breaks.length > 0) {
+        breaks.forEach((b, idx) => {
+          console.log(`[Admin API]   Break ${idx + 1}: ${Math.round(b.duration / 60000)}min, locations: ${b.locations?.length || 0}, hasLocation: ${!!b.location}`);
+        });
+      }
 
       // For historical data, always set isActive to false (it's past data)
       // Historical data is never "active" since it's from a previous day
@@ -566,11 +736,46 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
       return hour >= 6;
     });
 
+    // Calculate breaks with POI information (if available)
+    let breaks: Array<{
+      start: number;
+      end: number;
+      duration: number;
+      location?: { lat: number; lng: number };
+      locations?: Array<{
+        poi_name: string;
+        poi_type: string;
+        address: string;
+        place_id: string;
+        durationAtLocation?: number;
+      }>;
+    }> = [];
+
+    // Fetch raw logs for break calculation
+    let rawLogs: TrackingData[] = [];
+    if (dateStr === today) {
+      const userData = dailyDataStore.getUserDailyData(userIdStr);
+      if (userData) {
+        rawLogs = userData.rawLogs;
+      }
+    } else {
+      const historicalData = await scrapeDayData(dateStr, userIdStr);
+      if (historicalData && historicalData.length > 0) {
+        rawLogs = historicalData[0].rawLogs;
+      }
+    }
+
+    if (rawLogs.length > 0) {
+      breaks = await calculateBreaks(rawLogs);
+      console.log(`[Admin API] Calculated ${breaks.length} breaks for route`);
+    }
+
     // Gebe immer 200 zurück, auch wenn keine Daten gefunden wurden
     // (verhindert Service Worker Cache-Probleme)
     res.json({
       gpsPoints: gpsPoints || [],
       photoTimestamps: photoTimestamps || [],
+      breaks: breaks || [],
       username: username || 'Unknown',
       date: dateStr,
       source: sourceFilter || 'all',
@@ -1091,8 +1296,14 @@ router.post('/generate-report', requireAuth, requireAdmin, async (req: Authentic
 
     console.log(`[Admin API] Generating ${isPartial ? 'partial' : 'final'} report for ${date} by ${req.username}`);
 
+    // Reset cache stats for accurate measurement
+    pauseLocationCache.resetStats();
+
     const { dailyReportCronService } = await import('../services/dailyReportCron');
     await dailyReportCronService.generateReportForDate(date, isPartial);
+
+    // Get final cache stats
+    const cacheStats = pauseLocationCache.getStats();
 
     res.json({
       success: true,
@@ -1100,11 +1311,34 @@ router.post('/generate-report', requireAuth, requireAdmin, async (req: Authentic
       date,
       isPartial,
       timestamp: getBerlinTimestamp(),
+      performance: cacheStats,
     });
   } catch (error) {
     console.error('[Admin API] Error generating report:', error);
     res.status(500).json({
       error: 'Failed to generate report',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+/**
+ * GET /api/admin/poi-cache-stats
+ * Get current POI cache statistics (hit rate, API calls, cost estimate)
+ */
+router.get('/poi-cache-stats', requireAuth, requireAdmin, (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const stats = pauseLocationCache.getStats();
+    
+    res.json({
+      success: true,
+      stats,
+      timestamp: getBerlinTimestamp(),
+    });
+  } catch (error) {
+    console.error('[Admin API] Error getting POI cache stats:', error);
+    res.status(500).json({
+      error: 'Failed to get cache stats',
       details: error instanceof Error ? error.message : String(error),
     });
   }

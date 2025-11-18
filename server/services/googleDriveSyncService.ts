@@ -187,6 +187,41 @@ class GoogleDriveSyncService {
     await this.syncFile(filename);
   }
 
+  /**
+   * List all daily report files in Google Drive
+   * NOTE: Reports are stored in GOOGLE_DRIVE_REPORTS_FOLDER_ID, NOT in the cache folder
+   */
+  async listReports(): Promise<Array<{ name: string; id: string }>> {
+    if (!this.driveClient) {
+      console.log("[GoogleDriveSync] List reports skipped – Drive not initialized");
+      return [];
+    }
+
+    const reportsFolderId = process.env.GOOGLE_DRIVE_REPORTS_FOLDER_ID || '';
+    if (!reportsFolderId) {
+      console.error("[GoogleDriveSync] GOOGLE_DRIVE_REPORTS_FOLDER_ID not configured");
+      return [];
+    }
+
+    try {
+      const response = await this.driveClient.files.list({
+        q: `name contains 'daily-report-' and '${reportsFolderId}' in parents and trashed=false`,
+        fields: "files(id, name)",
+        spaces: "drive",
+      });
+      
+      const files = response.data.files || [];
+      console.log(`[GoogleDriveSync] Found ${files.length} reports in Drive`);
+      return files.map(file => ({ 
+        name: file.name || '', 
+        id: file.id || '' 
+      }));
+    } catch (error) {
+      console.error("[GoogleDriveSync] Error listing reports:", error);
+      return [];
+    }
+  }
+
   stop(): void {
     if (this.syncHandle) {
       clearInterval(this.syncHandle);

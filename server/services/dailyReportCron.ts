@@ -9,6 +9,7 @@
 import cron from 'node-cron';
 import { getBerlinDate } from '../utils/timezone';
 import { createDailyReport } from './dailyReportGenerator';
+import { googleDriveSyncService } from './googleDriveSyncService';
 
 class DailyReportCronService {
   private cronJob: cron.ScheduledTask | null = null;
@@ -80,7 +81,7 @@ class DailyReportCronService {
     console.log(`[DailyReportCron] Checking for missing reports since ${this.START_DATE}...`);
 
     const today = getBerlinDate(new Date());
-    const missingDates = this.getMissingDates(today);
+    const missingDates = await this.getMissingDates(today);
 
     if (missingDates.length === 0) {
       console.log('[DailyReportCron] No missing reports found');
@@ -103,9 +104,9 @@ class DailyReportCronService {
 
   /**
    * Get list of dates that need reports (from START_DATE to yesterday)
-   * TODO: Check Google Drive to see which reports already exist
+   * Checks Google Drive to see which reports already exist
    */
-  private getMissingDates(today: string): string[] {
+  private async getMissingDates(today: string): Promise<string[]> {
     const dates: string[] = [];
     const start = new Date(this.START_DATE);
     const end = new Date(today);
@@ -120,10 +121,28 @@ class DailyReportCronService {
       current.setDate(current.getDate() + 1);
     }
 
-    // TODO: Filter out dates that already have reports in Google Drive
-    // For now, we'll just generate all dates (Drive upload will update existing files)
-    
-    return dates;
+    // Check which reports already exist in Google Drive
+    try {
+      const existingReports = await googleDriveSyncService.listReports();
+      const existingDates = new Set(
+        existingReports.map((report: { name: string }) => {
+          // Extract date from filename: daily-report-2025-11-17.json → 2025-11-17
+          const match = report.name.match(/daily-report-(\d{4}-\d{2}-\d{2})\.json/);
+          return match ? match[1] : null;
+        }).filter(Boolean) as string[]
+      );
+
+      // Filter out dates that already have reports
+      const missingDates = dates.filter(date => !existingDates.has(date));
+      
+      console.log(`[DailyReportCron] Total dates: ${dates.length}, Existing reports: ${existingDates.size}, Missing: ${missingDates.length}`);
+      
+      return missingDates;
+    } catch (error) {
+      console.error('[DailyReportCron] Error checking existing reports in Drive, will regenerate all:', error);
+      // Fallback: return all dates if Drive check fails
+      return dates;
+    }
   }
 
   /**
