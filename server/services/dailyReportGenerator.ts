@@ -9,6 +9,12 @@
  * - Peak time analysis
  * 
  * Reports are stored in Google Drive for n8n consumption
+ * 
+ * POI System Optimizations:
+ * - Batch coordinate deduplication (50m radius)
+ * - Single API call per unique location
+ * - Batch Google Sheets writes
+ * - Real-time cache hit rate tracking
  */
 
 import { google } from 'googleapis';
@@ -23,12 +29,13 @@ const REPORTS_FOLDER_ID = process.env.GOOGLE_DRIVE_REPORTS_FOLDER_ID || '';
 interface PauseLocation {
   startTime: number;
   endTime: number;
-  duration: number; // minutes
+  duration: number; // minutes (total pause duration)
   locations: Array<{
     name: string;
     type: string;
     address: string;
     distance: number; // meters from GPS center
+    durationAtLocation?: number; // minutes spent at this specific location
   }>;
 }
 
@@ -40,6 +47,12 @@ interface UserReport {
   totalActions: number;
   uniquePhotos: number;
   peakTime: string; // Hour with most activity (format: "HH:00")
+  
+  gpsStats: {
+    native: number;        // GPS points from background tracking (every 5min)
+    followmee: number;     // GPS points from FollowMee API
+    externalApp: number;   // GPS points from external tracking app (high frequency)
+  };
   
   actionDetails: {
     scans: number;
@@ -188,11 +201,53 @@ function detectStationaryClusters(
 }
 
 /**
- * Calculate pauses with POI enrichment
+ * Calculate pauses WITHOUT POI enrichment (when disabled via config)
  */
-async function calculatePausesWithLocations(
+async function calculatePausesWithoutPOI(
   rawLogs: TrackingData[]
 ): Promise<PauseLocation[]> {
+  if (rawLogs.length < 2) return [];
+
+  const nativeGpsLogs = rawLogs.filter(log =>
+    log.gps !== undefined && (log.gps.source === 'native' || !log.gps.source)
+  );
+
+  if (nativeGpsLogs.length < 2) return [];
+
+  const sortedLogs = [...nativeGpsLogs].sort((a, b) => a.timestamp - b.timestamp);
+  const MIN_BREAK_MS = 20 * 60 * 1000;
+  const pausePeriods: PauseLocation[] = [];
+
+  for (let i = 1; i < sortedLogs.length; i++) {
+    const gap = sortedLogs[i].timestamp - sortedLogs[i - 1].timestamp;
+    if (gap >= MIN_BREAK_MS) {
+      pausePeriods.push({
+        startTime: sortedLogs[i - 1].timestamp,
+        endTime: sortedLogs[i].timestamp,
+        duration: Math.round(gap / 60000),
+        locations: [], // Empty when POI disabled
+      });
+    }
+  }
+
+  return pausePeriods;
+}
+
+/**
+ * Calculate pauses with POI enrichment (optimized with batch caching)
+ */
+async function calculatePausesWithLocations(
+  rawLogs: TrackingData[],
+  username: string
+): Promise<PauseLocation[]> {
+  // Check if POI lookups are enabled via config
+  const poiEnabled = process.env.ENABLE_POI_LOOKUPS !== 'false';
+  
+  if (!poiEnabled) {
+    console.log(`[DailyReport] ${username}: POI lookups disabled via config`);
+    return await calculatePausesWithoutPOI(rawLogs);
+  }
+
   if (rawLogs.length < 2) return [];
 
   // Filter native GPS points for pause detection (20+ min gaps)
@@ -218,65 +273,162 @@ async function calculatePausesWithLocations(
     }
   }
 
-  // Enrich pauses with location data
-  const enrichedPauses: PauseLocation[] = [];
+  // Collect all pause locations first (batch)
+  const pauseLocations: Array<{ pause: typeof pausePeriods[0]; center: { lat: number; lng: number } | null }> = [];
 
   for (const pause of pausePeriods) {
-    // Get ALL GPS points during pause (native + external)
-    const pauseGpsPoints = rawLogs
-      .filter(log => log.gps && log.timestamp >= pause.start && log.timestamp <= pause.end)
+    // CRITICAL: Only proceed if external tracking data (source: 'external_app') is available during pause
+    // External tracking app sends high-frequency GPS data via /api/external-tracking/location
+    const externalTrackingPoints = rawLogs
+      .filter(log => 
+        log.gps && 
+        log.gps.source === 'external_app' && 
+        log.timestamp >= pause.start && 
+        log.timestamp <= pause.end
+      )
       .map(log => ({
         latitude: log.gps!.latitude,
         longitude: log.gps!.longitude,
         timestamp: log.timestamp,
       }));
 
-    if (pauseGpsPoints.length === 0) {
-      // No GPS data during pause
-      enrichedPauses.push({
-        startTime: pause.start,
-        endTime: pause.end,
-        duration: Math.round(pause.duration / 60000), // Convert to minutes
-        locations: [],
-      });
+    if (externalTrackingPoints.length === 0) {
+      // No external tracking data during pause - skip POI lookup
+      pauseLocations.push({ pause, center: null });
       continue;
     }
 
     // Detect clusters within pause (user might have moved around)
-    const clusters = detectStationaryClusters(pauseGpsPoints);
+    const clusters = detectStationaryClusters(externalTrackingPoints);
 
     if (clusters.length === 0) {
-      // No stationary clusters found
-      enrichedPauses.push({
-        startTime: pause.start,
-        endTime: pause.end,
-        duration: Math.round(pause.duration / 60000),
-        locations: [],
-      });
+      pauseLocations.push({ pause, center: null });
       continue;
     }
 
     // Use longest cluster as main pause location
     const longestCluster = clusters.sort((a, b) => b.duration - a.duration)[0];
+    pauseLocations.push({ pause, center: longestCluster.center });
+  }
 
-    // Fetch POI information
-    const pois = await pauseLocationCache.getPOIInfo(
-      longestCluster.center.lat,
-      longestCluster.center.lng
+  // Deduplicate locations by 50m radius to minimize API calls
+  const uniqueLocations: Array<{ lat: number; lng: number; pauseIndices: number[] }> = [];
+
+  pauseLocations.forEach((loc, idx) => {
+    if (!loc.center) return;
+
+    // Check if location already exists within 50m
+    const existing = uniqueLocations.find(ul =>
+      calculateDistance(ul.lat, ul.lng, loc.center!.lat, loc.center!.lng) < 50
     );
 
-    enrichedPauses.push({
-      startTime: pause.start,
-      endTime: pause.end,
-      duration: Math.round(pause.duration / 60000),
-      locations: pois.map(poi => ({
-        name: poi.name,
-        type: poi.type,
-        address: poi.address,
-        distance: poi.distance || 0,
-      })),
-    });
+    if (existing) {
+      existing.pauseIndices.push(idx);
+    } else {
+      uniqueLocations.push({
+        lat: loc.center.lat,
+        lng: loc.center.lng,
+        pauseIndices: [idx],
+      });
+    }
+  });
+
+  console.log(`[DailyReport] ${username}: ${pauseLocations.length} pauses → ${uniqueLocations.length} unique locations (POI lookup)`);
+
+  // Safety limit: Max 15 API calls per report to prevent excessive costs
+  const MAX_API_CALLS_PER_REPORT = 15;
+
+  // Check API call limit
+  if (uniqueLocations.length > MAX_API_CALLS_PER_REPORT) {
+    console.warn(`[DailyReport] ${username}: Skipping POI lookups - ${uniqueLocations.length} locations exceeds limit of ${MAX_API_CALLS_PER_REPORT}`);
+    
+    // Return pauses without POI data
+    return pauseLocations.map(loc => ({
+      startTime: loc.pause.start,
+      endTime: loc.pause.end,
+      duration: Math.round(loc.pause.duration / 60000),
+      locations: [], // Empty due to limit exceeded
+    }));
   }
+
+  // Fetch POI data for unique locations only
+  const locationPOIs = new Map<number, POIInfo[]>();
+
+  for (const uniqueLoc of uniqueLocations) {
+    try {
+      const pois = await pauseLocationCache.getPOIInfo(uniqueLoc.lat, uniqueLoc.lng);
+      
+      // Assign POIs to all pauses at this location
+      for (const pauseIdx of uniqueLoc.pauseIndices) {
+        locationPOIs.set(pauseIdx, pois);
+      }
+    } catch (error) {
+      console.error('[DailyReport] Error fetching POI:', error);
+      // Set empty array for failed lookups
+      for (const pauseIdx of uniqueLoc.pauseIndices) {
+        locationPOIs.set(pauseIdx, []);
+      }
+    }
+  }
+
+  // Build enriched pauses
+  const enrichedPauses: PauseLocation[] = pauseLocations.map((loc, idx) => {
+    const pois = locationPOIs.get(idx) || [];
+    const pauseDurationMinutes = Math.round(loc.pause.duration / 60000);
+
+    // Get all external tracking points during this pause for duration calculation
+    const pauseTrackingPoints = rawLogs
+      .filter(log => 
+        log.gps && 
+        log.gps.source === 'external_app' && 
+        log.timestamp >= loc.pause.start && 
+        log.timestamp <= loc.pause.end
+      )
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    return {
+      startTime: loc.pause.start,
+      endTime: loc.pause.end,
+      duration: pauseDurationMinutes,
+      locations: pois.map(poi => {
+        // Calculate actual time spent within 50m of this POI
+        let timeAtPOI = 0;
+        
+        if (pauseTrackingPoints.length > 0 && loc.center) {
+          // Find all GPS points within 50m of POI
+          const pointsNearPOI = pauseTrackingPoints.filter(log => {
+            const distance = calculateDistance(
+              log.gps!.latitude,
+              log.gps!.longitude,
+              loc.center!.lat,
+              loc.center!.lng
+            );
+            return distance <= 50;
+          });
+
+          if (pointsNearPOI.length > 0) {
+            // Calculate duration based on timestamps of points within radius
+            const firstPoint = pointsNearPOI[0].timestamp;
+            const lastPoint = pointsNearPOI[pointsNearPOI.length - 1].timestamp;
+            timeAtPOI = Math.round((lastPoint - firstPoint) / 60000); // minutes
+            
+            // Edge case: Single point or very short duration
+            if (timeAtPOI === 0 && pointsNearPOI.length > 0) {
+              timeAtPOI = 1; // At least 1 minute if user was detected there
+            }
+          }
+        }
+
+        return {
+          name: poi.name,
+          type: poi.type,
+          address: poi.address,
+          distance: poi.distance || 0,
+          durationAtLocation: timeAtPOI, // Actual minutes spent within 50m of this POI
+        };
+      }),
+    };
+  });
 
   return enrichedPauses;
 }
@@ -369,12 +521,19 @@ export async function generateDailyReport(
 
   const users: UserReport[] = [];
 
-  for (const userData of allUserData.values()) {
+  for (const userData of Array.from(allUserData.values())) {
     // Calculate pauses with locations
-    const pauses = await calculatePausesWithLocations(userData.rawLogs);
+    const pauses = await calculatePausesWithLocations(userData.rawLogs, userData.username);
 
     // Calculate peak time
     const peakTime = calculatePeakTime(userData.rawLogs);
+
+    // Calculate GPS source statistics
+    const gpsStats = {
+      native: userData.rawLogs.filter(log => log.gps?.source === 'native' || (log.gps && !log.gps.source)).length,
+      followmee: userData.rawLogs.filter(log => log.gps?.source === 'followmee').length,
+      externalApp: userData.rawLogs.filter(log => log.gps?.source === 'external_app').length,
+    };
 
     users.push({
       username: userData.username,
@@ -384,6 +543,7 @@ export async function generateDailyReport(
       totalActions: userData.totalActions,
       uniquePhotos: userData.uniquePhotos || 0,
       peakTime,
+      gpsStats,
 
       actionDetails: {
         scans: userData.actionsByType.get('scan') || 0,
@@ -418,10 +578,14 @@ export async function generateDailyReport(
     });
   }
 
+  // Log POI cache performance
+  const cacheStats = pauseLocationCache.getStats();
+  console.log('[DailyReport] POI Cache Performance:', cacheStats);
+
   return {
     date: dateStr,
     isPartial,
-    generatedAt: getBerlinTimestamp(),
+    generatedAt: Date.now(),
     users,
   };
 }
