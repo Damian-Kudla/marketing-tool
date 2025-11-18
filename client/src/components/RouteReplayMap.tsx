@@ -54,6 +54,19 @@ interface RouteReplayMapProps {
   date: string;
   userId?: string;
   source?: 'all' | 'native' | 'followmee' | 'external' | 'external_app';
+  breaks?: Array<{
+    start: number;
+    end: number;
+    duration: number;
+    location?: { lat: number; lng: number };
+    locations?: Array<{
+      poi_name: string;
+      poi_type: string;
+      address: string;
+      place_id: string;
+      durationAtLocation?: number;
+    }>;
+  }>;
 }
 
 const MORNING_CUTOFF_HOUR = 6;
@@ -117,6 +130,7 @@ interface MapOverlays {
   endMarker: google.maps.Marker | null;
   currentMarker: google.maps.Marker | null;
   photoMarker: google.maps.Marker | null;
+  poiMarker: any | null; // Custom HTML overlay marker for POI
   gpsMarkers: google.maps.Marker[];
 }
 
@@ -270,7 +284,12 @@ function calculateZoomForBounds(bounds: { minLat: number; maxLat: number; minLng
 
 // calculateOptimalZoom function removed - auto-zoom disabled to prevent rendering conflicts
 
-export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = [], date, userId, source = 'all' }: RouteReplayMapProps) {
+export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = [], date, userId, source = 'all', breaks = [] }: RouteReplayMapProps) {
+  console.log(`[RouteReplay] Initialized for ${username}:`, { gpsPoints: gpsPoints.length, breaks: breaks.length, source });
+  
+  if (breaks.length > 0) {
+    console.log('[RouteReplay] Breaks data:', breaks);
+  }
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentTimestamp, setCurrentTimestamp] = useState(0); // Current GPS timestamp for smooth interpolation
@@ -330,6 +349,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     endMarker: null,
     currentMarker: null,
     photoMarker: null,
+    poiMarker: null,
     gpsMarkers: [],
   });
   const zoomListenerRef = useRef<google.maps.MapsEventListener | null>(null);
@@ -1244,6 +1264,146 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     });
   }, [pauseMode.active, pauseMode.periodIndex, stationaryPeriods, basePoints, currentTimestamp, currentPosition, mapsApiLoaded]);
 
+  // POI Marker (Gartenschild) in Pause Mode
+  useEffect(() => {
+    const map = mapRef.current;
+    const googleMaps = window.google?.maps;
+    if (!map || !googleMaps) return;
+
+    const overlays = mapOverlaysRef.current;
+    
+    // Clear existing POI marker
+    if (overlays.poiMarker) {
+      overlays.poiMarker.setMap(null);
+      overlays.poiMarker = null;
+    }
+
+    // Only show POI marker in pause mode with location data
+    if (!pauseMode.active || pauseMode.periodIndex === null) {
+      console.log('[RouteReplay POI] Pause mode not active or no period selected');
+      return;
+    }
+    
+    const breakData = breaks[pauseMode.periodIndex];
+    console.log('[RouteReplay POI] Break data:', breakData);
+    
+    if (!breakData || !breakData.location || !breakData.locations || breakData.locations.length === 0) {
+      console.log('[RouteReplay POI] Missing data:', { 
+        hasBreak: !!breakData, 
+        hasLocation: !!breakData?.location,
+        locationsCount: breakData?.locations?.length || 0
+      });
+      return;
+    }
+
+    const poi = breakData.locations[0]; // Use first POI
+    const { lat, lng } = breakData.location;
+    
+    console.log(`[RouteReplay POI] ✅ Creating marker for ${poi.poi_name} at [${lat}, ${lng}]`);
+
+    // Create custom HTML marker (Gartenschild style)
+    const markerDiv = document.createElement('div');
+    markerDiv.innerHTML = `
+      <div style="position: relative; display: flex; flex-direction: column; align-items: center;">
+        <!-- Gartensteck-Schild -->
+        <div style="
+          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+          color: white;
+          padding: 8px 12px;
+          border-radius: 8px 8px 2px 2px;
+          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+          font-weight: 600;
+          font-size: 13px;
+          text-align: center;
+          min-width: 120px;
+          max-width: 200px;
+          border: 2px solid #047857;
+          animation: slideDown 0.5s ease-out, pulse 2s ease-in-out infinite;
+          transform-origin: bottom center;
+        ">
+          📍 ${poi.poi_name}
+          ${poi.durationAtLocation ? `<div style="font-size: 11px; opacity: 0.9; margin-top: 2px;">${poi.durationAtLocation} min</div>` : ''}
+        </div>
+        <!-- Stange (Pfahl) -->
+        <div style="
+          width: 4px;
+          height: 30px;
+          background: linear-gradient(180deg, #047857 0%, #065f46 100%);
+          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        "></div>
+      </div>
+      <style>
+        @keyframes slideDown {
+          from {
+            transform: translateY(-20px);
+            opacity: 0;
+          }
+          to {
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
+        @keyframes pulse {
+          0%, 100% {
+            transform: scale(1);
+          }
+          50% {
+            transform: scale(1.05);
+          }
+        }
+      </style>
+    `;
+
+    // Use OverlayView for custom HTML marker
+    class HTMLMarker extends googleMaps.OverlayView {
+      private position: google.maps.LatLng;
+      private div: HTMLElement | null = null;
+
+      constructor(position: google.maps.LatLng, content: HTMLElement) {
+        super();
+        this.position = position;
+        this.div = content;
+      }
+
+      onAdd() {
+        const panes = this.getPanes();
+        if (panes && this.div) {
+          panes.floatPane.appendChild(this.div);
+        }
+      }
+
+      draw() {
+        const projection = this.getProjection();
+        if (!projection || !this.div) return;
+
+        const pos = projection.fromLatLngToDivPixel(this.position);
+        if (pos) {
+          this.div.style.position = 'absolute';
+          this.div.style.left = pos.x - 60 + 'px'; // Center horizontally
+          this.div.style.top = pos.y - 70 + 'px'; // Position above the point
+          this.div.style.zIndex = '1000';
+        }
+      }
+
+      onRemove() {
+        if (this.div && this.div.parentNode) {
+          this.div.parentNode.removeChild(this.div);
+        }
+      }
+    }
+
+    const marker = new HTMLMarker(new googleMaps.LatLng(lat, lng), markerDiv);
+    marker.setMap(map);
+    overlays.poiMarker = marker as any;
+
+    return () => {
+      if (overlays.poiMarker) {
+        overlays.poiMarker.setMap(null);
+        overlays.poiMarker = null;
+      }
+    };
+  }, [pauseMode.active, pauseMode.periodIndex, breaks, mapsApiLoaded]);
+
   // Calculate animated snap segments up to current timestamp
   const animatedSnapSegments = useMemo(() => {
     if (!snapToRoadsEnabled || !snapSegments || snapSegments.length === 0) return [];
@@ -1927,6 +2087,24 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
       // Kamera-Steuerung erfolgt über updateCameraView (alle 3 Sekunden)
       // Keine redundante Pan-Logik hier im Animationsloop
 
+      // Check if we've reached the END of pause in pause mode (not the start)
+      if (pauseMode.active && pauseMode.periodIndex !== null && breaks.length > pauseMode.periodIndex) {
+        const breakData = breaks[pauseMode.periodIndex];
+        console.log('[RouteReplay] 🔍 Pause mode check:', { 
+          targetGPSTimestamp, 
+          breakEnd: breakData?.end,
+          shouldStop: breakData && targetGPSTimestamp >= breakData.end 
+        });
+        
+        if (breakData && targetGPSTimestamp >= breakData.end) {
+          console.log('[RouteReplay] 🛑 Reached end of pause, stopping animation');
+          setIsPlaying(false);
+          startTimeRef.current = null;
+          setCurrentTimestamp(breakData.end);
+          return;
+        }
+      }
+
       // Check if we've reached the end
       if (targetGPSTimestamp >= endTime) {
         console.log('[RouteReplay] Animation reached end', { targetGPSTimestamp, endTime });
@@ -2325,7 +2503,60 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
             </div>
 
             {/* Breaks */}
-            {stationaryPeriods.length > 0 && (
+            {breaks && breaks.length > 0 ? (
+              // Show breaks from backend (with POI data)
+              <div className="pt-2 border-t">
+                <p className="text-xs font-medium text-muted-foreground mb-2">
+                  Pausen (≥20 Min): {breaks.length}
+                </p>
+                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                  {breaks.map((breakItem, idx) => {
+                    const durationMinutes = Math.round(breakItem.duration / (1000 * 60));
+                    const startTimeStr = format(new Date(breakItem.start), 'HH:mm', { locale: de });
+                    const endTimeStr = format(new Date(breakItem.end), 'HH:mm', { locale: de });
+                    const hasPOIData = breakItem.locations && breakItem.locations.length > 0;
+                    const isActive = pauseMode.active && pauseMode.periodIndex === idx;
+
+                    // Convert break to StationaryPeriod format for handlePauseClick
+                    // Find indices in displayPoints array for this break
+                    const startIdx = displayPoints.findIndex(p => p.timestamp >= breakItem.start);
+                    const endIdx = displayPoints.findIndex(p => p.timestamp >= breakItem.end);
+                    
+                    const period: StationaryPeriod = {
+                      startIndex: startIdx !== -1 ? startIdx : 0,
+                      endIndex: endIdx !== -1 ? endIdx : displayPoints.length - 1,
+                      startTime: breakItem.start,
+                      endTime: breakItem.end,
+                      durationMs: breakItem.duration,
+                      centerLat: breakItem.location?.lat || 0,
+                      centerLng: breakItem.location?.lng || 0
+                    };
+
+                    return (
+                      <button
+                        key={`break-${idx}`}
+                        onClick={() => handlePauseClick(period, idx)}
+                        className={`px-2 py-1 text-xs rounded border transition-colors font-mono tabular-nums ${
+                          isActive 
+                            ? 'bg-red-500 text-white border-red-600 shadow-lg ring-2 ring-red-400' 
+                            : hasPOIData
+                              ? 'bg-orange-100 hover:bg-orange-200 border-orange-300'
+                              : 'bg-gray-100 hover:bg-gray-200 border-gray-300'
+                        }`}
+                        title={
+                          hasPOIData 
+                            ? `Pause mit POI: ${breakItem.locations![0].poi_name} (${startTimeStr} - ${endTimeStr})${isActive ? ' (aktiv - klicken zum Deaktivieren)' : ''}` 
+                            : `Zu Pause springen: ${startTimeStr} - ${endTimeStr}`
+                        }
+                      >
+                        {startTimeStr} ({durationMinutes} Min)
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : stationaryPeriods.length > 0 && (
+              // Fallback: Show detected periods (no POI data)
               <div className="pt-2 border-t">
                 <p className="text-xs font-medium text-muted-foreground mb-2">
                   Pausen (≥20 Min): {stationaryPeriods.length}

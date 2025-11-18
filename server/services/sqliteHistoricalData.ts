@@ -13,6 +13,66 @@ import type { DailyUserData, GPSCoordinates, ActionLog, DeviceStatus, SessionDat
 import crypto from 'crypto';
 
 /**
+ * Map legacy English status keys to current German keys
+ * (for backward compatibility with old data)
+ */
+const STATUS_KEY_MAPPING: Record<string, string> = {
+  // English → German
+  'interest_later': 'interessiert',
+  'appointment': 'termin_vereinbart',
+  'written': 'geschrieben',
+  'no_interest': 'nicht_interessiert',
+  'not_reached': 'nicht_angetroffen',
+  // German → German (passthrough)
+  'interessiert': 'interessiert',
+  'termin_vereinbart': 'termin_vereinbart',
+  'geschrieben': 'geschrieben',
+  'nicht_interessiert': 'nicht_interessiert',
+  'nicht_angetroffen': 'nicht_angetroffen',
+};
+
+/**
+ * Infer action type from endpoint (for historical data without explicit action field)
+ */
+function inferActionTypeFromEndpoint(endpoint: string, method?: string): string | null {
+  // OCR endpoints
+  if (endpoint === '/api/ocr') return 'scan';
+  if (endpoint === '/api/ocr-correct') return 'bulk_residents_update';
+  
+  // Geocoding
+  if (endpoint === '/api/geocode') return 'geocode';
+  
+  // Navigation
+  if (endpoint.includes('/api/navigate')) return 'navigate';
+  
+  // Address datasets
+  if (endpoint.startsWith('/api/address-datasets')) {
+    if (method === 'POST') return 'dataset_create';
+    if (method === 'GET') return null; // Don't count GET requests as actions
+    if (method === 'PUT') {
+      if (endpoint.includes('/bulk-residents')) return 'bulk_residents_update';
+      if (endpoint.includes('/residents')) return 'resident_update';
+    }
+    if (method === 'DELETE') return 'resident_delete';
+  }
+  
+  // Search address (not counted as action, just a query)
+  if (endpoint === '/api/search-address') return null;
+  
+  // Customers endpoint (not counted as action)
+  if (endpoint === '/api/customers') return null;
+  
+  return null;
+}
+
+/**
+ * Normalize status key to German format
+ */
+function normalizeStatusKey(status: string): string {
+  return STATUS_KEY_MAPPING[status] || status;
+}
+
+/**
  * Lädt User-Daten für einen bestimmten Tag aus SQLite
  * @param date - YYYY-MM-DD
  * @param userId - Optional: Nur Daten für diesen User laden
@@ -174,16 +234,8 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
             userData.gpsPoints.push(gps);
             trackingData.gps = gps;
 
-            // Calculate distance (only if coordinates are valid)
-            if (userData.gpsPoints.length > 1) {
-              const prev = userData.gpsPoints[userData.gpsPoints.length - 2];
-              if (prev.latitude && prev.longitude && gps.latitude && gps.longitude) {
-                const dist = calculateDistance(prev, gps);
-                if (!isNaN(dist) && isFinite(dist)) {
-                  userData.totalDistance += dist;
-                }
-              }
-            }
+            // Distance calculation moved to after active time calculation
+            // (needs to filter by walking speed and active periods)
           }
           break;
 
@@ -248,11 +300,16 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
           const actionData = logData;
           trackingData.action = actionData;
           
-          // Count actions based on action type
-          const actionType = actionData.action || 'unknown';
+          // Extract action type from nested data structure OR infer from endpoint
+          let actionType = actionData.data?.action || actionData.action;
+          
+          // If no explicit action, infer from endpoint (for historical data)
+          if (!actionType && actionData.endpoint) {
+            actionType = inferActionTypeFromEndpoint(actionData.endpoint, actionData.method);
+          }
           
           // Only count if it's a real action (not just metadata)
-          if (actionType !== 'unknown') {
+          if (actionType && actionType !== 'unknown') {
             userData.totalActions++;
             const count = userData.actionsByType.get(actionType) || 0;
             userData.actionsByType.set(actionType, count + 1);
@@ -316,8 +373,9 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
           // 1. Direct status field (single resident update: resident_update action)
           const status = actionData.residentStatus || actionData.newCategory || actionData.status;
           if (status && typeof status === 'string') {
-            const statusCount = userData.statusChanges.get(status) || 0;
-            userData.statusChanges.set(status, statusCount + 1);
+            const normalizedStatus = normalizeStatusKey(status);
+            const statusCount = userData.statusChanges.get(normalizedStatus) || 0;
+            userData.statusChanges.set(normalizedStatus, statusCount + 1);
           }
           
           // 2. Bulk updates - residents array contains all status changes
@@ -326,8 +384,9 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
           if (actionType === 'bulk_residents_update' && actionData.residents && Array.isArray(actionData.residents)) {
             actionData.residents.forEach((resident: any) => {
               if (resident.status && typeof resident.status === 'string') {
-                const statusCount = userData.statusChanges.get(resident.status) || 0;
-                userData.statusChanges.set(resident.status, statusCount + 1);
+                const normalizedStatus = normalizeStatusKey(resident.status);
+                const statusCount = userData.statusChanges.get(normalizedStatus) || 0;
+                userData.statusChanges.set(normalizedStatus, statusCount + 1);
               }
             });
           }
@@ -338,14 +397,14 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
           const existingCustomersLegacy = logData.existingCustomers || (log.data as any).existingCustomers || actionData.existingCustomers;
           
           if (newProspectsLegacy && Array.isArray(newProspectsLegacy) && newProspectsLegacy.length > 0) {
-            const interestCount = userData.statusChanges.get('interest_later') || 0;
-            userData.statusChanges.set('interest_later', interestCount + newProspectsLegacy.length);
+            const interestCount = userData.statusChanges.get('interessiert') || 0;
+            userData.statusChanges.set('interessiert', interestCount + newProspectsLegacy.length);
           }
           
           if (existingCustomersLegacy && Array.isArray(existingCustomersLegacy) && existingCustomersLegacy.length > 0) {
-            // Legacy: existingCustomers → 'written' status (not 'geschrieben'!)
-            const writtenCount = userData.statusChanges.get('written') || 0;
-            userData.statusChanges.set('written', writtenCount + existingCustomersLegacy.length);
+            // Legacy: existingCustomers → 'geschrieben' status (normalized from 'written')
+            const writtenCount = userData.statusChanges.get('geschrieben') || 0;
+            userData.statusChanges.set('geschrieben', writtenCount + existingCustomersLegacy.length);
           }
           break;
       }
@@ -397,7 +456,7 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
               }
               
               residentStatusTimeline.get(key)!.push({
-                status: action.residentStatus,
+                status: normalizeStatusKey(action.residentStatus),
                 timestamp: log.timestamp
               });
             }
@@ -420,7 +479,7 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
               }
               
               residentStatusTimeline.get(key)!.push({
-                status: resident.status,
+                status: normalizeStatusKey(resident.status),
                 timestamp: log.timestamp
               });
             }
@@ -437,7 +496,7 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
           }
           
           residentStatusTimeline.get(key)!.push({
-            status: actionData.residentStatus,
+            status: normalizeStatusKey(actionData.residentStatus),
             timestamp: log.timestamp
           });
         }
@@ -463,7 +522,7 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
     userData.finalStatuses = finalStatuses;
     
     // === CALCULATE CONVERSION RATES ===
-    // Finde interest_later → written/appointment/no_interest/not_reached Übergänge
+    // Finde interessiert → geschrieben/termin_vereinbart/nicht_interessiert/nicht_angetroffen Übergänge
     const conversionRates = {
       interest_later_to_written: 0,
       interest_later_to_no_interest: 0,
@@ -477,21 +536,21 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
         // Sortiere nach timestamp
         timeline.sort((a, b) => a.timestamp - b.timestamp);
         
-        // Durchlaufe Timeline und finde interest_later → X Übergänge
+        // Durchlaufe Timeline und finde interessiert → X Übergänge (normalized keys!)
         for (let i = 0; i < timeline.length - 1; i++) {
           const currentStatus = timeline[i].status;
           const nextStatus = timeline[i + 1].status;
           
-          if (currentStatus === 'interest_later') {
+          if (currentStatus === 'interessiert') {
             conversionRates.interest_later_total++;
             
-            if (nextStatus === 'written') {
+            if (nextStatus === 'geschrieben') {
               conversionRates.interest_later_to_written++;
-            } else if (nextStatus === 'no_interest') {
+            } else if (nextStatus === 'nicht_interessiert') {
               conversionRates.interest_later_to_no_interest++;
-            } else if (nextStatus === 'appointment') {
+            } else if (nextStatus === 'termin_vereinbart') {
               conversionRates.interest_later_to_appointment++;
-            } else if (nextStatus === 'not_reached') {
+            } else if (nextStatus === 'nicht_angetroffen') {
               conversionRates.interest_later_to_not_reached++;
             }
           }
@@ -520,12 +579,36 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
     // Sort rawLogs by timestamp
     userData.rawLogs.sort((a, b) => a.timestamp - b.timestamp);
 
+    // === CALCULATE DISTANCE (with walking speed filter) ===
+    // Recalculate distance using only GPS points during active periods and walking speed
+    const WALKING_SPEED_KMH = 8;
+    const nativeGpsPoints = userData.gpsPoints.filter(p => p.source === 'native' || !p.source);
+    
+    let totalDistance = 0;
+    for (let i = 1; i < nativeGpsPoints.length; i++) {
+      const prevPoint = nativeGpsPoints[i - 1];
+      const currPoint = nativeGpsPoints[i];
+      const gap = currPoint.timestamp - prevPoint.timestamp;
+      
+      const distance = calculateDistance(
+        { latitude: prevPoint.latitude, longitude: prevPoint.longitude },
+        { latitude: currPoint.latitude, longitude: currPoint.longitude }
+      );
+      
+      // Calculate speed in km/h
+      const timeDiffHours = gap / (1000 * 60 * 60);
+      const speedKmh = timeDiffHours > 0 ? (distance / 1000) / timeDiffHours : 0;
+      
+      // Only count distance if walking speed (< 8 km/h)
+      if (speedKmh < WALKING_SPEED_KMH) {
+        totalDistance += distance;
+      }
+    }
+    userData.totalDistance = totalDistance;
+
     // === CALCULATE ACTIVE TIME ===
     // Aktive Zeit = Zeitspanne zwischen frühester und spätester NATIVER App-Statusmeldung - Pausezeiten
     // Pausen = Lücken zwischen nativen GPS-Punkten > 20 Minuten
-    
-    // 1. Filtere nur native GPS-Punkte (keine FollowMee oder externe)
-    const nativeGpsPoints = userData.gpsPoints.filter(p => p.source === 'native' || !p.source);
     
     if (nativeGpsPoints.length >= 2) {
       // 2. Zeitspanne zwischen erstem und letztem nativen Punkt
