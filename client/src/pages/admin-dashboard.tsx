@@ -23,7 +23,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Download, RefreshCw, Users, Activity, MapPin, Calendar, Route, LogOut } from 'lucide-react';
+import { Download, RefreshCw, Users, Activity, MapPin, Calendar, Route, LogOut, FileText } from 'lucide-react';
 import RouteReplayMap from '../components/RouteReplayMap';
 
 // Fix Leaflet default icon issue with Vite
@@ -95,6 +95,12 @@ interface DashboardUser {
       start: number;
       end: number;
       duration: number;
+      locations?: Array<{
+        poi_name: string;
+        poi_type: string;
+        address: string;
+        place_id: string;
+      }>;
     }>;
   };
 }
@@ -157,6 +163,7 @@ export default function AdminDashboard() {
   const [selectedDate, setSelectedDate] = useState<string>(getLastWeekday(1)); // Auto-select last weekday
   const [sortBy, setSortBy] = useState<'actions' | 'statusChanges' | 'written'>('actions');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [generatingReport, setGeneratingReport] = useState(false);
   
   // Expanded rows state
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -277,7 +284,35 @@ export default function AdminDashboard() {
       document.body.removeChild(a);
     } catch (err: any) {
       alert(err.message || 'Failed to download report');
-      console.error('Error downloading report:', err);
+    }
+  };
+
+  // Generate daily report (partial or final)
+  const generateDailyReport = async () => {
+    setGeneratingReport(true);
+    try {
+      const date = mode === 'live' ? format(new Date(), 'yyyy-MM-dd') : selectedDate;
+      const isPartial = mode === 'live'; // Live = partial, Historical = final
+
+      const response = await fetch('/api/admin/generate-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ date, isPartial }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate report');
+      }
+
+      const result = await response.json();
+      alert(`✅ ${result.message}\n\nDatum: ${result.date}\nTyp: ${result.isPartial ? 'Zwischenbericht' : 'Abschlussbericht'}`);
+    } catch (err: any) {
+      alert(`❌ Fehler beim Erstellen des Berichts:\n${err.message}`);
+      console.error('Error generating report:', err);
+    } finally {
+      setGeneratingReport(false);
     }
   };
 
@@ -460,6 +495,16 @@ export default function AdminDashboard() {
             title="Aktualisieren"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
+          <Button
+            variant="outline"
+            onClick={generateDailyReport}
+            disabled={generatingReport}
+            className="gap-2"
+            title={mode === 'live' ? 'Zwischenbericht erstellen' : 'Abschlussbericht erstellen'}
+          >
+            <FileText className={`h-4 w-4 ${generatingReport ? 'animate-pulse' : ''}`} />
+            Bericht erstellen
           </Button>
           <Button
             variant="outline"
@@ -1080,11 +1125,24 @@ export default function AdminDashboard() {
                                       <div className="mt-2">
                                         <div className="text-muted-foreground font-medium mb-1">Pausen:</div>
                                         {user.todayStats.breaks.map((breakItem, idx) => (
-                                          <div key={idx} className="flex justify-between text-sm">
-                                            <span className="text-muted-foreground">
-                                              {format(breakItem.start, 'HH:mm', { locale: de })} - {format(breakItem.end, 'HH:mm', { locale: de })}
-                                            </span>
-                                            <span className="font-medium">{formatDuration(breakItem.duration)}</span>
+                                          <div key={idx} className="mb-2 pb-2 border-b last:border-0">
+                                            <div className="flex justify-between text-sm">
+                                              <span className="text-muted-foreground">
+                                                {format(breakItem.start, 'HH:mm', { locale: de })} - {format(breakItem.end, 'HH:mm', { locale: de })}
+                                              </span>
+                                              <span className="font-medium">{formatDuration(breakItem.duration)}</span>
+                                            </div>
+                                            {breakItem.locations && breakItem.locations.length > 0 && (
+                                              <div className="mt-1 space-y-1">
+                                                {breakItem.locations.map((loc, locIdx) => (
+                                                  <div key={locIdx} className="text-xs text-muted-foreground pl-2 border-l-2 border-blue-300">
+                                                    <div className="font-semibold text-blue-600">{loc.poi_name}</div>
+                                                    {loc.address && <div>{loc.address}</div>}
+                                                    {loc.poi_type && <div className="italic">{loc.poi_type}</div>}
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
                                           </div>
                                         ))}
                                       </div>

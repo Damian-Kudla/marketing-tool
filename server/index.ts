@@ -164,6 +164,29 @@ app.use((req, res, next) => {
     // Start Daily Archive Cron Job (runs at midnight CET)
     log('Starting SQLite Daily Archive cron job...');
     sqliteDailyArchiveService.start();
+
+    // Initialize Pause Location Cache (loads from Google Sheets)
+    log('Initializing Pause Location Cache...');
+    try {
+      const { pauseLocationCache } = await import('./services/pauseLocationCache');
+      await pauseLocationCache.initialize();
+      log('✅ Pause Location Cache initialized');
+    } catch (error) {
+      log(`⚠️ Failed to initialize Pause Location Cache: ${error}`);
+    }
+
+    // Start Daily Report Cron Job (runs at midnight MEZ)
+    log('Starting Daily Report cron job...');
+    try {
+      const { dailyReportCronService } = await import('./services/dailyReportCron');
+      dailyReportCronService.start();
+      
+      // Generate missing reports since 17.11.2025
+      await dailyReportCronService.generateMissingReports();
+      log('✅ Daily Report cron job started');
+    } catch (error) {
+      log(`⚠️ Failed to start Daily Report cron: ${error}`);
+    }
   });
 
   // Graceful shutdown: save cache before exit

@@ -13,6 +13,7 @@ import { dailyDataStore } from '../services/dailyDataStore';
 import { scrapeDayDataFromSQLite as scrapeDayData, clearHistoricalCache, getCacheStats } from '../services/sqliteHistoricalData';
 import { getCETDate } from '../services/sqliteLogService';
 import { getBerlinDate, getBerlinHour, getBerlinTimestamp } from '../utils/timezone';
+import { pauseLocationCache } from '../services/pauseLocationCache';
 import fs from 'fs';
 import path from 'path';
 import type { DailyUserData, DashboardLiveData, TrackingData, ActionLog } from '../../shared/trackingTypes';
@@ -119,7 +120,17 @@ function calculatePeakTime(rawLogs: TrackingData[]): string | undefined {
  * A break is considered significant if it's at least 20 minutes
  * Only uses GPS logs to match the route visualization
  */
-function calculateBreaks(rawLogs: TrackingData[]): Array<{ start: number; end: number; duration: number }> {
+async function calculateBreaks(rawLogs: TrackingData[]): Promise<Array<{ 
+  start: number; 
+  end: number; 
+  duration: number;
+  locations?: Array<{
+    poi_name: string;
+    poi_type: string;
+    address: string;
+    place_id: string;
+  }>;
+}>> {
   if (rawLogs.length < 2) return [];
 
   // Filter to only NATIVE GPS logs (matching activeTime calculation)
@@ -134,23 +145,50 @@ function calculateBreaks(rawLogs: TrackingData[]): Array<{ start: number; end: n
   const sortedLogs = [...gpsLogs].sort((a, b) => a.timestamp - b.timestamp);
 
   // Calculate all gaps between GPS updates
-  const gaps: Array<{ start: number; end: number; duration: number }> = [];
+  const gaps: Array<{ start: number; end: number; duration: number; gps?: { lat: number; lng: number } }> = [];
 
   for (let i = 1; i < sortedLogs.length; i++) {
     const gap = sortedLogs[i].timestamp - sortedLogs[i - 1].timestamp;
     const minBreakDuration = 20 * 60 * 1000; // 20 minutes
 
     if (gap >= minBreakDuration) {
+      // Use the GPS coordinates at the start of the break
+      const gps = sortedLogs[i - 1].gps;
       gaps.push({
         start: sortedLogs[i - 1].timestamp,
         end: sortedLogs[i].timestamp,
-        duration: gap
+        duration: gap,
+        gps: gps ? { lat: gps.lat, lng: gps.lng } : undefined
       });
     }
   }
 
-  // Sort by duration (largest first) - return ALL breaks, not just top 3
-  return gaps.sort((a, b) => b.duration - a.duration);
+  // Sort by duration (largest first)
+  const sortedGaps = gaps.sort((a, b) => b.duration - a.duration);
+
+  // Enrich with POI information
+  const enrichedGaps = await Promise.all(
+    sortedGaps.map(async (gap) => {
+      if (!gap.gps) {
+        return { start: gap.start, end: gap.end, duration: gap.duration };
+      }
+
+      try {
+        const poiInfo = await pauseLocationCache.getPOIInfo(gap.gps.lat, gap.gps.lng);
+        return {
+          start: gap.start,
+          end: gap.end,
+          duration: gap.duration,
+          locations: poiInfo.length > 0 ? poiInfo : undefined
+        };
+      } catch (error) {
+        console.error('[calculateBreaks] Error fetching POI info:', error);
+        return { start: gap.start, end: gap.end, duration: gap.duration };
+      }
+    })
+  );
+
+  return enrichedGaps;
 }
 
 /**
@@ -194,8 +232,8 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
       return b.totalActions - a.totalActions;
     });
 
-    // Transformiere DailyUserData zu DashboardLiveData Format
-    const dashboardUsers = usersArray.map(userData => {
+    // Transformiere DailyUserData zu DashboardLiveData Format (async)
+    const dashboardUsers = await Promise.all(usersArray.map(async userData => {
       const lastGpsPoint = userData.gpsPoints.length > 0 
         ? userData.gpsPoints[userData.gpsPoints.length - 1]
         : undefined;
@@ -228,9 +266,9 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
       // Calculate action details breakdown
       const actionDetails = calculateActionDetails(userData);
 
-      // Calculate peak time and breaks
+      // Calculate peak time and breaks (await breaks)
       const peakTime = calculatePeakTime(userData.rawLogs);
-      const breaks = calculateBreaks(userData.rawLogs);
+      const breaks = await calculateBreaks(userData.rawLogs);
 
       // Debug: Log if breaks are empty but rawLogs exist
       if (breaks.length === 0 && userData.rawLogs.length > 0) {
@@ -264,7 +302,7 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
           breaks,
         },
       };
-    });
+    }));
 
     const totalStatusChanges = usersArray.reduce((sum, u) => {
       return sum + Array.from(u.statusChanges.values()).reduce((s, c) => s + c, 0);
@@ -336,8 +374,8 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
     // Sortiere nach totalActions
     userData.sort((a, b) => b.totalActions - a.totalActions);
 
-    // Transformiere zu DashboardLiveData Format
-    const dashboardUsers = userData.map(user => {
+    // Transformiere zu DashboardLiveData Format (async)
+    const dashboardUsers = await Promise.all(userData.map(async user => {
       const lastGpsPoint = user.gpsPoints.length > 0 
         ? user.gpsPoints[user.gpsPoints.length - 1]
         : undefined;
@@ -367,9 +405,9 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
       // Calculate action details breakdown
       const actionDetails = calculateActionDetails(user);
 
-      // Calculate peak time and breaks
+      // Calculate peak time and breaks (await breaks)
       const peakTime = calculatePeakTime(user.rawLogs);
-      const breaks = calculateBreaks(user.rawLogs);
+      const breaks = await calculateBreaks(user.rawLogs);
 
       // For historical data, always set isActive to false (it's past data)
       // Historical data is never "active" since it's from a previous day
@@ -396,7 +434,7 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
           breaks,
         },
       };
-    });
+    }));
 
     // DEBUG: Log response for Raphael to verify uniquePhotos is sent
     const raphaelUser = dashboardUsers.find(u => u.username === 'Raphael');
@@ -1029,6 +1067,45 @@ router.post('/test-tracking-reconciliation', requireAuth, requireAdmin, async (r
     res.status(500).json({
       error: 'Failed to run external tracking reconciliation',
       details: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * POST /api/admin/generate-report
+ * Generate daily report (partial or final) for a specific date
+ * Body: { date: "YYYY-MM-DD", isPartial?: boolean }
+ */
+router.post('/generate-report', requireAuth, requireAdmin, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { date, isPartial = true } = req.body;
+
+    if (!date) {
+      return res.status(400).json({ error: 'Date is required (format: YYYY-MM-DD)' });
+    }
+
+    // Validate date format
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: 'Invalid date format (use YYYY-MM-DD)' });
+    }
+
+    console.log(`[Admin API] Generating ${isPartial ? 'partial' : 'final'} report for ${date} by ${req.username}`);
+
+    const { dailyReportCronService } = await import('../services/dailyReportCron');
+    await dailyReportCronService.generateReportForDate(date, isPartial);
+
+    res.json({
+      success: true,
+      message: `${isPartial ? 'Partial' : 'Final'} report generated successfully`,
+      date,
+      isPartial,
+      timestamp: getBerlinTimestamp(),
+    });
+  } catch (error) {
+    console.error('[Admin API] Error generating report:', error);
+    res.status(500).json({
+      error: 'Failed to generate report',
+      details: error instanceof Error ? error.message : String(error),
     });
   }
 });

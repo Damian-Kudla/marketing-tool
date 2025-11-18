@@ -187,6 +187,12 @@ export interface DashboardLiveData {
         start: number; // timestamp
         end: number; // timestamp
         duration: number; // milliseconds
+        locations?: Array<{ // POI information for the pause location
+          poi_name: string;
+          poi_type: string;
+          address: string;
+          place_id: string;
+        }>;
       }>;
     };
   }[];
