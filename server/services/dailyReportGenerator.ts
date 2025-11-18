@@ -47,6 +47,7 @@ interface UserReport {
     datasetCreates: number;
     geocodes: number;
     edits: number;
+    saves: number;
     deletes: number;
     statusChanges: number;
     navigations: number;
@@ -286,34 +287,54 @@ async function calculatePausesWithLocations(
 function calculatePeakTime(rawLogs: TrackingData[]): string {
   if (rawLogs.length === 0) return 'N/A';
 
-  // Count actions per hour (MEZ timezone)
-  const hourCounts: Map<number, number> = new Map();
-
+  // Group activities by hour (MEZ timezone)
+  const hourlyActivity = new Map<number, number>();
+  
   for (const log of rawLogs) {
     const date = new Date(log.timestamp);
-    // Convert to MEZ (Berlin time)
     const berlinHour = parseInt(
       date.toLocaleString('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', hour12: false }),
       10
     );
-
-    hourCounts.set(berlinHour, (hourCounts.get(berlinHour) || 0) + 1);
+    hourlyActivity.set(berlinHour, (hourlyActivity.get(berlinHour) || 0) + 1);
   }
 
-  if (hourCounts.size === 0) return 'N/A';
+  if (hourlyActivity.size === 0) return 'N/A';
 
-  // Find hour with most activity
-  let maxHour = 0;
-  let maxCount = 0;
+  // Find consecutive hours with highest total activity
+  const hours = Array.from(hourlyActivity.keys()).sort((a, b) => a - b);
+  let maxActivity = 0;
+  let maxStart = hours[0];
+  let maxEnd = hours[0];
 
-  for (const [hour, count] of hourCounts.entries()) {
-    if (count > maxCount) {
-      maxCount = count;
-      maxHour = hour;
+  // Try different window sizes (1-4 hours)
+  for (let windowSize = 1; windowSize <= 4; windowSize++) {
+    for (let i = 0; i <= hours.length - windowSize; i++) {
+      const windowHours = hours.slice(i, i + windowSize);
+      // Check if hours are consecutive
+      let isConsecutive = true;
+      for (let j = 1; j < windowHours.length; j++) {
+        if (windowHours[j] - windowHours[j - 1] !== 1) {
+          isConsecutive = false;
+          break;
+        }
+      }
+      
+      if (isConsecutive) {
+        const windowActivity = windowHours.reduce((sum, h) => sum + (hourlyActivity.get(h) || 0), 0);
+        if (windowActivity > maxActivity) {
+          maxActivity = windowActivity;
+          maxStart = windowHours[0];
+          maxEnd = windowHours[windowHours.length - 1];
+        }
+      }
     }
   }
 
-  return `${maxHour.toString().padStart(2, '0')}:00`;
+  // Format as "HH:00-HH:00"
+  const startStr = maxStart.toString().padStart(2, '0');
+  const endStr = (maxEnd + 1).toString().padStart(2, '0');
+  return `${startStr}:00-${endStr}:00`;
 }
 
 /**
@@ -370,26 +391,27 @@ export async function generateDailyReport(
         datasetCreates: userData.actionsByType.get('dataset_create') || 0,
         geocodes: userData.actionsByType.get('geocode') || 0,
         edits: userData.actionsByType.get('resident_update') || 0,
+        saves: userData.actionsByType.get('dataset_update') || 0,
         deletes: userData.actionsByType.get('resident_delete') || 0,
         statusChanges: userData.actionsByType.get('status_change') || 0,
         navigations: userData.actionsByType.get('navigate') || 0,
-        other: 0, // TODO: Calculate from unmapped types
+        other: 0,
       },
 
       statusChangeDetails: {
-        laterInterest: userData.statusChanges.get('Später Interesse') || 0,
-        appointmentScheduled: userData.statusChanges.get('Termin vereinbart') || 0,
-        written: userData.statusChanges.get('Geschrieben') || 0,
-        noInterest: userData.statusChanges.get('Kein Interesse') || 0,
-        notReached: userData.statusChanges.get('Nicht erreicht') || 0,
+        laterInterest: userData.statusChanges.get('interessiert') || 0,
+        appointmentScheduled: userData.statusChanges.get('termin_vereinbart') || 0,
+        written: userData.statusChanges.get('geschrieben') || 0,
+        noInterest: userData.statusChanges.get('nicht_interessiert') || 0,
+        notReached: userData.statusChanges.get('nicht_angetroffen') || 0,
       },
 
       finalStatusAssignments: {
-        laterInterest: userData.finalStatusCounts?.get('Später Interesse') || 0,
-        appointmentScheduled: userData.finalStatusCounts?.get('Termin vereinbart') || 0,
-        written: userData.finalStatusCounts?.get('Geschrieben') || 0,
-        noInterest: userData.finalStatusCounts?.get('Kein Interesse') || 0,
-        notReached: userData.finalStatusCounts?.get('Nicht erreicht') || 0,
+        laterInterest: userData.finalStatuses?.get('interessiert') || 0,
+        appointmentScheduled: userData.finalStatuses?.get('termin_vereinbart') || 0,
+        written: userData.finalStatuses?.get('geschrieben') || 0,
+        noInterest: userData.finalStatuses?.get('nicht_interessiert') || 0,
+        notReached: userData.finalStatuses?.get('nicht_angetroffen') || 0,
       },
 
       pauses,
