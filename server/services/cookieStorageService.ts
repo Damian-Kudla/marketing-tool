@@ -31,6 +31,7 @@ interface UserCookies {
     sessionId: string;
     createdAt: string;
     expiresAt: string;
+    isAdmin: boolean;
     deviceId?: string;
     deviceName?: string;
     platform?: string;
@@ -267,6 +268,7 @@ class CookieStorageService {
           sessionId,
           createdAt: getBerlinTimestamp(cookie.createdAt),
           expiresAt: getBerlinTimestamp(cookie.expiresAt),
+          isAdmin: cookie.isAdmin,
           deviceId: cookie.deviceInfo?.deviceId,
           deviceName: cookie.deviceInfo?.deviceName,
           platform: cookie.deviceInfo?.platform
@@ -353,7 +355,7 @@ class CookieStorageService {
                 userId,
                 password: '', // Password not stored in sheets for security
                 username,
-                isAdmin: false, // Will be updated on next login
+                isAdmin: cookie.isAdmin || false, // Load admin status from sheet
                 createdAt: new Date(cookie.createdAt),
                 expiresAt,
                 deviceInfo: cookie.deviceId ? {

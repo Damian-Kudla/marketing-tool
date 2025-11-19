@@ -80,7 +80,9 @@ const SNAP_SEGMENT_COST_CENT_PER_CALL = 0.5;
  */
 function cleanUserAgent(userAgent?: string): string {
   if (!userAgent) return 'Unknown';
-  return userAgent.replace(/\s*\[Device:[^\]]+\]\s*/g, '').trim();
+  // Don't remove Device-ID anymore to allow distinguishing specific devices
+  // return userAgent.replace(/\s*\[Device:[^\]]+\]\s*/g, '').trim();
+  return userAgent.trim();
 }
 
 /**
@@ -623,6 +625,13 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
   const pointsByUser = useMemo(() => {
     const grouped: Record<string, GPSPoint[]> = {};
     
+    if (source === 'all') {
+      // For 'all' source, combine all points into a single track
+      // This ensures we have one continuous line and one marker
+      grouped['combined'] = displayPoints;
+      return grouped;
+    }
+
     displayPoints.forEach(point => {
       // Determine key: User-Agent for native, 'external' for others
       let key = 'external';
@@ -637,7 +646,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     });
     
     return grouped;
-  }, [displayPoints]);
+  }, [displayPoints, source]);
 
   // Check if there are any external GPS points in the dataset
   const hasExternalGPS = useMemo(() => {
@@ -1122,6 +1131,16 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
   const currentPositions = useMemo(() => {
     const positions: Record<string, GPSPoint> = {};
     
+    if (source === 'all') {
+      if (pointsByUser['combined']) {
+        const pos = interpolatePosition(currentTimestamp, pointsByUser['combined']);
+        if (pos) {
+          positions['combined'] = pos;
+        }
+      }
+      return positions;
+    }
+    
     // Calculate for each active User-Agent
     activeUserAgents.forEach(ua => {
       const userPoints = pointsByUser[ua];
@@ -1142,7 +1161,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     }
     
     return positions;
-  }, [currentTimestamp, pointsByUser, activeUserAgents, snapToRoadsEnabled, snapSegments]);
+  }, [currentTimestamp, pointsByUser, activeUserAgents, snapToRoadsEnabled, snapSegments, source]);
 
   // Backward compatibility: Primary current position (for camera following etc.)
   const currentPosition = useMemo(() => {
@@ -1993,7 +2012,10 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
       
       // Determine color
       let color = '#000000';
-      if (key === 'external') {
+      if (key === 'combined') {
+         // Use color of the current position's source
+         color = SOURCE_COLORS[position.source || 'native'];
+      } else if (key === 'external') {
         color = '#ef4444'; // Red for external
       } else {
         const index = availableUserAgents.indexOf(key);
@@ -2003,15 +2025,17 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
       // Determine if we should show emoji
       // Native: Only if single user is active (to avoid clutter)
       // External: Always (as it's grouped into a single track)
+      // Combined: Always (it's the single track for 'all')
       const isExternal = key === 'external';
-      const isTargetForEmoji = isExternal || (activeUserAgents.size === 1);
+      const isCombined = key === 'combined';
+      const isTargetForEmoji = isExternal || isCombined || (activeUserAgents.size === 1);
       
       const shouldShowEmoji = isTargetForEmoji && showMovementMode;
       
       const markerOptions: google.maps.MarkerOptions = {
         position: { lat: position.latitude, lng: position.longitude },
         zIndex: 450,
-        title: key === 'external' ? 'External App' : key
+        title: key === 'external' ? 'External App' : (key === 'combined' ? 'Combined Track' : key)
       };
 
       if (shouldShowEmoji) {
@@ -2647,7 +2671,13 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
                     
                     // Extract device info from User-Agent (e.g., "iPhone; CPU iPhone OS 18_6_2")
                     const deviceMatch = userAgent.match(/\((.*?)\)/);
-                    const deviceInfo = deviceMatch ? deviceMatch[1].split(';')[0].trim() : `Gerät ${index + 1}`;
+                    let deviceInfo = deviceMatch ? deviceMatch[1].split(';')[0].trim() : `Gerät ${index + 1}`;
+                    
+                    // Extract Device ID if present to distinguish devices
+                    const deviceIdMatch = userAgent.match(/\[Device:([^\]]+)\]/);
+                    if (deviceIdMatch) {
+                      deviceInfo += ` (${deviceIdMatch[1].substring(0, 6)}...)`;
+                    }
                     
                     return (
                       <button
