@@ -217,8 +217,15 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
 
       switch (log.logType) {
         case 'gps':
-          // GPS data might be in data.data or directly in data
-          const gpsData = logData.latitude !== undefined ? logData : (log.data as any);
+          // GPS data structure:
+          // - New format: log.data = {endpoint, method, address, data: {latitude, longitude, source}}
+          // - Old format: log.data = {latitude, longitude, source}
+          let gpsData = logData;
+          
+          // Check if data is nested (new format from enhancedLogging)
+          if (logData.data && logData.data.latitude !== undefined) {
+            gpsData = logData.data;
+          }
           
           // Validate GPS coordinates
           if (gpsData.latitude !== undefined && gpsData.longitude !== undefined &&
@@ -228,7 +235,7 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
               longitude: gpsData.longitude,
               accuracy: gpsData.accuracy || 0,
               timestamp: log.timestamp,
-              source: gpsData.source || 'native' // Default to 'native' if not specified (historical data)
+              source: gpsData.source || 'native' // Default to 'native' if not specified
             };
             
             userData.gpsPoints.push(gps);
