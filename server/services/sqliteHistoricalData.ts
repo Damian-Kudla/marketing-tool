@@ -207,7 +207,9 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
     // Process logs
     for (const log of logs) {
       // Extract nested data structure (data.data contains actual log data)
-      const logData = (log.data as any).data || log.data;
+      // WICHTIG: userAgent steht im Top-Level log.data (von enhancedLogging), nicht zwingend im inneren data-Objekt!
+      const topLevelData = log.data as any;
+      const logData = topLevelData.data || topLevelData;
       
       const trackingData: any = {
         userId,
@@ -218,7 +220,7 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
       switch (log.logType) {
         case 'gps':
           // GPS data structure:
-          // - New format: log.data = {endpoint, method, address, data: {latitude, longitude, source}}
+          // - New format: log.data = {endpoint, method, address, userAgent, data: {latitude, longitude, source}}
           // - Old format: log.data = {latitude, longitude, source}
           let gpsData = logData;
           
@@ -235,7 +237,9 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
               longitude: gpsData.longitude,
               accuracy: gpsData.accuracy || 0,
               timestamp: log.timestamp,
-              source: gpsData.source || 'native' // Default to 'native' if not specified
+              source: gpsData.source || 'native', // Default to 'native' if not specified
+              // Extract User-Agent from top-level data (preferred) or inner data
+              userAgent: topLevelData.userAgent || logData.userAgent || undefined 
             };
             
             userData.gpsPoints.push(gps);

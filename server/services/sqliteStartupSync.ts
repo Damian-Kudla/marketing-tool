@@ -339,7 +339,11 @@ class SQLiteStartupSyncService {
             console.warn(`[Phase 4]   ⚠️  Large dataset detected (${logs.length} logs) - may take a while`);
           }
 
-          // Filter for old logs (not today)
+          // Filter for old logs (YESTERDAY or earlier, not today or same day)
+          // WICHTIG: Nur Logs von GESTERN (oder früher) als "old" behandeln
+          // Dadurch wird verhindert, dass Logs vom gleichen Tag gelöscht werden,
+          // wenn der Server kurz nach Mitternacht startet, aber noch Batch-Uploads
+          // vom Vortag ausstehen (z.B. 23:05-23:59 Uhr Logs)
           const oldLogs = logs.filter(log => {
             try {
               // Validate timestamp
@@ -349,7 +353,8 @@ class SQLiteStartupSyncService {
               if (isNaN(timestamp)) return false;
 
               const logDate = getCETDate(timestamp);
-              return logDate !== today;
+              // Nur Logs VOR heute (gestern oder früher) als "old" markieren
+              return logDate < today;
             } catch (error) {
               console.warn(`[Phase 4]   Invalid timestamp: ${log.timestamp}`);
               return false;
@@ -581,6 +586,15 @@ class SQLiteStartupSyncService {
   }
 
   /**
+   * Helper: Get yesterday's date (for safety buffer in cleanup)
+   */
+  private getYesterday(today: string): string {
+    const todayDate = new Date(today);
+    todayDate.setDate(todayDate.getDate() - 1);
+    return getBerlinDate(todayDate);
+  }
+
+  /**
    * Helper: Get all user worksheet names from Log spreadsheet
    */
   private async getAllUserWorksheets(): Promise<string[]> {
@@ -703,7 +717,10 @@ class SQLiteStartupSyncService {
 
       if (rows.length === 0) return 0;
 
-      // Find rows to keep (ONLY today's logs, not last 24 hours)
+      // Find rows to keep (today's and yesterday's logs for safety)
+      // WICHTIG: Behalte Logs von heute UND gestern, lösche nur Logs von vorgestern oder älter
+      // Dies verhindert Datenverlust bei verspäteten Batch-Uploads
+      const yesterday = this.getYesterday(today);
       const rowsToKeep: any[][] = [];
 
       for (const row of rows) {
@@ -716,8 +733,8 @@ class SQLiteStartupSyncService {
 
           const logDate = getCETDate(timestampMs);
 
-          // Keep ONLY if log is from today's CET date
-          if (logDate === today) {
+          // Behalte Logs von heute oder gestern (>= yesterday)
+          if (logDate >= yesterday) {
             rowsToKeep.push(row);
           }
         } catch (error) {

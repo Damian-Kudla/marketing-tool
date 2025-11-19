@@ -1,4 +1,5 @@
-import type { SessionData, ActionLog } from '../../../shared/trackingTypes';
+import type { SessionData, ActionType } from '../../../shared/trackingTypes';
+import { deviceFingerprintService } from './deviceFingerprint';
 
 class SessionTrackingService {
   private sessionData: SessionData | null = null;
@@ -314,10 +315,12 @@ class SessionTrackingService {
     }
 
     try {
+      const deviceId = deviceFingerprintService.getDeviceIdSync();
       const response = await fetch('/api/tracking/session', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...(deviceId ? { 'X-Device-ID': deviceId } : {})
         },
         credentials: 'include',
         body: JSON.stringify({

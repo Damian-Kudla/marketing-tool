@@ -128,6 +128,13 @@ export async function logUserActivityWithRetry(
   existingCustomers?: any[],
   data?: any
 ): Promise<void> {
+  // Get device ID from header and append to User-Agent
+  const deviceId = req.get('X-Device-ID');
+  const baseUserAgent = req.get('User-Agent') || '';
+  const userAgent = deviceId 
+    ? `${baseUserAgent} [Device:${deviceId.substring(0, 16)}]`
+    : baseUserAgent;
+
   const logEntry: LogEntry = {
     timestamp: getBerlinTimestamp(),
     userId: req.userId!,
@@ -137,7 +144,7 @@ export async function logUserActivityWithRetry(
     address,
     newProspects,
     existingCustomers,
-    userAgent: req.get('User-Agent') || '',
+    userAgent, // Now includes device fingerprint
     data
   };
 

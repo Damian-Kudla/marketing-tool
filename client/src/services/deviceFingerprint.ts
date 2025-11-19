@@ -49,57 +49,31 @@ class DeviceFingerprintService {
   private async generateDeviceId(): Promise<string> {
     const components: string[] = [];
 
-    // 1. User Agent
-    components.push(navigator.userAgent);
+    // Basis-Hardware-Komponenten (stabil + unterscheidungskräftig)
+    components.push(navigator.userAgent); // iPhone-Modell + iOS-Version
+    components.push(`${screen.width}x${screen.height}x${screen.colorDepth}`); // Hardware-Display
+    components.push(Intl.DateTimeFormat().resolvedOptions().timeZone); // Nutzer-Timezone
+    components.push(navigator.platform); // Betriebssystem
+    components.push(navigator.language); // Nutzer-Sprache
 
-    // 2. Screen Resolution
-    components.push(`${screen.width}x${screen.height}x${screen.colorDepth}`);
-
-    // 3. Timezone
-    components.push(Intl.DateTimeFormat().resolvedOptions().timeZone);
-
-    // 4. Platform
-    components.push(navigator.platform);
-
-    // 5. Language
-    components.push(navigator.language);
-
-    // 6. Hardware Concurrency (CPU cores)
-    if (navigator.hardwareConcurrency) {
-      components.push(`cpu:${navigator.hardwareConcurrency}`);
-    }
-
-    // 7. Device Memory (if available)
-    // @ts-ignore - deviceMemory is not in all TypeScript definitions
-    if (navigator.deviceMemory) {
+    // Device-spezifische Infos (iOS-spezifisch, falls verfügbar)
+    // @ts-ignore - iOS-spezifische Properties
+    if (window.navigator?.standalone !== undefined) {
       // @ts-ignore
-      components.push(`mem:${navigator.deviceMemory}`);
+      components.push(`standalone:${window.navigator.standalone}`);
     }
+    
+    // Screen Pixel Ratio (unterscheidet iPhone-Modelle)
+    components.push(`pixelRatio:${window.devicePixelRatio}`);
 
-    // 8. Max Touch Points
-    components.push(`touch:${navigator.maxTouchPoints}`);
-
-    // 9. Vendor
-    components.push(navigator.vendor);
-
-    // 10. Canvas Fingerprint (unique per device/browser combination)
+    // Canvas Fingerprint (GPU-basiert, ~95% einzigartig pro Gerät)
     const canvasId = await this.getCanvasFingerprint();
     components.push(canvasId);
 
-    // 11. WebGL Fingerprint
-    const webglId = this.getWebGLFingerprint();
-    components.push(webglId);
-
-    // 12. Random component (stored in localStorage) for additional uniqueness
-    let randomComponent = localStorage.getItem('deviceRandomSeed');
-    if (!randomComponent) {
-      randomComponent = Math.random().toString(36).substring(2, 15);
-      localStorage.setItem('deviceRandomSeed', randomComponent);
-    }
-    components.push(randomComponent);
-
-    // Combine all components and hash
+    // Alle Komponenten zu einem String kombinieren
     const fingerprint = components.join('|');
+
+    // SHA-256 Hash erstellen für eindeutige Device-ID
     const deviceId = await this.hashString(fingerprint);
 
     return deviceId;
@@ -137,29 +111,6 @@ class DeviceFingerprintService {
     } catch (error) {
       console.warn('[DeviceFingerprint] Canvas fingerprinting failed:', error);
       return 'canvas-error';
-    }
-  }
-
-  /**
-   * WebGL Fingerprinting
-   */
-  private getWebGLFingerprint(): string {
-    try {
-      const canvas = document.createElement('canvas');
-      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl') as WebGLRenderingContext | null;
-
-      if (!gl) return 'no-webgl';
-
-      const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-      if (!debugInfo) return 'no-debug-info';
-
-      const vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
-      const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
-
-      return `${vendor}|${renderer}`;
-    } catch (error) {
-      console.warn('[DeviceFingerprint] WebGL fingerprinting failed:', error);
-      return 'webgl-error';
     }
   }
 

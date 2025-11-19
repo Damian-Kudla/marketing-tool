@@ -22,6 +22,7 @@ interface GPSPoint {
   accuracy: number;
   timestamp: number;
   source?: 'native' | 'followmee' | 'external' | 'external_app';
+  userAgent?: string; // User-Agent string from device
 }
 
 interface SnapPoint {
@@ -72,6 +73,47 @@ interface RouteReplayMapProps {
 const MORNING_CUTOFF_HOUR = 6;
 const GAP_DISTANCE_THRESHOLD_METERS = 50;
 const SNAP_SEGMENT_COST_CENT_PER_CALL = 0.5;
+
+/**
+ * Remove Device-ID from User-Agent string for comparison
+ * Example: "Mozilla/5.0... [Device:ce41e359ad0ed0b1]" → "Mozilla/5.0..."
+ */
+function cleanUserAgent(userAgent?: string): string {
+  if (!userAgent) return 'Unknown';
+  return userAgent.replace(/\s*\[Device:[^\]]+\]\s*/g, '').trim();
+}
+
+/**
+ * Extract unique User-Agents from GPS points (cleaned, without Device-ID)
+ */
+function extractUniqueUserAgents(gpsPoints: GPSPoint[]): string[] {
+  const userAgentSet = new Set<string>();
+  
+  gpsPoints.forEach(point => {
+    if (point.userAgent) {
+      userAgentSet.add(cleanUserAgent(point.userAgent));
+    }
+  });
+  
+  return Array.from(userAgentSet).sort();
+}
+
+/**
+ * Generate a color for a User-Agent based on hash
+ */
+function getUserAgentColor(userAgent: string, index: number): string {
+  const colors = [
+    '#3b82f6', // Blue
+    '#10b981', // Green
+    '#f59e0b', // Orange
+    '#ef4444', // Red
+    '#8b5cf6', // Purple
+    '#ec4899', // Pink
+    '#06b6d4', // Cyan
+    '#84cc16', // Lime
+  ];
+  return colors[index % colors.length];
+}
 
 function buildRouteSignature(points: GPSPoint[]): string {
   if (!points || points.length === 0) return 'empty';
@@ -129,6 +171,7 @@ interface MapOverlays {
   startMarker: google.maps.Marker | null;
   endMarker: google.maps.Marker | null;
   currentMarker: google.maps.Marker | null;
+  userMarkers: Map<string, google.maps.Marker>; // Markers for each active User-Agent
   photoMarker: google.maps.Marker | null;
   poiMarker: any | null; // Custom HTML overlay marker for POI
   gpsMarkers: google.maps.Marker[];
@@ -313,6 +356,10 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     active: boolean;
     periodIndex: number | null;
   }>({ active: false, periodIndex: null });
+
+  // User-Agent Filter State
+  const [availableUserAgents, setAvailableUserAgents] = useState<string[]>([]);
+  const [activeUserAgents, setActiveUserAgents] = useState<Set<string>>(new Set());
   
   // Adjust speed when entering/exiting pause mode
   useEffect(() => {
@@ -348,6 +395,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     startMarker: null,
     endMarker: null,
     currentMarker: null,
+    userMarkers: new Map(),
     photoMarker: null,
     poiMarker: null,
     gpsMarkers: [],
@@ -371,6 +419,47 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
   const displayPointsRef = useRef<GPSPoint[]>([]);
   const pauseModeRef = useRef<{ active: boolean; periodIndex: number | null }>({ active: false, periodIndex: null });
   const snapRequestIdRef = useRef(0);
+
+  // Extract unique User-Agents from GPS points and initialize active set
+  useEffect(() => {
+    // Only extract User-Agents from native GPS points
+    const nativePoints = gpsPoints.filter(p => p.source === 'native' || !p.source);
+    
+    // DEBUG LOGGING: Check why User-Agents might be missing
+    console.log('[RouteReplay] Debug User-Agents:', {
+      totalPoints: gpsPoints.length,
+      nativePoints: nativePoints.length,
+      samplePoint: nativePoints.length > 0 ? nativePoints[0] : null,
+      hasUserAgent: nativePoints.some(p => !!p.userAgent),
+      uniqueUAs: extractUniqueUserAgents(nativePoints),
+      sourceProp: source
+    });
+
+    const userAgents = extractUniqueUserAgents(nativePoints);
+    
+    setAvailableUserAgents(userAgents);
+    
+    // Initialize with all User-Agents active (or first one for 'all' source)
+    if (userAgents.length > 0) {
+      if (source === 'all') {
+        // For 'all': Only activate first User-Agent
+        setActiveUserAgents(new Set([userAgents[0]]));
+      } else {
+        // For 'native': Activate all User-Agents
+        setActiveUserAgents(new Set(userAgents));
+      }
+    }
+    
+    console.log(`[RouteReplay] Found ${userAgents.length} unique User-Agents:`, userAgents);
+  }, [gpsPoints, source]);
+
+  // Auto-disable Auto-Zoom when multiple User-Agents are active
+  useEffect(() => {
+    if (activeUserAgents.size > 1 && autoZoomEnabled) {
+      setAutoZoomEnabled(false);
+      console.log('[RouteReplay] Auto-Zoom disabled: multiple User-Agents active');
+    }
+  }, [activeUserAgents.size]);
 
   // Drag handlers for movable panels
   const handleMouseDown = (e: React.MouseEvent, panel: 'left' | 'right') => {
@@ -491,27 +580,64 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
 
   const basePoints = pointsAfterSix;
 
-  // Detect stationary periods (20+ min in 20m radius) - based on basePoints
-  const stationaryPeriods = useMemo(() => detectStationaryPeriods(basePoints), [basePoints]);
+  // Filter basePoints by active User-Agents first
+  const uaFilteredPoints = useMemo(() => {
+    return basePoints.filter(p => {
+      // If it's a native point, check if its User-Agent is active
+      if (p.source === 'native' || !p.source) {
+        // If we have active agents selected, only show those
+        if (activeUserAgents.size > 0) {
+          if (!p.userAgent) return false; // Skip native points without UA
+          return activeUserAgents.has(cleanUserAgent(p.userAgent));
+        }
+      }
+      // Always include external data (assumed to belong to the session/user context)
+      return true;
+    });
+  }, [basePoints, activeUserAgents]);
 
-  // Display points: In pause mode, filter to only show external GPS data within pause period
+  // Detect stationary periods based on filtered points
+  // This ensures pauses are calculated separately for the selected user(s)
+  const stationaryPeriods = useMemo(() => detectStationaryPeriods(uaFilteredPoints), [uaFilteredPoints]);
+
+  // Display points: Filter by Pause Mode
   const displayPoints = useMemo(() => {
     if (!pauseMode.active || pauseMode.periodIndex === null) {
-      return basePoints;
+      return uaFilteredPoints;
     }
 
     const period = stationaryPeriods[pauseMode.periodIndex];
     if (!period) {
-      return basePoints;
+      return uaFilteredPoints;
     }
 
     // Filter to only external GPS points within the pause period
-    return basePoints.filter(
+    return uaFilteredPoints.filter(
       p => p.timestamp >= period.startTime &&
            p.timestamp <= period.endTime &&
            (p.source === 'followmee' || p.source === 'external' || p.source === 'external_app')
     );
-  }, [basePoints, pauseMode, stationaryPeriods]);
+  }, [uaFilteredPoints, pauseMode, stationaryPeriods]);
+
+  // Group display points by User-Agent for independent interpolation
+  const pointsByUser = useMemo(() => {
+    const grouped: Record<string, GPSPoint[]> = {};
+    
+    displayPoints.forEach(point => {
+      // Determine key: User-Agent for native, 'external' for others
+      let key = 'external';
+      if (point.source === 'native' || !point.source) {
+        key = point.userAgent ? cleanUserAgent(point.userAgent) : 'unknown';
+      }
+      
+      if (!grouped[key]) {
+        grouped[key] = [];
+      }
+      grouped[key].push(point);
+    });
+    
+    return grouped;
+  }, [displayPoints]);
 
   // Check if there are any external GPS points in the dataset
   const hasExternalGPS = useMemo(() => {
@@ -547,8 +673,8 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
   const baseRouteSignature = useMemo(() => buildRouteSignature(basePoints), [basePoints]);
 
   useEffect(() => {
-    basePointsRef.current = basePoints;
-  }, [basePoints]);
+    basePointsRef.current = uaFilteredPoints;
+  }, [uaFilteredPoints]);
 
   useEffect(() => {
     displayPointsRef.current = displayPoints;
@@ -653,6 +779,8 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
       overlays.startMarker = removeMarker(overlays.startMarker);
       overlays.endMarker = removeMarker(overlays.endMarker);
       overlays.currentMarker = removeMarker(overlays.currentMarker);
+      overlays.userMarkers.forEach(marker => marker.setMap(null));
+      overlays.userMarkers.clear();
       overlays.photoMarker = removeMarker(overlays.photoMarker);
       overlays.gpsMarkers.forEach(marker => marker.setMap(null));
       overlays.gpsMarkers = [];
@@ -907,8 +1035,8 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
 
   // Interpolate position between two GPS points based on timestamp
   // If snap-to-roads is enabled, interpolate along snap segments
-  const interpolatePosition = (timestamp: number): GPSPoint | null => {
-    if (displayPoints.length === 0) return null;
+  const interpolatePosition = (timestamp: number, points: GPSPoint[] = displayPoints): GPSPoint | null => {
+    if (points.length === 0) return null;
 
     // Clamp timestamp to valid range
     const clampedTime = Math.max(startTime, Math.min(endTime, timestamp));
@@ -959,8 +1087,8 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     let beforeIdx = 0;
     let afterIdx = 0;
 
-    for (let i = 0; i < displayPoints.length; i++) {
-      if (displayPoints[i].timestamp <= clampedTime) {
+    for (let i = 0; i < points.length; i++) {
+      if (points[i].timestamp <= clampedTime) {
         beforeIdx = i;
       } else {
         afterIdx = i;
@@ -970,11 +1098,11 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
 
     // If we're at or after the last point
     if (afterIdx === 0 || afterIdx === beforeIdx) {
-      return displayPoints[beforeIdx];
+      return points[beforeIdx];
     }
 
-    const beforePoint = displayPoints[beforeIdx];
-    const afterPoint = displayPoints[afterIdx];
+    const beforePoint = points[beforeIdx];
+    const afterPoint = points[afterIdx];
 
     // Calculate interpolation ratio
     const timeDiff = afterPoint.timestamp - beforePoint.timestamp;
@@ -990,10 +1118,41 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     };
   };
 
-  // Get current interpolated position
+  // Get current interpolated positions for all active agents
+  const currentPositions = useMemo(() => {
+    const positions: Record<string, GPSPoint> = {};
+    
+    // Calculate for each active User-Agent
+    activeUserAgents.forEach(ua => {
+      const userPoints = pointsByUser[ua];
+      if (userPoints && userPoints.length > 0) {
+        const pos = interpolatePosition(currentTimestamp, userPoints);
+        if (pos) {
+          positions[ua] = pos;
+        }
+      }
+    });
+    
+    // Also calculate for external data if present
+    if (pointsByUser['external']) {
+      const pos = interpolatePosition(currentTimestamp, pointsByUser['external']);
+      if (pos) {
+        positions['external'] = pos;
+      }
+    }
+    
+    return positions;
+  }, [currentTimestamp, pointsByUser, activeUserAgents, snapToRoadsEnabled, snapSegments]);
+
+  // Backward compatibility: Primary current position (for camera following etc.)
   const currentPosition = useMemo(() => {
-    return interpolatePosition(currentTimestamp);
-  }, [currentTimestamp, snapToRoadsEnabled, snapSegments, displayPoints]);
+    // Return the first available position
+    const uas = Array.from(activeUserAgents);
+    if (uas.length > 0 && currentPositions[uas[0]]) {
+      return currentPositions[uas[0]];
+    }
+    return currentPositions['external'] || null;
+  }, [currentPositions, activeUserAgents]);
 
   // Note: Animation is now time-based, not duration-based
   // The animation speed is controlled by secondsPerHour in real-time
@@ -1158,8 +1317,53 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     return segments;
   };
 
-  const fullRouteSegments = createRouteSegments(displayPoints, snapToRoadsEnabled ? gapSegmentIdSet : undefined);
-  const animatedRouteSegments = createRouteSegments(animatedRouteWithInterpolation, snapToRoadsEnabled ? gapSegmentIdSet : undefined);
+  // Generate segments for ALL active users
+  const fullRouteSegments = useMemo(() => {
+    let allSegments: any[] = [];
+    
+    // Process each user's points
+    Object.entries(pointsByUser).forEach(([key, points]) => {
+      const sorted = [...points].sort((a, b) => a.timestamp - b.timestamp);
+      const segments = createRouteSegments(sorted, snapToRoadsEnabled ? gapSegmentIdSet : undefined);
+      
+      // Add user info to segments
+      segments.forEach(seg => {
+        (seg as any).userAgent = key;
+      });
+      
+      allSegments = [...allSegments, ...segments];
+    });
+    
+    return allSegments;
+  }, [pointsByUser, snapToRoadsEnabled, gapSegmentIdSet]);
+
+  // Generate animated segments for ALL active users
+  const animatedRouteSegments = useMemo(() => {
+    let allSegments: any[] = [];
+    
+    Object.entries(pointsByUser).forEach(([key, points]) => {
+      // Filter points up to current timestamp
+      const animatedPoints = points.filter(p => p.timestamp <= currentTimestamp);
+      
+      // Add interpolated current position for this user
+      const currentPos = currentPositions[key];
+      
+      let pointsToDraw = animatedPoints;
+      if (currentPos && currentPos.timestamp > (animatedPoints[animatedPoints.length - 1]?.timestamp || 0)) {
+        pointsToDraw = [...animatedPoints, currentPos];
+      }
+      
+      const segments = createRouteSegments(pointsToDraw, snapToRoadsEnabled ? gapSegmentIdSet : undefined);
+      
+      segments.forEach(seg => {
+        (seg as any).userAgent = key;
+      });
+      
+      allSegments = [...allSegments, ...segments];
+    });
+    
+    return allSegments;
+  }, [pointsByUser, currentTimestamp, currentPositions, snapToRoadsEnabled, gapSegmentIdSet]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1172,24 +1376,24 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     if (!showRouteLines) return;
 
     overlays.fullRoutes = fullRouteSegments.map(segment => {
-      const sourceColor = SOURCE_COLORS[segment.source || 'native'];
-
-      console.log('[RouteReplay] Full Route Segment:', {
-        source: segment.source,
-        color: sourceColor,
-        points: segment.points.length
-      });
+      // Use User-Agent color for native segments, source color for others
+      let color = SOURCE_COLORS[segment.source || 'native'];
+      if (segment.source === 'native' && (segment as any).userAgent) {
+        const ua = (segment as any).userAgent;
+        const index = availableUserAgents.indexOf(ua);
+        color = getUserAgentColor(ua, index >= 0 ? index : 0);
+      }
 
       return new googleMaps.Polyline({
         map,
         path: segment.points.map(([lat, lng]) => ({ lat, lng })),
-        strokeColor: sourceColor,
+        strokeColor: color,
         strokeOpacity: pauseMode.active ? 0.1 : 0.3,
         strokeWeight: 2,
         zIndex: 50,
       });
     });
-  }, [fullRouteSegments, showRouteLines, mapsApiLoaded, pauseMode.active]);
+  }, [fullRouteSegments, showRouteLines, mapsApiLoaded, pauseMode.active, availableUserAgents]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1200,18 +1404,24 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     clearPolylineList(overlays.animatedRoutes);
 
     overlays.animatedRoutes = animatedRouteSegments.map(segment => {
-      const sourceColor = SOURCE_COLORS[segment.source || 'native'];
+      // Use User-Agent color for native segments, source color for others
+      let color = SOURCE_COLORS[segment.source || 'native'];
+      if (segment.source === 'native' && (segment as any).userAgent) {
+        const ua = (segment as any).userAgent;
+        const index = availableUserAgents.indexOf(ua);
+        color = getUserAgentColor(ua, index >= 0 ? index : 0);
+      }
 
       return new googleMaps.Polyline({
         map,
         path: segment.points.map(([lat, lng]) => ({ lat, lng })),
-        strokeColor: sourceColor,
+        strokeColor: color,
         strokeOpacity: pauseMode.active ? 0.25 : 0.9,
         strokeWeight: 4,
         zIndex: 200,
       });
     });
-  }, [animatedRouteSegments, mapsApiLoaded, pauseMode.active]);
+  }, [animatedRouteSegments, mapsApiLoaded, pauseMode.active, availableUserAgents]);
 
   // Pause Mode Route: Show only external GPS points during pause period
   useEffect(() => {
@@ -1757,88 +1967,93 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     if (!map || !googleMaps) return;
 
     const overlays = mapOverlaysRef.current;
-    if (!currentPosition || currentIndex <= 0 || currentIndex >= displayPoints.length - 1) {
-      overlays.currentMarker = removeMarker(overlays.currentMarker);
+    
+    // Clear legacy marker
+    overlays.currentMarker = removeMarker(overlays.currentMarker);
+
+    // If no positions, clear all markers
+    if (Object.keys(currentPositions).length === 0) {
+      overlays.userMarkers.forEach(marker => marker.setMap(null));
+      overlays.userMarkers.clear();
       return;
     }
 
-    if (!overlays.currentMarker) {
-      // Determine if we should show emoji (only if external GPS data exists and toggle is on)
-      const shouldShowEmoji = hasExternalGPS && showMovementMode;
-      
-      if (shouldShowEmoji) {
-        // Create marker with emoji icon
-        const movementMode = getMovementMode(currentIndex);
-        const emoji = movementMode === 'walking' ? '🚶' : '🚗';
-        
-        overlays.currentMarker = new googleMaps.Marker({
-          map,
-          label: {
-            text: emoji,
-            fontSize: '48px',
-            className: 'emoji-marker-label',
-          },
-          icon: {
-            path: googleMaps.SymbolPath.CIRCLE,
-            fillColor: '#FFFFFF',
-            fillOpacity: 0.9,
-            strokeColor: '#000000',
-            strokeWeight: 3,
-            scale: 20,
-          },
-          zIndex: 450,
-        });
-      } else {
-        // Create normal circle marker
-        overlays.currentMarker = new googleMaps.Marker({
-          map,
-          icon: {
-            path: googleMaps.SymbolPath.CIRCLE,
-            fillColor: '#000000', // Schwarz für bessere Sichtbarkeit
-            fillOpacity: 1,
-            strokeColor: '#ffffff',
-            strokeWeight: 3,
-            scale: 12, // Größerer Marker
-          },
-          zIndex: 450,
-        });
+    // Clear markers for inactive users
+    const activeKeys = new Set(Object.keys(currentPositions));
+    for (const [key, marker] of overlays.userMarkers.entries()) {
+      if (!activeKeys.has(key)) {
+        marker.setMap(null);
+        overlays.userMarkers.delete(key);
       }
-    } else {
-      // Update existing marker icon/label based on mode
-      const shouldShowEmoji = hasExternalGPS && showMovementMode;
+    }
+
+    // Update or create markers for active users
+    Object.entries(currentPositions).forEach(([key, position]) => {
+      let marker = overlays.userMarkers.get(key);
       
+      // Determine color
+      let color = '#000000';
+      if (key === 'external') {
+        color = '#ef4444'; // Red for external
+      } else {
+        const index = availableUserAgents.indexOf(key);
+        color = getUserAgentColor(key, index >= 0 ? index : 0);
+      }
+
+      // Determine if we should show emoji
+      // Native: Only if single user is active (to avoid clutter)
+      // External: Always (as it's grouped into a single track)
+      const isExternal = key === 'external';
+      const isTargetForEmoji = isExternal || (activeUserAgents.size === 1);
+      
+      const shouldShowEmoji = isTargetForEmoji && showMovementMode;
+      
+      const markerOptions: google.maps.MarkerOptions = {
+        position: { lat: position.latitude, lng: position.longitude },
+        zIndex: 450,
+        title: key === 'external' ? 'External App' : key
+      };
+
       if (shouldShowEmoji) {
         const movementMode = getMovementMode(currentIndex);
         const emoji = movementMode === 'walking' ? '🚶' : '🚗';
         
-        overlays.currentMarker.setLabel({
+        markerOptions.label = {
           text: emoji,
           fontSize: '48px',
           className: 'emoji-marker-label',
-        });
-        overlays.currentMarker.setIcon({
+        };
+        markerOptions.icon = {
           path: googleMaps.SymbolPath.CIRCLE,
           fillColor: '#FFFFFF',
           fillOpacity: 0.9,
           strokeColor: '#000000',
           strokeWeight: 3,
           scale: 20,
-        });
+        };
       } else {
-        overlays.currentMarker.setLabel(null);
-        overlays.currentMarker.setIcon({
+        markerOptions.label = null; // Clear label if switching from emoji
+        markerOptions.icon = {
           path: googleMaps.SymbolPath.CIRCLE,
-          fillColor: '#000000',
-          fillOpacity: 1,
+          fillColor: color,
+          fillOpacity: 0.9,
           strokeColor: '#ffffff',
-          strokeWeight: 3,
-          scale: 12,
-        });
+          strokeWeight: 2,
+          scale: 10, // Slightly smaller than single mode
+        };
       }
-    }
 
-    overlays.currentMarker.setPosition({ lat: currentPosition.latitude, lng: currentPosition.longitude });
-  }, [currentPosition, currentIndex, displayPoints.length, mapsApiLoaded, hasExternalGPS, showMovementMode]);
+      if (!marker) {
+        marker = new googleMaps.Marker({
+          map,
+          ...markerOptions
+        });
+        overlays.userMarkers.set(key, marker);
+      } else {
+        marker.setOptions(markerOptions);
+      }
+    });
+  }, [currentPositions, currentIndex, availableUserAgents, activeUserAgents, hasExternalGPS, showMovementMode, mapsApiLoaded]);
 
   // GPS-Marker: Nur basierend auf baseRouteSignature (ändert sich nur bei Route-Wechsel)
   useEffect(() => {
@@ -2401,23 +2616,88 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
               </p>
             </div>
 
-            {/* Movement Mode Emoji Toggle (only when external GPS data exists) */}
-            {hasExternalGPS && (
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={showMovementMode}
-                    onChange={(e) => setShowMovementMode(e.target.checked)}
-                    className="rounded"
-                  />
-                  <span>Bewegungsmodus 🚶🚗</span>
+            {/* Movement Mode Emoji Toggle */}
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showMovementMode}
+                  onChange={(e) => setShowMovementMode(e.target.checked)}
+                  className="rounded"
+                />
+                <span>Bewegungsmodus 🚶🚗</span>
+              </label>
+              <p className="text-[10px] text-muted-foreground">
+                {showMovementMode
+                  ? 'Zeigt Fußgänger/Auto-Icon basierend auf Geschwindigkeit'
+                  : 'Bewegungsmodus ausgeblendet'}
+              </p>
+            </div>
+
+            {/* User-Agent Filter (only for native GPS) */}
+            {(source === 'native' || source === 'all') && availableUserAgents.length > 1 && (
+              <div className="pt-3 border-t space-y-2">
+                <label className="text-sm font-medium">
+                  Geräte ({availableUserAgents.length})
                 </label>
+                <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                  {availableUserAgents.map((userAgent, index) => {
+                    const isActive = activeUserAgents.has(userAgent);
+                    const color = getUserAgentColor(userAgent, index);
+                    
+                    // Extract device info from User-Agent (e.g., "iPhone; CPU iPhone OS 18_6_2")
+                    const deviceMatch = userAgent.match(/\((.*?)\)/);
+                    const deviceInfo = deviceMatch ? deviceMatch[1].split(';')[0].trim() : `Gerät ${index + 1}`;
+                    
+                    return (
+                      <button
+                        key={userAgent}
+                        onClick={() => {
+                          const newActive = new Set(activeUserAgents);
+                          
+                          if (source === 'all') {
+                            // For 'all': Only one User-Agent can be active
+                            newActive.clear();
+                            newActive.add(userAgent);
+                          } else {
+                            // For 'native': Toggle
+                            if (isActive) {
+                              newActive.delete(userAgent);
+                            } else {
+                              newActive.add(userAgent);
+                            }
+                          }
+                          
+                          setActiveUserAgents(newActive);
+                        }}
+                        className={`w-full px-2 py-1.5 text-xs rounded border transition-colors text-left ${
+                          isActive
+                            ? 'bg-primary/10 border-primary font-medium'
+                            : 'bg-muted/50 border-border hover:bg-muted'
+                        }`}
+                        title={userAgent}
+                      >
+                        <div className="flex items-center gap-2">
+                          <div 
+                            className="w-3 h-3 rounded-full border-2 border-white shadow-sm flex-shrink-0"
+                            style={{ backgroundColor: color }}
+                          />
+                          <span className="truncate">{deviceInfo}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
                 <p className="text-[10px] text-muted-foreground">
-                  {showMovementMode
-                    ? 'Zeigt Fußgänger/Auto-Icon basierend auf Geschwindigkeit'
-                    : 'Bewegungsmodus ausgeblendet'}
+                  {source === 'all'
+                    ? `${activeUserAgents.size} Gerät aktiv (nur ein Gerät für GPS + External)`
+                    : `${activeUserAgents.size} von ${availableUserAgents.length} Geräten aktiv`}
                 </p>
+                {activeUserAgents.size > 1 && (
+                  <p className="text-[10px] text-orange-600 font-medium">
+                    ⚠️ Auto-Zoom bei mehreren Geräten deaktiviert
+                  </p>
+                )}
               </div>
             )}
 

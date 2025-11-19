@@ -10,6 +10,7 @@ export interface GPSCoordinates {
   speed?: number;
   timestamp: number;
   source?: 'native' | 'followmee' | 'external_app'; // GPS data source (native = background, followmee = external service, external_app = tracking app)
+  userAgent?: string; // User-Agent string from device (for multi-device tracking)
 }
 
 export interface SessionData {

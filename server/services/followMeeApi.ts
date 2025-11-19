@@ -26,7 +26,7 @@
 import { batchLogger } from './batchLogger';
 import type { LogEntry } from './fallbackLogging';
 import { getBerlinTimestamp } from '../utils/timezone';
-import { getCETDate } from './sqliteLogService';
+import { getCETDate, insertLog, type LogInsertData } from './sqliteLogService';
 
 const FOLLOWMEE_API_KEY = process.env.FOLLOWMEE_API;
 const FOLLOWMEE_USERNAME = process.env.FOLLOWMEE_USERNAME || 'Saskia.zucht';
@@ -416,10 +416,30 @@ class FollowMeeApiService {
           this.parseFollowMeeDate(a.Date) - this.parseFollowMeeDate(b.Date)
         );
 
-        // Queue new locations via batchLogger
+        // Queue new locations via batchLogger (Google Sheets) + SQLite
         for (const location of newLocations) {
           const logEntry = this.locationToLogEntry(location, mapping);
+          
+          // 1. Google Sheets (batch)
           batchLogger.addUserActivity(logEntry);
+          
+          // 2. CRITICAL: AUCH SQLite schreiben (verhindert Datenverlust)
+          try {
+            const timestamp = this.parseFollowMeeDate(location.Date);
+            const date = getCETDate(timestamp);
+            const sqliteLog: LogInsertData = {
+              userId: mapping.userId,
+              username: mapping.username,
+              timestamp: timestamp,
+              logType: 'gps',
+              data: logEntry.data
+            };
+
+            insertLog(date, sqliteLog);
+          } catch (error) {
+            console.error(`[FollowMee] ❌ SQLite write error for ${mapping.username}:`, error);
+            // Don't throw - Google Sheets backup still works
+          }
         }
 
         // Build cache with today's FollowMee data (sorted by timestamp) - already filtered above
@@ -516,10 +536,30 @@ class FollowMeeApiService {
           this.parseFollowMeeDate(a.Date) - this.parseFollowMeeDate(b.Date)
         );
 
-        // Queue new locations via batchLogger
+        // Queue new locations via batchLogger (Google Sheets) + SQLite
         for (const location of newLocations) {
           const logEntry = this.locationToLogEntry(location, mapping);
+          
+          // 1. Google Sheets (batch)
           batchLogger.addUserActivity(logEntry);
+          
+          // 2. CRITICAL: AUCH SQLite schreiben (verhindert Datenverlust)
+          try {
+            const timestamp = this.parseFollowMeeDate(location.Date);
+            const date = getCETDate(timestamp);
+            const sqliteLog: LogInsertData = {
+              userId: mapping.userId,
+              username: mapping.username,
+              timestamp: timestamp,
+              logType: 'gps',
+              data: logEntry.data
+            };
+
+            insertLog(date, sqliteLog);
+          } catch (error) {
+            console.error(`[FollowMee] ❌ SQLite write error for ${mapping.username}:`, error);
+            // Don't throw - Google Sheets backup still works
+          }
         }
 
         // Update cache: add new data and keep sorted

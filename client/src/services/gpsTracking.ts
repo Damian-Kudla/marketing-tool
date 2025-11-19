@@ -1,4 +1,5 @@
 import type { GPSCoordinates } from '../../../shared/trackingTypes';
+import { deviceFingerprintService } from './deviceFingerprint';
 
 class GPSTrackingService {
   private watchId: number | null = null;
@@ -122,10 +123,12 @@ class GPSTrackingService {
     }
 
     try {
+      const deviceId = deviceFingerprintService.getDeviceIdSync();
       const response = await fetch('/api/tracking/gps', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...(deviceId ? { 'X-Device-ID': deviceId } : {})
         },
         credentials: 'include',
         body: JSON.stringify({

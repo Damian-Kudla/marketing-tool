@@ -22,8 +22,12 @@ router.post('/gps', async (req: AuthenticatedRequest, res: Response) => {
       return res.status(400).json({ error: 'Invalid GPS data' });
     }
 
-    // Mark as native source
-    const gpsWithSource: GPSCoordinates = { ...gps, source: 'native' };
+    // Mark as native source and add User-Agent
+    const gpsWithSource: GPSCoordinates = { 
+      ...gps, 
+      source: 'native',
+      userAgent: req.get('User-Agent')
+    };
 
     // Store in RAM
     dailyDataStore.addGPS(req.userId, req.username, gpsWithSource);

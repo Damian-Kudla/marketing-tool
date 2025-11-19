@@ -3,6 +3,7 @@ import type { LocationData } from '../../shared/externalTrackingTypes';
 import { googleSheetsService } from './googleSheets';
 import { batchLogger } from './batchLogger';
 import { getBerlinDate, getBerlinTimestamp } from '../utils/timezone';
+import { insertLog, getCETDate, type LogInsertData } from './sqliteLogService';
 
 /**
  * External Tracking Service
@@ -187,9 +188,31 @@ class ExternalTrackingService {
 
         console.log(`[ExternalTrackingService] LogEntry data field:`, JSON.stringify(logEntry.data));
 
-        // Schreibe in Nutzer-Log über batchLogger
+        // Schreibe in Nutzer-Log über batchLogger (Google Sheets)
         batchLogger.addUserActivity(logEntry);
         console.log(`[ExternalTrackingService] Added tracking data to user log for ${user.username} with GPS timestamp ${gpsTimestamp}`);
+
+        // CRITICAL: AUCH SQLite schreiben (verhindert Datenverlust)
+        try {
+          const date = getCETDate(new Date(locationData.timestamp).getTime());
+          const sqliteLog: LogInsertData = {
+            userId: user.userId,
+            username: user.username,
+            timestamp: new Date(locationData.timestamp).getTime(),
+            logType: 'gps', // External GPS ist immer GPS
+            data: logEntry.data
+          };
+
+          const inserted = insertLog(date, sqliteLog);
+          if (inserted) {
+            console.log(`[ExternalTrackingService] ✅ Written to SQLite for ${user.username} on ${date}`);
+          } else {
+            console.log(`[ExternalTrackingService] ℹ️  Duplicate entry in SQLite (already exists)`);
+          }
+        } catch (error) {
+          console.error('[ExternalTrackingService] ❌ Error writing to SQLite:', error);
+          // Don't throw - Google Sheets backup still works
+        }
       } else {
         // Nutzer nicht gefunden - Fallback: schreibe in Google Sheet
         console.log(`[ExternalTrackingService] No user found for tracking name "${locationData.userName}" - writing to Google Sheet as fallback`);

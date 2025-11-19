@@ -133,11 +133,13 @@ class DeviceTrackingService {
   private async syncDeviceStatus(): Promise<void> {
     try {
       const deviceStatus = await this.getDeviceStatus();
+      const deviceId = await deviceFingerprintService.getDeviceId();
 
       const response = await fetch('/api/tracking/device', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...(deviceId ? { 'X-Device-ID': deviceId } : {}) // Include device fingerprint
         },
         credentials: 'include',
         body: JSON.stringify({

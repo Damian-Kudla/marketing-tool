@@ -2,10 +2,12 @@
  * SQLite Daily Archive Service
  *
  * Cron-Job für tägliche Archivierung:
- * - Läuft um Mitternacht (CET/CEST)
+ * - Läuft um 01:00 Uhr (CET/CEST) - 1 Stunde nach Mitternacht
  * - Archiviert gestrigen Tag in Drive
  * - Löscht alte lokale DBs (>7 Tage)
- * - Leert alte Logs aus Sheets
+ * - Leert alte Logs aus Sheets (behält gestern + heute als Sicherheitspuffer)
+ * 
+ * WICHTIG: 1 Stunde Verzögerung gibt verspäteten Batch-Uploads Zeit abzuschließen
  */
 
 import cron from 'node-cron';
@@ -20,7 +22,8 @@ class SQLiteDailyArchiveService {
 
   /**
    * Startet den Cron-Job
-   * Läuft täglich um 00:05 Uhr (CET/CEST) - 5 Minuten nach Mitternacht
+   * Läuft täglich um 01:00 Uhr (CET/CEST) - 1 Stunde nach Mitternacht
+   * WICHTIG: 1 Stunde Verzögerung gibt Batch-Uploads Zeit abzuschließen
    */
   start(): void {
     if (this.cronJob) {
@@ -28,10 +31,12 @@ class SQLiteDailyArchiveService {
       return;
     }
 
-    // Cron: Täglich um 00:05 Uhr (nach Mitternacht, damit dailyDataStore reset erfolgt ist)
+    // Cron: Täglich um 01:00 Uhr (1 Stunde nach Mitternacht)
     // Format: Minute Hour Day Month Weekday
+    // WICHTIG: Zeit auf 01:00 erhöht, damit alle nächtlichen Batch-Uploads
+    // von Gestern abgeschlossen sind, bevor wir aus Sheets löschen
     this.cronJob = cron.schedule(
-      '5 0 * * *',
+      '0 1 * * *',
       async () => {
         await this.runDailyArchive();
       },
@@ -320,14 +325,20 @@ class SQLiteDailyArchiveService {
 
           if (!logs || logs.length === 0) continue;
 
-          // Filter for old logs (not today)
+          // Filter for old logs (YESTERDAY or earlier, not today or same day)
+          // WICHTIG: Nur Logs von GESTERN (oder früher) als "old" behandeln
+          // Dadurch wird verhindert, dass Logs vom gleichen Tag gelöscht werden,
+          // wenn der Cronjob kurz nach Mitternacht läuft, aber noch Batch-Uploads
+          // vom Vortag ausstehen (z.B. 23:05-23:59 Uhr Logs)
+          const yesterday = this.getYesterday(today);
           const oldLogs = logs.filter(log => {
             try {
               if (!log.timestamp) return false;
               const timestamp = new Date(log.timestamp).getTime();
               if (isNaN(timestamp)) return false;
               const logDate = getCETDate(timestamp);
-              return logDate !== today;
+              // Nur Logs VOR heute (gestern oder früher) als "old" markieren
+              return logDate < today;
             } catch {
               return false;
             }
@@ -623,7 +634,10 @@ class SQLiteDailyArchiveService {
 
       if (rows.length === 0) return 0;
 
-      // Find rows to keep (today's logs)
+      // Find rows to keep (today's logs AND yesterday's logs for safety)
+      // WICHTIG: Behalte Logs von heute UND gestern, lösche nur Logs von vorgestern oder älter
+      // Dies verhindert Datenverlust bei verspäteten Batch-Uploads
+      const yesterday = this.getYesterday(today);
       const rowsToKeep: any[][] = [];
 
       for (const row of rows) {
@@ -632,7 +646,8 @@ class SQLiteDailyArchiveService {
 
         const logDate = getCETDate(new Date(timestamp).getTime());
 
-        if (logDate === today) {
+        // Behalte Logs von heute oder gestern (>= yesterday)
+        if (logDate >= yesterday) {
           rowsToKeep.push(row);
         }
       }
