@@ -565,7 +565,10 @@ export function checkpointDB(date: string): void {
     // Open fresh connection for checkpoint
     const db = initDB(date, false); // Read-write mode
     db.pragma('wal_checkpoint(TRUNCATE)');
-    db.close();
+    
+    // CRITICAL: Remove from cache after checkpoint!
+    // initDB adds it to cache, so we must use closeDB to remove it
+    closeDB(date);
     
     console.log(`[SQLite] Checkpointed WAL for ${date}`);
   } catch (error) {
