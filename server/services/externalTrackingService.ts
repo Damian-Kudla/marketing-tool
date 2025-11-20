@@ -3,7 +3,7 @@ import type { LocationData } from '../../shared/externalTrackingTypes';
 import { googleSheetsService } from './googleSheets';
 import { batchLogger } from './batchLogger';
 import { getBerlinDate, getBerlinTimestamp } from '../utils/timezone';
-import { insertLog, getCETDate, type LogInsertData } from './sqliteLogService';
+import { insertLog, getCETDate, getUserLogs, type LogInsertData } from './sqliteLogService';
 
 /**
  * External Tracking Service
@@ -318,10 +318,45 @@ class ExternalTrackingService {
           typeof item.longitude === 'number'
         );
 
-      console.log(
-        `[ExternalTrackingService] Found ${externalTrackingLogs.length} external tracking logs for ${username} on ${getBerlinDate(date)}`
-      );
-      return externalTrackingLogs;
+      // Additionally, try to load entries from local SQLite daily DB (in case ingestion wrote there)
+      let sqliteExternal: Array<{ timestamp: string; latitude: number; longitude: number }> = [];
+      try {
+        const users = await googleSheetsService.getAllUsers();
+        const user = users.find(u => u.username === username);
+
+        if (user && user.userId) {
+          const dateStr = getCETDate(date.getTime());
+          const sqliteLogs = getUserLogs(dateStr, user.userId);
+
+          sqliteExternal = sqliteLogs
+            .filter(l => l.logType === 'gps' && l.data && l.data.source === 'external_app')
+            .map(l => ({
+              timestamp: l.data.timestamp || l.timestamp,
+              latitude: l.data.latitude,
+              longitude: l.data.longitude
+            }))
+            .filter(item => typeof item.latitude === 'number' && typeof item.longitude === 'number');
+        }
+      } catch (err) {
+        console.error('[ExternalTrackingService] Error loading external logs from SQLite:', err);
+      }
+
+      // Merge and dedupe by timestamp+lat+lon
+      const combined = [...externalTrackingLogs, ...sqliteExternal];
+      const map = new Map<string, { timestamp: string; latitude: number; longitude: number }>();
+      for (const it of combined) {
+        const key = `${it.timestamp}-${it.latitude}-${it.longitude}`;
+        if (!map.has(key)) map.set(key, it);
+      }
+
+      const merged = Array.from(map.values()).sort((a, b) => {
+        const ta = typeof a.timestamp === 'string' ? new Date(a.timestamp).getTime() : Number(a.timestamp);
+        const tb = typeof b.timestamp === 'string' ? new Date(b.timestamp).getTime() : Number(b.timestamp);
+        return ta - tb;
+      });
+
+      console.log(`[ExternalTrackingService] Found ${merged.length} external tracking logs for ${username} on ${getBerlinDate(date)} (sheets: ${externalTrackingLogs.length}, sqlite: ${sqliteExternal.length})`);
+      return merged;
     } catch (error) {
       console.error('[ExternalTrackingService] Error loading external tracking data from user log:', error);
       return [];
