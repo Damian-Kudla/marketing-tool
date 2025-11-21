@@ -1,20 +1,18 @@
 {
-  "version": "2.7.0",
-  "buildTime": "2025-11-19T04:54:11.349Z",
-  "buildNumber": "build-1763528051350",
+  "version": "2.8.0",
+  "buildTime": "2025-11-21T15:55:05.271Z",
+  "buildNumber": "build-1763740505271",
   "features": [
-    "Feature: Hausnummern-Varianten Hinweise (immer anzeigen, nicht nur bei 0 Ergebnissen)",
-    "Feature: GPS-Tracking Intervall von 30s auf 15s reduziert",
-    "Optimize: Google Sheets Batch API (87.5% weniger API-Requests)",
-    "Optimize: Historischer Daten-Cache von 5s auf 15 Minuten erhöht",
-    "Fix: Route Wiedergabe Modal Z-Index Problem behoben"
+    "Feature: Route Replay - Fahrten-Visualisierung (blaue Balken)",
+    "Feature: Route Replay - Manuelle Zeiteingabe & Leertaste (Play/Pause)",
+    "Feature: Tracking - App-Version wird in Logs erfasst",
+    "Fix: Live-View Updates für externe Tracker verbessert"
   ],
   "technicalDetails": [
-    "Related House Numbers: Always show hints for variants",
-    "GPS Tracking: 15s interval (was 30s)",
-    "Admin Dashboard: Batch API reduces quota usage",
-    "Historical Cache: 15min TTL (was 5s)",
-    "Route Replay: Default zoom 18, duration 30s"
+    "Route Replay: Driving segments visualization",
+    "Route Replay: Manual time input + Spacebar shortcut",
+    "Tracking: App version logging in Google Sheets",
+    "Tracking: DailyDataStore live updates"
   ],
   "previousFeatures": [
     "Status-Persistenz in Tabellenansicht (v2.5.4)",
