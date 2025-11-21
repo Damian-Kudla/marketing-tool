@@ -36,4 +36,7 @@ export interface LocationData {
   // Netzwerk-Info (OPTIONAL)
   isConnected: boolean;
   connectionType: "wifi" | "cellular" | "none" | "unknown" | null;
+
+  // App-Info (OPTIONAL)
+  appVersion?: string | null;
 }

@@ -1,7 +1,9 @@
 import { google } from 'googleapis';
 import type { LocationData } from '../../shared/externalTrackingTypes';
+import type { GPSCoordinates } from '../../shared/trackingTypes';
 import { googleSheetsService } from './googleSheets';
 import { batchLogger } from './batchLogger';
+import { dailyDataStore } from './dailyDataStore';
 import { getBerlinDate, getBerlinTimestamp } from '../utils/timezone';
 import { insertLog, getCETDate, getUserLogs, type LogInsertData } from './sqliteLogService';
 
@@ -128,12 +130,13 @@ class ExternalTrackingService {
           'Device Serial Number',     // NEU: Hardware-Seriennummer
           'Is Connected',
           'Connection Type',
-          'Received At' // Server-Zeitstempel
+          'Received At', // Server-Zeitstempel
+          'App Version' // NEU: App-Version
         ];
 
         await this.sheetsClient.spreadsheets.values.update({
           spreadsheetId: this.SHEET_ID,
-          range: `'${normalizedUserName}'!A1:T1`,
+          range: `'${normalizedUserName}'!A1:U1`, // Range erweitert auf U
           valueInputOption: 'RAW',
           resource: {
             values: [headers]
@@ -182,7 +185,8 @@ class ExternalTrackingService {
             longitude: locationData.longitude,
             timestamp: locationData.timestamp,
             source: 'external_app', // Markierung für spätere Auswertung
-            receivedAt: getBerlinTimestamp() // Optional: Server-Empfangszeit
+            receivedAt: getBerlinTimestamp(), // Optional: Server-Empfangszeit
+            appVersion: locationData.appVersion // NEU: App-Version
           }
         };
 
@@ -191,6 +195,26 @@ class ExternalTrackingService {
         // Schreibe in Nutzer-Log über batchLogger (Google Sheets)
         batchLogger.addUserActivity(logEntry);
         console.log(`[ExternalTrackingService] Added tracking data to user log for ${user.username} with GPS timestamp ${gpsTimestamp}`);
+
+        // CRITICAL: Update DailyDataStore for live view
+        try {
+          const gpsCoords: GPSCoordinates = {
+            latitude: locationData.latitude,
+            longitude: locationData.longitude,
+            accuracy: locationData.accuracy || 0,
+            altitude: locationData.altitude,
+            altitudeAccuracy: locationData.altitudeAccuracy,
+            heading: locationData.heading,
+            speed: locationData.speed,
+            timestamp: new Date(locationData.timestamp).getTime(),
+            source: 'external_app'
+          };
+          
+          dailyDataStore.addGPS(user.userId, user.username, gpsCoords);
+          console.log(`[ExternalTrackingService] ✅ Added GPS point to DailyStore for ${user.username}`);
+        } catch (error) {
+          console.error('[ExternalTrackingService] ❌ Error updating DailyStore:', error);
+        }
 
         // CRITICAL: AUCH SQLite schreiben (verhindert Datenverlust)
         try {
@@ -260,13 +284,14 @@ class ExternalTrackingService {
         locationData.deviceSerialNumber ?? '',  // NEU: Abwärtskompatibel
         locationData.isConnected,
         locationData.connectionType ?? '',
-        receivedAt
+        receivedAt,
+        locationData.appVersion ?? '' // NEU: App-Version
       ];
 
       // Füge die Daten an das Ende des Sheets an
       await this.sheetsClient.spreadsheets.values.append({
         spreadsheetId: this.SHEET_ID,
-        range: `'${sheetName}'!A:T`,
+        range: `'${sheetName}'!A:U`, // Range erweitert auf U (21 Spalten)
         valueInputOption: 'RAW',
         resource: {
           values: [rowData]

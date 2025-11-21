@@ -11,6 +11,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
+import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Play, Pause, RotateCcw, Zap, MapPin, ArrowUp, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -217,6 +218,16 @@ function calculateDistance(point1: GPSPoint, point2: GPSPoint): number {
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
   return earthRadiusMeters * c;
+}
+
+// Calculate speed between two GPS points (km/h)
+function calculateSpeed(point1: GPSPoint, point2: GPSPoint): number {
+  const timeDiffHours = (point2.timestamp - point1.timestamp) / (1000 * 60 * 60);
+  if (timeDiffHours === 0) return 0;
+  
+  const distance = calculateDistance(point1, point2); // meters
+  const speedKmh = (distance / 1000) / timeDiffHours;
+  return speedKmh;
 }
 
 // Interface for stationary period
@@ -602,6 +613,38 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
   // This ensures pauses are calculated separately for the selected user(s)
   const stationaryPeriods = useMemo(() => detectStationaryPeriods(uaFilteredPoints), [uaFilteredPoints]);
 
+  // Calculate driving segments for timeline visualization
+  const drivingSegments = useMemo(() => {
+    const segments: { start: number; end: number }[] = [];
+    if (uaFilteredPoints.length < 2) return segments;
+
+    let currentSegment: { start: number; end: number } | null = null;
+
+    for (let i = 0; i < uaFilteredPoints.length - 1; i++) {
+      const p1 = uaFilteredPoints[i];
+      const p2 = uaFilteredPoints[i+1];
+      const speed = calculateSpeed(p1, p2);
+
+      // Threshold 8 km/h for driving
+      if (speed >= 8) {
+        if (currentSegment) {
+          currentSegment.end = p2.timestamp;
+        } else {
+          currentSegment = { start: p1.timestamp, end: p2.timestamp };
+        }
+      } else {
+        if (currentSegment) {
+          segments.push(currentSegment);
+          currentSegment = null;
+        }
+      }
+    }
+    if (currentSegment) {
+      segments.push(currentSegment);
+    }
+    return segments;
+  }, [uaFilteredPoints]);
+
   // Display points: Filter by Pause Mode
   const displayPoints = useMemo(() => {
     if (!pauseMode.active || pauseMode.periodIndex === null) {
@@ -652,16 +695,6 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
   const hasExternalGPS = useMemo(() => {
     return basePoints.some(p => p.source === 'followmee' || p.source === 'external' || p.source === 'external_app');
   }, [basePoints]);
-
-  // Calculate speed between two GPS points (km/h)
-  const calculateSpeed = (point1: GPSPoint, point2: GPSPoint): number => {
-    const timeDiffHours = (point2.timestamp - point1.timestamp) / (1000 * 60 * 60);
-    if (timeDiffHours === 0) return 0;
-    
-    const distance = calculateDistance(point1, point2); // meters
-    const speedKmh = (distance / 1000) / timeDiffHours;
-    return speedKmh;
-  };
 
   // Determine movement mode based on speed (walking < 8 km/h, driving >= 8 km/h)
   const getMovementMode = (currentIndex: number): 'walking' | 'driving' => {
@@ -2202,6 +2235,26 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     }
   };
 
+  // Handle manual time input
+  const handleTimeInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const timeStr = e.target.value; // "HH:mm" or "HH:mm:ss"
+    if (!timeStr) return;
+
+    try {
+      const [hours, minutes, seconds] = timeStr.split(':').map(Number);
+      const newDate = new Date(currentTimestamp || startTime);
+      newDate.setHours(hours);
+      newDate.setMinutes(minutes);
+      if (seconds !== undefined) newDate.setSeconds(seconds);
+      
+      // Clamp to range
+      const newTimestamp = Math.max(startTime, Math.min(endTime, newDate.getTime()));
+      handleScrub(newTimestamp);
+    } catch (error) {
+      console.error('Invalid time input:', error);
+    }
+  };
+
   // Manual scrubbing: Update position based on timestamp slider
   const handleScrub = (timestamp: number) => {
     if (isPlaying) {
@@ -2390,7 +2443,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     };
   }, []);
 
-  // Keyboard navigation: Arrow Left/Right for previous/next GPS point
+  // Keyboard navigation: Arrow Left/Right for previous/next GPS point, Space for Play/Pause
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowLeft') {
@@ -2399,6 +2452,16 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
         handleNextPoint();
+      } else if (e.code === 'Space') {
+        // Prevent if typing in input
+        if ((e.target as HTMLElement).tagName === 'INPUT') return;
+        
+        e.preventDefault();
+        if (isPlaying) {
+          pauseAnimation();
+        } else {
+          startAnimation();
+        }
       }
     };
 
@@ -2406,7 +2469,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [currentIndex, displayPoints]);
+  }, [currentIndex, displayPoints, isPlaying]); // Added isPlaying dependency
 
   // Center map on current position
   const centerOnCurrentPosition = () => {
@@ -2523,6 +2586,22 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
                     />
                   );
                 })}
+                {/* Driving segments */}
+                {displayPoints.length > 0 && drivingSegments.map((segment, idx) => {
+                  const totalDuration = endTime - startTime;
+                  if (totalDuration <= 0) return null;
+                  const startPos = ((segment.start - startTime) / totalDuration) * 100;
+                  const endPos = ((segment.end - startTime) / totalDuration) * 100;
+                  const width = endPos - startPos;
+                  return (
+                    <div
+                      key={`drive-${idx}`}
+                      className="absolute h-full bg-blue-500 opacity-40 rounded"
+                      style={{ left: `${startPos}%`, width: `${width}%` }}
+                      title="Fahrt (Auto)"
+                    />
+                  );
+                })}
               </div>
 
               {/* Hour marker ticks */}
@@ -2559,11 +2638,13 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
 
           {/* Current time + Speed */}
           <div className="flex items-center gap-2 lg:gap-3">
-            {currentPosition && (
-              <span className="hidden sm:inline text-sm font-bold whitespace-nowrap font-mono tabular-nums">
-                {format(new Date(currentPosition.timestamp), 'HH:mm:ss', { locale: de })}
-              </span>
-            )}
+            <Input
+              type="time"
+              step="1"
+              value={format(new Date(currentTimestamp || startTime), 'HH:mm:ss', { locale: de })}
+              onChange={handleTimeInputChange}
+              className="w-28 h-8 text-sm font-mono tabular-nums bg-background/50"
+            />
             {/* Speed control removed - fixed at 5s/hour */}
           </div>
         </div>
