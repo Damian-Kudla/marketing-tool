@@ -39,6 +39,8 @@
     "@tanstack/react-query": "^5.60.5",
     "@types/leaflet": "^1.9.21",
     "@types/multer": "^2.0.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "autoprefixer": "^10.4.20",
     "better-sqlite3": "^11.0.0",
     "browser-image-compression": "^2.0.2",
     "class-variance-authority": "^0.7.1",
@@ -48,6 +50,7 @@
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.39.1",
     "drizzle-zod": "^0.7.0",
+    "esbuild": "^0.25.0",
     "express": "^4.21.2",
     "googleapis": "^161.0.0",
     "i18next": "^25.5.3",
@@ -57,6 +60,7 @@
     "luxon": "^3.7.2",
     "multer": "^2.0.2",
     "node-cron": "^3.0.3",
+    "postcss": "^8.4.47",
     "puppeteer": "^24.25.0",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
@@ -66,7 +70,10 @@
     "recharts": "^2.15.2",
     "sharp": "^0.33.0",
     "tailwind-merge": "^2.6.0",
+    "tailwindcss": "^3.4.17",
     "tailwindcss-animate": "^1.0.7",
+    "typescript": "5.6.3",
+    "vite": "^5.4.20",
     "wouter": "^3.3.5",
     "zod": "^3.24.2"
   },
@@ -81,15 +88,8 @@
     "@types/node-cron": "^3.0.11",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.7.0",
-    "autoprefixer": "^10.4.20",
     "cross-env": "^10.1.0",
     "drizzle-kit": "^0.31.4",
-    "esbuild": "^0.25.0",
-    "postcss": "^8.4.47",
-    "tailwindcss": "^3.4.17",
-    "tsx": "^4.20.5",
-    "typescript": "5.6.3",
-    "vite": "^5.4.20"
+    "tsx": "^4.20.5"
   }
 }
