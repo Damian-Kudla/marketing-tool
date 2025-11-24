@@ -722,6 +722,13 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
     // Externe Tracking-Daten sind bereits in gpsPoints enthalten (aus SQLite mit source: 'external_app')
     // Kein separates Laden mehr nötig
 
+    // CRITICAL FIX: Filter out points that don't match the requested date
+    // This removes old FollowMee data that might have been merged incorrectly
+    gpsPoints = gpsPoints.filter(point => {
+      const pointDate = getBerlinDate(point.timestamp);
+      return pointDate === dateStr;
+    });
+
     // Filter GPS points by source if specified
     if (sourceFilter && sourceFilter !== 'all') {
       if (sourceFilter === 'external' || sourceFilter === 'external_app') {
@@ -771,6 +778,12 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
     }
 
     if (rawLogs.length > 0) {
+      // Filter rawLogs by date as well to ensure break calculation is correct
+      rawLogs = rawLogs.filter(log => {
+        const logDate = getBerlinDate(log.timestamp);
+        return logDate === dateStr;
+      });
+
       breaks = await calculateBreaks(rawLogs);
       console.log(`[Admin API] Calculated ${breaks.length} breaks for route`);
     }
