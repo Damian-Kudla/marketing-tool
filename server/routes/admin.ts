@@ -54,8 +54,13 @@ function calculateActionDetails(userData: DailyUserData): {
     'scan', 'bulk_residents_update', 'dataset_create', 'geocode',
     'resident_update', 'resident_delete', 'status_change', 'navigate'
   ]);
+  
+  // Actions to explicitly ignore (not "other", just ignore)
+  const ignoredActions = new Set(['gps_update', 'external_app', 'unknown', '', 'undefined', 'null']);
+
   userData.actionsByType.forEach((count, actionType) => {
-    if (!knownActions.has(actionType)) {
+    if (!knownActions.has(actionType) && !ignoredActions.has(actionType)) {
+      console.log(`[Admin API] Found unknown action type: "${actionType}" (count: ${count}) for user ${userData.username}`);
       details.other += count;
     }
   });

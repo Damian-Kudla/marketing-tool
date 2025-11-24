@@ -10,7 +10,7 @@
 
 import { google } from 'googleapis';
 
-const SHEET_ID = process.env.PAUSE_LOCATIONS_SHEET_ID || '';
+const SHEET_ID = process.env.GOOGLE_LOGS_SHEET_ID || '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
 const API_KEY = process.env.GOOGLE_GEOCODING_API_KEY || '';
 const SHEET_NAME = 'PauseLocations';
 

@@ -329,6 +329,8 @@ class DailyDataStore {
       }
 
       session.actions.forEach((action: ActionLog) => {
+        if (!action.action) return; // Ignore empty actions
+
         // BUGFIX: Validate action timestamp is from today
         const actionDate = new Date(action.timestamp);
         const actionDateStr = getBerlinDate(actionDate);
@@ -340,6 +342,11 @@ class DailyDataStore {
         
         // Skip if we've already processed this action
         if (processedTimestamps!.has(action.timestamp)) {
+          return;
+        }
+
+        // BUGFIX: Ignore tracking/GPS actions
+        if ((action.action as string) === 'gps_update' || (action.action as string) === 'external_app') {
           return;
         }
 
@@ -384,6 +391,8 @@ class DailyDataStore {
    * This ensures actions like dataset_create, bulk_residents_update, etc. are counted
    */
   addAction(userId: string, username: string, actionType: string, residentStatus?: string, previousStatus?: string): void {
+    if (!actionType) return; // Ignore empty actions
+    
     const userData = this.getUserData(userId, username);
     
     const timestamp = Date.now();
@@ -400,6 +409,11 @@ class DailyDataStore {
       return;
     }
     
+    // BUGFIX: Ignore tracking/GPS actions
+    if (actionType === 'gps_update' || actionType === 'external_app') {
+      return;
+    }
+
     // Mark as processed
     processedTimestamps.add(timestamp);
     

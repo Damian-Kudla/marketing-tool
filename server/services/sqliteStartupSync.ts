@@ -610,7 +610,7 @@ class SQLiteStartupSyncService {
       });
 
       const sheets = google.sheets({ version: 'v4', auth });
-      const LOG_SHEET_ID = '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+      const LOG_SHEET_ID = process.env.GOOGLE_LOGS_SHEET_ID || '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
 
       // Get spreadsheet metadata to list all worksheets
       const response = await sheets.spreadsheets.get({
@@ -652,7 +652,7 @@ class SQLiteStartupSyncService {
       });
 
       const sheets = google.sheets({ version: 'v4', auth });
-      const LOG_SHEET_ID = '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+      const LOG_SHEET_ID = process.env.GOOGLE_LOGS_SHEET_ID || '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
 
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: LOG_SHEET_ID,
@@ -705,7 +705,7 @@ class SQLiteStartupSyncService {
       });
 
       const sheets = google.sheets({ version: 'v4', auth });
-      const LOG_SHEET_ID = '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+      const LOG_SHEET_ID = process.env.GOOGLE_LOGS_SHEET_ID || '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
 
       // Get all rows
       const response = await sheets.spreadsheets.values.get({
@@ -790,7 +790,7 @@ class SQLiteStartupSyncService {
       });
 
       const sheets = google.sheets({ version: 'v4', auth });
-      const LOG_SHEET_ID = '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+      const LOG_SHEET_ID = process.env.GOOGLE_LOGS_SHEET_ID || '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
 
       // Get spreadsheet metadata to find sheet ID
       const spreadsheet = await sheets.spreadsheets.get({

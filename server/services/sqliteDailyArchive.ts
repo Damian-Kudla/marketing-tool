@@ -264,6 +264,10 @@ class SQLiteDailyArchiveService {
 
       // Get all users
       const allUsers = await googleSheetsService.getAllUsers();
+      
+      // Get all actual sheets to find IDs
+      const allWorksheets = await this.getAllUserWorksheets();
+      const sheetMap = new Map(allWorksheets.map(s => [s.title, s.sheetId]));
 
       if (allUsers.length === 0) {
         console.log('[Step 4] No users found');
@@ -274,9 +278,15 @@ class SQLiteDailyArchiveService {
 
       for (const user of allUsers) {
         const worksheetName = `${user.username}_${user.userId}`;
+        const sheetId = sheetMap.get(worksheetName);
+        
+        if (sheetId === undefined) {
+          // Sheet doesn't exist for this user, skip
+          continue;
+        }
 
         try {
-          const deleted = await this.deleteOldLogsFromSheet(worksheetName, today);
+          const deleted = await this.deleteOldLogsFromSheet(worksheetName, sheetId, today);
           totalDeleted += deleted;
 
           if (deleted > 0) {
@@ -319,7 +329,7 @@ class SQLiteDailyArchiveService {
       let totalOldLogs = 0;
 
       // Process each user's sheet
-      for (const worksheetName of allWorksheets) {
+      for (const { title: worksheetName } of allWorksheets) {
         try {
           const logs = await this.getAllLogsFromSheet(worksheetName);
 
@@ -428,7 +438,7 @@ class SQLiteDailyArchiveService {
   /**
    * Helper: Get all user worksheets
    */
-  private async getAllUserWorksheets(): Promise<string[]> {
+  private async getAllUserWorksheets(): Promise<{ title: string; sheetId: number }[]> {
     try {
       const sheetsKey = process.env.GOOGLE_SHEETS_KEY || '{}';
       const credentials = JSON.parse(sheetsKey);
@@ -441,19 +451,21 @@ class SQLiteDailyArchiveService {
       });
 
       const sheets = google.sheets({ version: 'v4', auth });
-      const LOG_SHEET_ID = '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+      const LOG_SHEET_ID = process.env.GOOGLE_LOGS_SHEET_ID || '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
 
       const response = await sheets.spreadsheets.get({
         spreadsheetId: LOG_SHEET_ID
       });
 
       const worksheets = response.data.sheets || [];
-      const userSheets: string[] = [];
+      const userSheets: { title: string; sheetId: number }[] = [];
 
       for (const sheet of worksheets) {
         const title = sheet.properties?.title || '';
-        if (title.includes('_') && !title.startsWith('Template')) {
-          userSheets.push(title);
+        const sheetId = sheet.properties?.sheetId;
+        
+        if (title.includes('_') && !title.startsWith('Template') && sheetId !== undefined && sheetId !== null) {
+          userSheets.push({ title, sheetId });
         }
       }
 
@@ -480,7 +492,7 @@ class SQLiteDailyArchiveService {
       });
 
       const sheets = google.sheets({ version: 'v4', auth });
-      const LOG_SHEET_ID = '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+      const LOG_SHEET_ID = process.env.GOOGLE_LOGS_SHEET_ID || '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
 
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: LOG_SHEET_ID,
@@ -609,7 +621,7 @@ class SQLiteDailyArchiveService {
   /**
    * Helper: Delete old logs from sheet
    */
-  private async deleteOldLogsFromSheet(worksheetName: string, today: string): Promise<number> {
+  private async deleteOldLogsFromSheet(worksheetName: string, sheetId: number, today: string): Promise<number> {
     try {
       const sheetsKey = process.env.GOOGLE_SHEETS_KEY || '{}';
       const credentials = JSON.parse(sheetsKey);
@@ -622,7 +634,7 @@ class SQLiteDailyArchiveService {
       });
 
       const sheets = google.sheets({ version: 'v4', auth });
-      const LOG_SHEET_ID = '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+      const LOG_SHEET_ID = process.env.GOOGLE_LOGS_SHEET_ID || '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
 
       // Get all rows
       const response = await sheets.spreadsheets.values.get({
@@ -631,8 +643,6 @@ class SQLiteDailyArchiveService {
       });
 
       const rows = response.data.values || [];
-
-      if (rows.length === 0) return 0;
 
       // Find rows to keep (today's logs AND yesterday's logs for safety)
       // WICHTIG: Behalte Logs von heute UND gestern, lösche nur Logs von vorgestern oder älter
@@ -650,6 +660,24 @@ class SQLiteDailyArchiveService {
         if (logDate >= yesterday) {
           rowsToKeep.push(row);
         }
+      }
+
+      // If sheet is empty (or will be empty), delete it
+      if (rowsToKeep.length === 0) {
+        console.log(`[Step 4]   ${worksheetName} is empty (or all logs old), deleting sheet...`);
+        
+        await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: LOG_SHEET_ID,
+          requestBody: {
+            requests: [{
+              deleteSheet: {
+                sheetId: sheetId
+              }
+            }]
+          }
+        });
+        
+        return rows.length; // All rows deleted (implicitly)
       }
 
       const deleted = rows.length - rowsToKeep.length;

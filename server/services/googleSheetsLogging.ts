@@ -49,7 +49,7 @@ export interface LogEntry {
 }
 
 export class GoogleSheetsLoggingService {
-  private static readonly LOG_SHEET_ID = '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+  private static readonly LOG_SHEET_ID = process.env.GOOGLE_LOGS_SHEET_ID || '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
   private static readonly worksheetCache = new Map<string, boolean>();
 
   // Ensure worksheet exists for user, create if it doesn't

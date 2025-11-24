@@ -221,7 +221,7 @@ class FollowMeeApiService {
       });
 
       const sheetsClient = google.sheets({ version: 'v4', auth });
-      const LOG_SHEET_ID = '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+      const LOG_SHEET_ID = process.env.GOOGLE_LOGS_SHEET_ID || '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
       const worksheetName = `${mapping.username}_${mapping.userId}`;
 
       // Check if worksheet exists

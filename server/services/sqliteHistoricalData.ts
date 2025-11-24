@@ -35,6 +35,9 @@ const STATUS_KEY_MAPPING: Record<string, string> = {
  * Infer action type from endpoint (for historical data without explicit action field)
  */
 function inferActionTypeFromEndpoint(endpoint: string, method?: string): string | null {
+  // External tracking (never count as action)
+  if (endpoint === '/api/external-tracking/location') return null;
+
   // OCR endpoints
   if (endpoint === '/api/ocr') return 'scan';
   if (endpoint === '/api/ocr-correct') return 'bulk_residents_update';
@@ -307,6 +310,33 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
           break;
 
         case 'action':
+          // SPECIAL CASE: External tracking might be misclassified as 'action'
+          // If endpoint is external tracking OR if data contains GPS coordinates, treat as GPS and SKIP action counting
+          const actionEndpoint = logData.endpoint || (log.data as any).endpoint || '';
+          const hasGpsData = (logData.latitude !== undefined && logData.longitude !== undefined) ||
+                             (logData.data?.latitude !== undefined && logData.data?.longitude !== undefined);
+
+          if (actionEndpoint === '/api/external-tracking/location' || hasGpsData) {
+             // Extract GPS data
+             const lat = logData.data?.latitude || logData.latitude;
+             const lon = logData.data?.longitude || logData.longitude;
+             
+             if (lat !== undefined && lon !== undefined) {
+                const gps: GPSCoordinates = {
+                  latitude: lat,
+                  longitude: lon,
+                  accuracy: logData.data?.accuracy || logData.accuracy || 0,
+                  timestamp: log.timestamp,
+                  source: logData.data?.source || logData.source || 'external_app'
+                };
+                userData.gpsPoints.push(gps);
+                trackingData.gps = gps;
+             }
+             
+             // Skip action counting
+             break; 
+          }
+
           // Action data from endpoints (address operations, photos, etc.)
           const actionData = logData;
           trackingData.action = actionData;
@@ -320,7 +350,7 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
           }
           
           // Only count if it's a real action (not just metadata)
-          if (actionType && actionType !== 'unknown') {
+          if (actionType && actionType !== 'unknown' && actionType !== 'gps_update' && actionType !== 'external_app') {
             userData.totalActions++;
             const count = userData.actionsByType.get(actionType) || 0;
             userData.actionsByType.set(actionType, count + 1);
@@ -602,8 +632,8 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
       const gap = currPoint.timestamp - prevPoint.timestamp;
       
       const distance = calculateDistance(
-        { latitude: prevPoint.latitude, longitude: prevPoint.longitude },
-        { latitude: currPoint.latitude, longitude: currPoint.longitude }
+        { latitude: prevPoint.latitude, longitude: prevPoint.longitude, accuracy: 0, timestamp: 0 },
+        { latitude: currPoint.latitude, longitude: currPoint.longitude, accuracy: 0, timestamp: 0 }
       );
       
       // Calculate speed in km/h

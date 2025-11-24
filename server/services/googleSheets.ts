@@ -848,7 +848,7 @@ class GoogleSheetsService implements SheetsService {
 }
 
 class AddressDatasetService implements AddressSheetsService {
-  private readonly ADDRESSES_SHEET_ID = '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+  private readonly ADDRESSES_SHEET_ID = process.env.GOOGLE_LOGS_SHEET_ID || '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
   private readonly ADDRESSES_WORKSHEET_NAME = 'Adressen';
 
   private async ensureAddressesSheetExists(): Promise<void> {
@@ -1305,7 +1305,7 @@ export async function initializeGoogleSheetsCaches(): Promise<void> {
 
 // Category Change Logging Service
 class CategoryChangeLoggingService {
-  private readonly SHEET_ID = '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+  private readonly SHEET_ID = process.env.GOOGLE_LOGS_SHEET_ID || '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
   private readonly WORKSHEET_NAME = 'Log_Änderung_Kategorie';
 
   // Get Sheets client dynamically to avoid initialization issues
@@ -1424,7 +1424,7 @@ class AppointmentService {
   private cacheInitialized: boolean = false;
   private cacheLoadPromise: Promise<void> | null = null;
   private readonly SHEET_NAME = "Termine";
-  private readonly ADDRESSES_SHEET_ID = '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+  private readonly ADDRESSES_SHEET_ID = process.env.GOOGLE_LOGS_SHEET_ID || '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
 
   // Ensure "Termine" sheet exists with proper headers
   async ensureSheetExists(): Promise<void> {

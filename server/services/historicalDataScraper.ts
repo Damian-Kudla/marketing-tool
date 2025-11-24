@@ -11,7 +11,7 @@ import type { DailyUserData, GPSCoordinates, ActionLog, DeviceStatus } from '../
 import { getBerlinDate } from '../utils/timezone';
 
 // Google Sheets Configuration - Uses individual user worksheets in LOG_SHEET_ID
-const LOG_SHEET_ID = '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw'; // Same as GoogleSheetsLoggingService
+const LOG_SHEET_ID = process.env.GOOGLE_LOGS_SHEET_ID || '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw'; // Same as GoogleSheetsLoggingService
 
 // Cache für gescrapte Daten (wird nach Verwendung gelöscht)
 const historicalCache = new Map<string, DailyUserData[]>();
@@ -665,6 +665,30 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
 
     // Actions
     if (log.type === 'action') {
+      // SPECIAL CASE: Check if it's actually GPS data misclassified as action
+      if (log.data.latitude !== undefined && log.data.longitude !== undefined) {
+        const coord: GPSCoordinates = {
+          latitude: log.data.latitude,
+          longitude: log.data.longitude,
+          accuracy: log.data.accuracy || 0,
+          timestamp: timestamp,
+          source: log.data.source || 'external_app',
+        };
+
+        data.gpsPoints.push(coord);
+        
+        // Store raw log as GPS
+        data.rawLogs.push({
+          userId,
+          username,
+          timestamp: timestamp,
+          gps: coord,
+        });
+
+        // Skip action counting
+        return;
+      }
+
       const actionType = log.data.action || log.data.type;
       
       // Skip actions without explicit type
