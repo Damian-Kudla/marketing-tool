@@ -1,23 +1,23 @@
 {
-  "version": "2.8.0",
-  "buildTime": "2025-11-21T15:55:05.271Z",
-  "buildNumber": "build-1763740505271",
+  "version": "2.8.1",
+  "buildTime": "2025-11-24T17:47:07.403Z",
+  "buildNumber": "build-1764006427405",
   "features": [
-    "Feature: Route Replay - Fahrten-Visualisierung (blaue Balken)",
-    "Feature: Route Replay - Manuelle Zeiteingabe & Leertaste (Play/Pause)",
-    "Feature: Tracking - App-Version wird in Logs erfasst",
-    "Fix: Live-View Updates für externe Tracker verbessert"
+    "Feature: Batch-Upload Support für Tracking App (v1.4+)",
+    "Fix: FollowMee Sync - Korrektur von Daten-Duplikaten",
+    "Fix: Admin Dashboard - Filterung ungültiger GPS-Daten",
+    "Fix: Route Replay - Zeiteingabe-Sichtbarkeit verbessert"
   ],
   "technicalDetails": [
-    "Route Replay: Driving segments visualization",
-    "Route Replay: Manual time input + Spacebar shortcut",
-    "Tracking: App version logging in Google Sheets",
-    "Tracking: DailyDataStore live updates"
+    "API: New /api/external-tracking/location/batch endpoint",
+    "FollowMee: Strict date filtering in sync service",
+    "Dashboard: Client-side date filtering for route points",
+    "RouteReplay: Removed conditional rendering for time input"
   ],
   "previousFeatures": [
+    "Route Replay: Fahrten-Visualisierung & Controls (v2.8.0)",
+    "Tracking: App-Version Logging (v2.8.0)",
     "Status-Persistenz in Tabellenansicht (v2.5.4)",
-    "Etagen-Feld: 0 (Erdgeschoss) Support (v2.5.4)",
-    "Foto-Tracking mit MD5-Deduplizierung (v2.5.0)",
-    "Kamera-Follow-System (v2.5.0)"
+    "Etagen-Feld: 0 (Erdgeschoss) Support (v2.5.4)"
   ]
 }
