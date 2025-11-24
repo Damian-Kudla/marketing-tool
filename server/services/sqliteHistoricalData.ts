@@ -235,11 +235,21 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
           // Validate GPS coordinates
           if (gpsData.latitude !== undefined && gpsData.longitude !== undefined &&
               !isNaN(gpsData.latitude) && !isNaN(gpsData.longitude)) {
+            // Use timestamp from data payload if available (especially for FollowMee/External), otherwise use log timestamp
+            // This fixes the issue where FollowMee points use the fetch time instead of the device time
+            let gpsTimestamp = log.timestamp;
+            if (gpsData.timestamp) {
+              const ts = new Date(gpsData.timestamp).getTime();
+              if (!isNaN(ts)) {
+                gpsTimestamp = ts;
+              }
+            }
+
             const gps: GPSCoordinates = {
               latitude: gpsData.latitude,
               longitude: gpsData.longitude,
               accuracy: gpsData.accuracy || 0,
-              timestamp: log.timestamp,
+              timestamp: gpsTimestamp,
               source: gpsData.source || 'native', // Default to 'native' if not specified
               // Extract User-Agent from top-level data (preferred) or inner data
               userAgent: topLevelData.userAgent || logData.userAgent || undefined 

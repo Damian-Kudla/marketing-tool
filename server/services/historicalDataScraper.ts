@@ -560,11 +560,21 @@ function reconstructDailyData(userId: string, logs: ParsedLog[]): DailyUserData 
 
     // GPS Updates
     if (log.type === 'gps' && log.data.latitude && log.data.longitude) {
+      // Use timestamp from data payload if available (especially for FollowMee/External), otherwise use log timestamp
+      // This fixes the issue where FollowMee points use the fetch time instead of the device time
+      let gpsTimestamp = timestamp;
+      if (log.data.timestamp) {
+        const ts = new Date(log.data.timestamp).getTime();
+        if (!isNaN(ts)) {
+          gpsTimestamp = ts;
+        }
+      }
+
       const coord: GPSCoordinates = {
         latitude: log.data.latitude,
         longitude: log.data.longitude,
         accuracy: log.data.accuracy || 0,
-        timestamp: timestamp,
+        timestamp: gpsTimestamp,
         source: log.data.source || 'native', // Extract source from data field (followmee or native)
       };
 
