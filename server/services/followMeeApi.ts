@@ -519,9 +519,15 @@ class FollowMeeApiService {
         const cachedTimestamps = new Set(cachedData.map(d => d.timestamp));
 
         // Find NEW locations (not in cache)
+        // CRITICAL: Filter to ONLY today's locations to prevent re-importing yesterday's data
+        // (The cache is trimmed to today, so yesterday's data would otherwise look "new")
+        const today = getCETDate();
         const newLocations = deviceLocations.filter(loc => {
           const timestamp = this.parseFollowMeeDate(loc.Date);
-          return !cachedTimestamps.has(timestamp);
+          const locDate = getCETDate(timestamp);
+          
+          // Must be from today AND not in cache
+          return locDate === today && !cachedTimestamps.has(timestamp);
         });
 
         if (newLocations.length === 0) {

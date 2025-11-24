@@ -333,6 +333,29 @@ export default function AdminDashboard() {
       }
 
       const result = await response.json();
+
+      // SAFETY FILTER: Filter out points that don't match the selected date
+      // This prevents old data (e.g. from FollowMee cache issues) from appearing in the route
+      if (result.gpsPoints && Array.isArray(result.gpsPoints)) {
+        const targetDate = date;
+        const originalCount = result.gpsPoints.length;
+        
+        result.gpsPoints = result.gpsPoints.filter((point: any) => {
+          // Use date-fns format to ensure consistent local date comparison
+          const pointDate = format(new Date(point.timestamp), 'yyyy-MM-dd');
+          return pointDate === targetDate;
+        });
+
+        if (result.gpsPoints.length < originalCount) {
+          console.log(`[Frontend] Filtered ${originalCount - result.gpsPoints.length} points from wrong date (Target: ${targetDate})`);
+        }
+
+        // Update total points count
+        if (result.totalPoints !== undefined) {
+          result.totalPoints = result.gpsPoints.length;
+        }
+      }
+
       setRouteData(result);
 
     } catch (err: any) {
