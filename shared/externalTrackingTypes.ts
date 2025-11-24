@@ -40,3 +40,11 @@ export interface LocationData {
   // App-Info (OPTIONAL)
   appVersion?: string | null;
 }
+
+export interface BatchLocationData {
+  batchId?: string;
+  deviceUniqueId?: string;
+  locations: LocationData[];
+}
+
+export type BatchRequest = LocationData[] | BatchLocationData;

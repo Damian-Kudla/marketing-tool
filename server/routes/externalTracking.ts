@@ -82,6 +82,63 @@ router.post('/location', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/external-tracking/location/batch
+ *
+ * Empfängt einen Batch von Location-Daten
+ * Body: LocationData[] oder { locations: LocationData[], ... }
+ */
+router.post('/location/batch', async (req: Request, res: Response) => {
+  try {
+    let batchData: LocationData[] = [];
+    const body = req.body;
+
+    if (Array.isArray(body)) {
+      batchData = body;
+    } else if (body && Array.isArray(body.locations)) {
+      batchData = body.locations;
+    } else {
+      return res.status(400).json({
+        error: 'Invalid batch format. Expected array of locations or object with locations array.'
+      });
+    }
+
+    if (batchData.length === 0) {
+      return res.json({ success: true, message: 'Empty batch received' });
+    }
+
+    // Validierung: Prüfe ob alle Items die notwendigen Felder haben
+    const invalidItem = batchData.find(item => 
+      !item.timestamp || 
+      typeof item.latitude !== 'number' || 
+      typeof item.longitude !== 'number' ||
+      !item.userName
+    );
+
+    if (invalidItem) {
+      return res.status(400).json({
+        error: 'Invalid batch data. One or more items are missing required fields (timestamp, latitude, longitude, userName).'
+      });
+    }
+
+    console.log(`[External Tracking] Received batch of ${batchData.length} locations`);
+
+    await externalTrackingService.saveBatchLocationData(batchData);
+
+    res.json({
+      success: true,
+      message: `Successfully processed batch of ${batchData.length} locations`
+    });
+
+  } catch (error) {
+    console.error('[External Tracking] Error processing batch data:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
  * GET /api/external-tracking/status
  *
  * Status-Endpunkt zum Testen der API-Verbindung

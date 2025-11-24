@@ -162,81 +162,7 @@ class ExternalTrackingService {
       const user = await googleSheetsService.getUserByTrackingName(locationData.userName);
 
       if (user) {
-        // Nutzer gefunden - schreibe in dessen Log
-        console.log(`[ExternalTrackingService] Found user ${user.username} for tracking name "${locationData.userName}"`);
-
-        // ✅ Verwende GPS-Timestamp aus dem Request-Body, NICHT Server-Zeit!
-        const gpsTimestamp = getBerlinTimestamp(new Date(locationData.timestamp));
-        
-        // Debug: Check precision of received coordinates
-        console.log(`[ExternalTrackingService] Received coordinates - lat: ${locationData.latitude} (type: ${typeof locationData.latitude}), lon: ${locationData.longitude} (type: ${typeof locationData.longitude})`);
-        console.log(`[ExternalTrackingService] Coordinates as string: lat="${locationData.latitude.toString()}", lon="${locationData.longitude.toString()}"`);
-
-        // Erstelle Log-Eintrag mit GPS-Daten im data-Feld
-        const logEntry = {
-          timestamp: gpsTimestamp, // ✅ GPS-Zeit verwenden
-          userId: user.userId,
-          username: user.username,
-          endpoint: '/api/external-tracking/location',
-          method: 'POST',
-          userAgent: 'External Tracking App',
-          data: {
-            latitude: locationData.latitude,
-            longitude: locationData.longitude,
-            timestamp: locationData.timestamp,
-            source: 'external_app', // Markierung für spätere Auswertung
-            receivedAt: getBerlinTimestamp(), // Optional: Server-Empfangszeit
-            appVersion: locationData.appVersion // NEU: App-Version
-          }
-        };
-
-        console.log(`[ExternalTrackingService] LogEntry data field:`, JSON.stringify(logEntry.data));
-
-        // Schreibe in Nutzer-Log über batchLogger (Google Sheets)
-        batchLogger.addUserActivity(logEntry);
-        console.log(`[ExternalTrackingService] Added tracking data to user log for ${user.username} with GPS timestamp ${gpsTimestamp}`);
-
-        // CRITICAL: Update DailyDataStore for live view
-        try {
-          const gpsCoords: GPSCoordinates = {
-            latitude: locationData.latitude,
-            longitude: locationData.longitude,
-            accuracy: locationData.accuracy || 0,
-            altitude: locationData.altitude,
-            altitudeAccuracy: locationData.altitudeAccuracy,
-            heading: locationData.heading,
-            speed: locationData.speed,
-            timestamp: new Date(locationData.timestamp).getTime(),
-            source: 'external_app'
-          };
-          
-          dailyDataStore.addGPS(user.userId, user.username, gpsCoords);
-          console.log(`[ExternalTrackingService] ✅ Added GPS point to DailyStore for ${user.username}`);
-        } catch (error) {
-          console.error('[ExternalTrackingService] ❌ Error updating DailyStore:', error);
-        }
-
-        // CRITICAL: AUCH SQLite schreiben (verhindert Datenverlust)
-        try {
-          const date = getCETDate(new Date(locationData.timestamp).getTime());
-          const sqliteLog: LogInsertData = {
-            userId: user.userId,
-            username: user.username,
-            timestamp: new Date(locationData.timestamp).getTime(),
-            logType: 'gps', // External GPS ist immer GPS
-            data: logEntry.data
-          };
-
-          const inserted = insertLog(date, sqliteLog);
-          if (inserted) {
-            console.log(`[ExternalTrackingService] ✅ Written to SQLite for ${user.username} on ${date}`);
-          } else {
-            console.log(`[ExternalTrackingService] ℹ️  Duplicate entry in SQLite (already exists)`);
-          }
-        } catch (error) {
-          console.error('[ExternalTrackingService] ❌ Error writing to SQLite:', error);
-          // Don't throw - Google Sheets backup still works
-        }
+        await this.saveLocationDataForKnownUser(user, locationData);
       } else {
         // Nutzer nicht gefunden - Fallback: schreibe in Google Sheet
         console.log(`[ExternalTrackingService] No user found for tracking name "${locationData.userName}" - writing to Google Sheet as fallback`);
@@ -247,6 +173,175 @@ class ExternalTrackingService {
       // Bei Fehler auch Fallback zu Google Sheet
       console.log('[ExternalTrackingService] Falling back to Google Sheet due to error');
       await this.saveToGoogleSheet(locationData);
+    }
+  }
+
+  /**
+   * Speichert einen Batch von Location-Daten
+   */
+  async saveBatchLocationData(batchData: LocationData[]): Promise<void> {
+    // Gruppiere nach User, um effizient zu verarbeiten
+    const userBatches = new Map<string, LocationData[]>();
+
+    for (const data of batchData) {
+      if (!data.userName) continue;
+      const existing = userBatches.get(data.userName) || [];
+      existing.push(data);
+      userBatches.set(data.userName, existing);
+    }
+
+    for (const [userName, locations] of userBatches) {
+      try {
+        const user = await googleSheetsService.getUserByTrackingName(userName);
+
+        if (user) {
+          // User gefunden - verarbeite jeden Punkt einzeln für Logs/SQLite/DailyStore
+          console.log(`[ExternalTrackingService] Processing batch of ${locations.length} points for user ${user.username}`);
+          
+          // Sortiere nach Timestamp, um korrekte Reihenfolge sicherzustellen
+          locations.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+          for (const locationData of locations) {
+             await this.saveLocationDataForKnownUser(user, locationData);
+          }
+        } else {
+          // Fallback: Batch write to Google Sheet
+          console.log(`[ExternalTrackingService] No user found for "${userName}" - writing batch to Google Sheet`);
+          await this.saveBatchToGoogleSheet(userName, locations);
+        }
+      } catch (error) {
+        console.error(`[ExternalTrackingService] Error processing batch for user ${userName}:`, error);
+        // Fallback for this user's batch
+        await this.saveBatchToGoogleSheet(userName, locations);
+      }
+    }
+  }
+
+  /**
+   * Interne Methode zum Speichern für einen bekannten Nutzer
+   */
+  private async saveLocationDataForKnownUser(user: any, locationData: LocationData): Promise<void> {
+    // Nutzer gefunden - schreibe in dessen Log
+    console.log(`[ExternalTrackingService] Found user ${user.username} for tracking name "${locationData.userName}"`);
+
+    // ✅ Verwende GPS-Timestamp aus dem Request-Body, NICHT Server-Zeit!
+    const gpsTimestamp = getBerlinTimestamp(new Date(locationData.timestamp));
+    
+    // Erstelle Log-Eintrag mit GPS-Daten im data-Feld
+    const logEntry = {
+      timestamp: gpsTimestamp, // ✅ GPS-Zeit verwenden
+      userId: user.userId,
+      username: user.username,
+      endpoint: '/api/external-tracking/location',
+      method: 'POST',
+      userAgent: 'External Tracking App',
+      data: {
+        latitude: locationData.latitude,
+        longitude: locationData.longitude,
+        timestamp: locationData.timestamp,
+        source: 'external_app', // Markierung für spätere Auswertung
+        receivedAt: getBerlinTimestamp(), // Optional: Server-Empfangszeit
+        appVersion: locationData.appVersion // NEU: App-Version
+      }
+    };
+
+    // Schreibe in Nutzer-Log über batchLogger (Google Sheets)
+    batchLogger.addUserActivity(logEntry);
+    console.log(`[ExternalTrackingService] Added tracking data to user log for ${user.username} with GPS timestamp ${gpsTimestamp}`);
+
+    // CRITICAL: Update DailyDataStore for live view
+    try {
+      const gpsCoords: GPSCoordinates = {
+        latitude: locationData.latitude,
+        longitude: locationData.longitude,
+        accuracy: locationData.accuracy || 0,
+        altitude: locationData.altitude,
+        altitudeAccuracy: locationData.altitudeAccuracy,
+        heading: locationData.heading,
+        speed: locationData.speed,
+        timestamp: new Date(locationData.timestamp).getTime(),
+        source: 'external_app'
+      };
+      
+      dailyDataStore.addGPS(user.userId, user.username, gpsCoords);
+    } catch (error) {
+      console.error('[ExternalTrackingService] ❌ Error updating DailyStore:', error);
+    }
+
+    // CRITICAL: AUCH SQLite schreiben (verhindert Datenverlust)
+    try {
+      const date = getCETDate(new Date(locationData.timestamp).getTime());
+      const sqliteLog: LogInsertData = {
+        userId: user.userId,
+        username: user.username,
+        timestamp: new Date(locationData.timestamp).getTime(),
+        logType: 'gps', // External GPS ist immer GPS
+        data: logEntry.data
+      };
+
+      const inserted = insertLog(date, sqliteLog);
+      if (inserted) {
+        console.log(`[ExternalTrackingService] ✅ Written to SQLite for ${user.username} on ${date}`);
+      } else {
+        console.log(`[ExternalTrackingService] ℹ️  Duplicate entry in SQLite (already exists)`);
+      }
+    } catch (error) {
+      console.error('[ExternalTrackingService] ❌ Error writing to SQLite:', error);
+    }
+  }
+
+  /**
+   * Fallback: Speichert einen Batch von Location-Daten in das entsprechende Google Sheet
+   */
+  private async saveBatchToGoogleSheet(userName: string, locations: LocationData[]): Promise<void> {
+    if (!this.sheetsEnabled || !this.sheetsClient) {
+      throw new Error('Google Sheets API not available');
+    }
+
+    try {
+      // Stelle sicher, dass ein Sheet für diesen Nutzer existiert
+      const sheetName = await this.ensureUserSheetExists(userName);
+
+      // Bereite die Daten-Zeilen vor
+      const receivedAt = getBerlinTimestamp();
+      const rows = locations.map(locationData => [
+        locationData.timestamp,
+        locationData.latitude,
+        locationData.longitude,
+        locationData.altitude ?? '',
+        locationData.accuracy ?? '',
+        locationData.altitudeAccuracy ?? '',
+        locationData.heading ?? '',
+        locationData.speed ?? '',
+        locationData.userName,
+        locationData.batteryLevel ?? '',
+        locationData.batteryState ?? '',
+        locationData.isCharging,
+        locationData.deviceName ?? '',
+        locationData.deviceModel ?? '',
+        locationData.osVersion ?? '',
+        locationData.deviceUniqueId ?? '',
+        locationData.deviceSerialNumber ?? '',
+        locationData.isConnected,
+        locationData.connectionType ?? '',
+        receivedAt,
+        locationData.appVersion ?? ''
+      ]);
+
+      // Füge die Daten an das Ende des Sheets an
+      await this.sheetsClient.spreadsheets.values.append({
+        spreadsheetId: this.SHEET_ID,
+        range: `'${sheetName}'!A:U`,
+        valueInputOption: 'RAW',
+        resource: {
+          values: rows
+        }
+      });
+
+      console.log(`[ExternalTrackingService] Successfully saved batch of ${rows.length} locations to Google Sheet for: ${userName}`);
+    } catch (error) {
+      console.error('[ExternalTrackingService] Error saving batch to Google Sheet:', error);
+      throw error;
     }
   }
 
