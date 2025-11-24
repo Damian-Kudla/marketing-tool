@@ -415,7 +415,7 @@ class SQLiteStartupSyncService {
         }
 
         // Rate limiting
-        await this.sleep(500);
+        await this.sleep(2000);
       }
 
       // Now merge all collected logs into DBs (grouped by date)
@@ -561,7 +561,7 @@ class SQLiteStartupSyncService {
         stats.errors.push(`Failed to clean ${worksheetName}`);
       }
 
-      await this.sleep(1000); // Rate limiting
+      await this.sleep(5000); // Rate limiting
     }
 
     console.log(`[Phase 6] ✅ Deleted ${stats.sheetsRowsDeleted} total rows`);

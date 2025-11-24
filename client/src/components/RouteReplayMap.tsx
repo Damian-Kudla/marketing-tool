@@ -49,6 +49,12 @@ interface GapSegment {
   distanceMeters: number;
 }
 
+interface RouteSegment {
+  points: [number, number][];
+  source: 'native' | 'followmee' | 'external' | 'external_app';
+  userAgent?: string;
+}
+
 interface RouteReplayMapProps {
   username: string;
   gpsPoints: GPSPoint[];
@@ -1325,8 +1331,8 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     : animatedRoute;
 
   // Create polyline segments grouped by source for multi-colored route
-  const createRouteSegments = (points: GPSPoint[], gapIds?: Set<string>) => {
-    const segments: { points: [number, number][]; source: 'native' | 'followmee' | 'external' | 'external_app' }[] = [];
+  const createRouteSegments = (points: GPSPoint[], gapIds?: Set<string>): RouteSegment[] => {
+    const segments: RouteSegment[] = [];
 
     if (points.length < 2) return segments;
 
@@ -1371,7 +1377,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
 
   // Generate segments for ALL active users
   const fullRouteSegments = useMemo(() => {
-    let allSegments: any[] = [];
+    let allSegments: RouteSegment[] = [];
     
     // Process each user's points
     Object.entries(pointsByUser).forEach(([key, points]) => {
@@ -1380,7 +1386,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
       
       // Add user info to segments
       segments.forEach(seg => {
-        (seg as any).userAgent = key;
+        seg.userAgent = key;
       });
       
       allSegments = [...allSegments, ...segments];
@@ -1391,7 +1397,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
 
   // Generate animated segments for ALL active users
   const animatedRouteSegments = useMemo(() => {
-    let allSegments: any[] = [];
+    let allSegments: RouteSegment[] = [];
     
     Object.entries(pointsByUser).forEach(([key, points]) => {
       // Filter points up to current timestamp
@@ -1408,7 +1414,7 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
       const segments = createRouteSegments(pointsToDraw, snapToRoadsEnabled ? gapSegmentIdSet : undefined);
       
       segments.forEach(seg => {
-        (seg as any).userAgent = key;
+        seg.userAgent = key;
       });
       
       allSegments = [...allSegments, ...segments];
@@ -1430,8 +1436,8 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     overlays.fullRoutes = fullRouteSegments.map(segment => {
       // Use User-Agent color for native segments, source color for others
       let color = SOURCE_COLORS[segment.source || 'native'];
-      if (segment.source === 'native' && (segment as any).userAgent) {
-        const ua = (segment as any).userAgent;
+      if (segment.source === 'native' && segment.userAgent) {
+        const ua = segment.userAgent;
         const index = availableUserAgents.indexOf(ua);
         color = getUserAgentColor(ua, index >= 0 ? index : 0);
       }
@@ -1458,8 +1464,8 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     overlays.animatedRoutes = animatedRouteSegments.map(segment => {
       // Use User-Agent color for native segments, source color for others
       let color = SOURCE_COLORS[segment.source || 'native'];
-      if (segment.source === 'native' && (segment as any).userAgent) {
-        const ua = (segment as any).userAgent;
+      if (segment.source === 'native' && segment.userAgent) {
+        const ua = segment.userAgent;
         const index = availableUserAgents.indexOf(ua);
         color = getUserAgentColor(ua, index >= 0 ? index : 0);
       }
@@ -2032,12 +2038,12 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
 
     // Clear markers for inactive users
     const activeKeys = new Set(Object.keys(currentPositions));
-    for (const [key, marker] of overlays.userMarkers.entries()) {
+    Array.from(overlays.userMarkers.entries()).forEach(([key, marker]) => {
       if (!activeKeys.has(key)) {
         marker.setMap(null);
         overlays.userMarkers.delete(key);
       }
-    }
+    });
 
     // Update or create markers for active users
     Object.entries(currentPositions).forEach(([key, position]) => {
