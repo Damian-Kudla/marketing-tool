@@ -579,7 +579,6 @@ class FollowMeeApiService {
           .sort((a, b) => a.timestamp - b.timestamp);
 
         // Keep only today's data in cache (to prevent memory growth)
-        const today = getCETDate();
         const trimmedCache = updatedCache.filter(d => {
           const logDate = getCETDate(d.timestamp);
           return logDate === today;
