@@ -19,9 +19,14 @@ class ExternalTrackingService {
   private readonly SHEET_ID = '1OspTbAfG6TM4SiUIHeRAF_QlODy3oHjubbiUTRGDo3Y';
   private sheetsClient: any = null;
   private sheetsEnabled = false;
+  private locationBuffer: LocationData[] = [];
+  private flushInterval: NodeJS.Timeout | null = null;
+  private knownSheets: Set<string> = new Set();
 
   constructor() {
     this.initializeClient();
+    // Flush buffer every minute to avoid rate limits
+    this.flushInterval = setInterval(() => this.flushBuffer(), 60 * 1000);
   }
 
   /**
@@ -82,6 +87,11 @@ class ExternalTrackingService {
 
     const normalizedUserName = this.normalizeUserName(userName);
 
+    // Check cache first
+    if (this.knownSheets.has(normalizedUserName)) {
+      return normalizedUserName;
+    }
+
     try {
       // Prüfe ob das Sheet bereits existiert
       const response = await this.sheetsClient.spreadsheets.get({
@@ -92,7 +102,9 @@ class ExternalTrackingService {
         (sheet: any) => sheet.properties?.title === normalizedUserName
       );
 
-      if (!sheetExists) {
+      if (sheetExists) {
+        this.knownSheets.add(normalizedUserName);
+      } else {
         // Erstelle das Sheet
         await this.sheetsClient.spreadsheets.batchUpdate({
           spreadsheetId: this.SHEET_ID,
@@ -144,6 +156,7 @@ class ExternalTrackingService {
         });
 
         console.log(`[ExternalTrackingService] Added headers to sheet: ${normalizedUserName}`);
+        this.knownSheets.add(normalizedUserName);
       }
 
       return normalizedUserName;
@@ -164,15 +177,15 @@ class ExternalTrackingService {
       if (user) {
         await this.saveLocationDataForKnownUser(user, locationData);
       } else {
-        // Nutzer nicht gefunden - Fallback: schreibe in Google Sheet
-        console.log(`[ExternalTrackingService] No user found for tracking name "${locationData.userName}" - writing to Google Sheet as fallback`);
-        await this.saveToGoogleSheet(locationData);
+        // Nutzer nicht gefunden - Fallback: Buffer für Batch-Write
+        console.log(`[ExternalTrackingService] No user found for tracking name "${locationData.userName}" - buffering for batch write`);
+        this.locationBuffer.push(locationData);
       }
     } catch (error) {
       console.error('[ExternalTrackingService] Error saving location data:', error);
-      // Bei Fehler auch Fallback zu Google Sheet
-      console.log('[ExternalTrackingService] Falling back to Google Sheet due to error');
-      await this.saveToGoogleSheet(locationData);
+      // Bei Fehler auch Fallback zu Buffer
+      console.log('[ExternalTrackingService] Buffering data due to error');
+      this.locationBuffer.push(locationData);
     }
   }
 
@@ -190,7 +203,7 @@ class ExternalTrackingService {
       userBatches.set(data.userName, existing);
     }
 
-    for (const [userName, locations] of userBatches) {
+    for (const [userName, locations] of Array.from(userBatches)) {
       try {
         const user = await googleSheetsService.getUserByTrackingName(userName);
 
@@ -199,20 +212,20 @@ class ExternalTrackingService {
           console.log(`[ExternalTrackingService] Processing batch of ${locations.length} points for user ${user.username}`);
           
           // Sortiere nach Timestamp, um korrekte Reihenfolge sicherzustellen
-          locations.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+          locations.sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
           for (const locationData of locations) {
              await this.saveLocationDataForKnownUser(user, locationData);
           }
         } else {
-          // Fallback: Batch write to Google Sheet
-          console.log(`[ExternalTrackingService] No user found for "${userName}" - writing batch to Google Sheet`);
-          await this.saveBatchToGoogleSheet(userName, locations);
+          // Fallback: Buffer batch
+          console.log(`[ExternalTrackingService] No user found for "${userName}" - buffering batch`);
+          this.locationBuffer.push(...locations);
         }
       } catch (error) {
         console.error(`[ExternalTrackingService] Error processing batch for user ${userName}:`, error);
         // Fallback for this user's batch
-        await this.saveBatchToGoogleSheet(userName, locations);
+        this.locationBuffer.push(...locations);
       }
     }
   }
@@ -255,10 +268,10 @@ class ExternalTrackingService {
         latitude: locationData.latitude,
         longitude: locationData.longitude,
         accuracy: locationData.accuracy || 0,
-        altitude: locationData.altitude,
-        altitudeAccuracy: locationData.altitudeAccuracy,
-        heading: locationData.heading,
-        speed: locationData.speed,
+        altitude: locationData.altitude ?? undefined,
+        altitudeAccuracy: locationData.altitudeAccuracy ?? undefined,
+        heading: locationData.heading ?? undefined,
+        speed: locationData.speed ?? undefined,
         timestamp: new Date(locationData.timestamp).getTime(),
         source: 'external_app'
       };
@@ -491,6 +504,39 @@ class ExternalTrackingService {
       enabled: this.sheetsEnabled,
       sheetId: this.SHEET_ID
     };
+  }
+
+  /**
+   * Flushes the buffered location data to Google Sheets
+   */
+  private async flushBuffer(): Promise<void> {
+    if (this.locationBuffer.length === 0) return;
+
+    console.log(`[ExternalTrackingService] Flushing ${this.locationBuffer.length} buffered locations to Google Sheets...`);
+    
+    // Copy and clear buffer immediately to handle new incoming data
+    const bufferToProcess = [...this.locationBuffer];
+    this.locationBuffer = [];
+
+    // Group by user
+    const userBatches = new Map<string, LocationData[]>();
+    for (const data of bufferToProcess) {
+      if (!data.userName) continue;
+      const existing = userBatches.get(data.userName) || [];
+      existing.push(data);
+      userBatches.set(data.userName, existing);
+    }
+
+    // Process each user batch
+    for (const [userName, locations] of Array.from(userBatches)) {
+      try {
+        console.log(`[ExternalTrackingService] Writing batch of ${locations.length} locations for unknown user "${userName}"`);
+        await this.saveBatchToGoogleSheet(userName, locations);
+      } catch (error) {
+        console.error(`[ExternalTrackingService] Error flushing buffer for user ${userName}:`, error);
+        // Optional: Re-add to buffer? For now, we just log error to avoid infinite loops
+      }
+    }
   }
 }
 
