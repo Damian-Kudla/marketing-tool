@@ -594,6 +594,11 @@ export async function generateDailyReport(
  * Upload report to Google Drive
  */
 export async function uploadReportToDrive(report: DailyReport): Promise<string> {
+  if (!REPORTS_FOLDER_ID) {
+    console.error('[DailyReport] GOOGLE_DRIVE_REPORTS_FOLDER_ID is not set. Skipping upload.');
+    throw new Error('GOOGLE_DRIVE_REPORTS_FOLDER_ID is not set');
+  }
+
   const auth = getGoogleAuth();
   const drive = google.drive({ version: 'v3', auth });
 

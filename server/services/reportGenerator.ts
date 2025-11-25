@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import puppeteer from 'puppeteer';
+// import puppeteer from 'puppeteer'; // Disabled to optimize build time
 import { scrapeDayData } from './historicalDataScraper';
 import type { DailyUserData, UserReport, DailyReport } from '../../shared/trackingTypes';
 import { getBerlinDate } from '../utils/timezone';
@@ -12,6 +12,8 @@ import { getBerlinDate } from '../utils/timezone';
  * - Fetches data from Google Sheets via historicalDataScraper
  * - Reports are generated on-demand and deleted after download
  * - No persistent storage to save resources
+ * 
+ * NOTE: PDF generation is currently DISABLED to reduce build times (puppeteer removed).
  */
 
 const __filename = fileURLToPath(import.meta.url);
@@ -56,6 +58,10 @@ cleanupOldReports();
  * Generate daily report for all users
  */
 export async function generateDailyReport(date: string): Promise<string> {
+  console.log(`[ReportGenerator] PDF generation requested for ${date}, but feature is DISABLED.`);
+  throw new Error('PDF generation is currently disabled to optimize server build times.');
+
+  /* Feature disabled
   console.log(`[ReportGenerator] Generating daily report for ${date}...`);
 
   // Fetch from Google Sheets via historicalDataScraper
@@ -100,6 +106,7 @@ export async function generateDailyReport(date: string): Promise<string> {
 
   console.log(`[ReportGenerator] Report generated successfully: ${filePath}`);
   return filePath;
+  */
 }
 
 /**
@@ -160,6 +167,8 @@ function createUserReport(userData: DailyUserData): UserReport {
  * Generate PDF using Puppeteer (HTML → PDF)
  */
 async function generatePDF(report: DailyReport): Promise<string> {
+  throw new Error('PDF generation is disabled.');
+  /*
   const fileName = `daily-report-${report.date}.pdf`;
   const filePath = path.join(REPORTS_DIR, fileName);
 
@@ -183,6 +192,7 @@ async function generatePDF(report: DailyReport): Promise<string> {
   await browser.close();
   console.log('[ReportGenerator] PDF generated:', filePath);
   return filePath;
+  */
 }
 
 /**

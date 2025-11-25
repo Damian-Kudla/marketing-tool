@@ -238,7 +238,7 @@ export class GoogleSheetsStorage implements IStorage {
         console.log(`[cleanStreetData] Extracted house number from street: "${street}" → street="${cleanedStreet}", number="${cleanedHouseNumber}"`);
       } else {
         // No house number in street and houseNumber field is empty → Skip this row
-        console.warn(`[cleanStreetData] ⚠️ Skipping row: No house number found in "${street}"`);
+        // console.warn(`[cleanStreetData] ⚠️ Skipping row: No house number found in "${street}"`);
         return { street: null, houseNumber: null, shouldSkip: true };
       }
     }

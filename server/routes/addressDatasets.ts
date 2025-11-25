@@ -428,6 +428,16 @@ router.get('/search-local', async (req, res) => {
         recentDatasetExists: false,
       });
     }
+
+    // Check if street is provided (required for local search)
+    const street = req.query.street as string;
+    if (!street || !street.trim()) {
+      // Return empty result if street is not provided yet
+      return res.json({
+        datasets: [],
+        recentDatasetExists: false,
+      });
+    }
     
     // Now validate the full address (both postal and number are guaranteed to be valid)
     const address = addressSchema.parse(req.query);
