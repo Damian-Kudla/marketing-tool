@@ -22,6 +22,7 @@ class ExternalTrackingService {
   private locationBuffer: LocationData[] = [];
   private flushInterval: NodeJS.Timeout | null = null;
   private knownSheets: Set<string> = new Set();
+  private sheetsLoaded = false;
 
   constructor() {
     this.initializeClient();
@@ -78,6 +79,34 @@ class ExternalTrackingService {
   }
 
   /**
+   * Lädt alle existierenden Sheet-Namen einmalig, um Read-Requests zu sparen
+   */
+  private async loadExistingSheets(): Promise<void> {
+    if (!this.sheetsEnabled || !this.sheetsClient) return;
+    
+    try {
+      console.log('[ExternalTrackingService] Pre-loading existing sheets to cache...');
+      const response = await this.sheetsClient.spreadsheets.get({
+        spreadsheetId: this.SHEET_ID,
+        fields: 'sheets.properties.title'
+      });
+
+      if (response.data.sheets) {
+        response.data.sheets.forEach((sheet: any) => {
+          if (sheet.properties?.title) {
+            this.knownSheets.add(sheet.properties.title);
+          }
+        });
+      }
+      this.sheetsLoaded = true;
+      console.log(`[ExternalTrackingService] Successfully cached ${this.knownSheets.size} existing sheets`);
+    } catch (error) {
+      console.error('[ExternalTrackingService] Failed to pre-load sheets:', error);
+      // Bei Fehler nicht auf true setzen, damit wir es später nochmal versuchen können
+    }
+  }
+
+  /**
    * Erstellt ein neues Sheet (Tabellenblatt) für einen Nutzer, falls es noch nicht existiert
    */
   private async ensureUserSheetExists(userName: string): Promise<string> {
@@ -92,72 +121,68 @@ class ExternalTrackingService {
       return normalizedUserName;
     }
 
+    // Optimization: Load all sheets once if not yet loaded
+    if (!this.sheetsLoaded) {
+      await this.loadExistingSheets();
+      // Check cache again after loading
+      if (this.knownSheets.has(normalizedUserName)) {
+        return normalizedUserName;
+      }
+    }
+
     try {
-      // Prüfe ob das Sheet bereits existiert
-      const response = await this.sheetsClient.spreadsheets.get({
+      // Erstelle das Sheet
+      await this.sheetsClient.spreadsheets.batchUpdate({
         spreadsheetId: this.SHEET_ID,
+        resource: {
+          requests: [{
+            addSheet: {
+              properties: {
+                title: normalizedUserName,
+              }
+            }
+          }]
+        }
       });
 
-      const sheetExists = response.data.sheets?.some(
-        (sheet: any) => sheet.properties?.title === normalizedUserName
-      );
+      console.log(`[ExternalTrackingService] Created new sheet for user: ${normalizedUserName}`);
 
-      if (sheetExists) {
-        this.knownSheets.add(normalizedUserName);
-      } else {
-        // Erstelle das Sheet
-        await this.sheetsClient.spreadsheets.batchUpdate({
-          spreadsheetId: this.SHEET_ID,
-          resource: {
-            requests: [{
-              addSheet: {
-                properties: {
-                  title: normalizedUserName,
-                }
-              }
-            }]
-          }
-        });
+      // Füge Header-Zeile hinzu
+      const headers = [
+        'Timestamp',
+        'Latitude',
+        'Longitude',
+        'Altitude',
+        'Accuracy',
+        'Altitude Accuracy',
+        'Heading',
+        'Speed',
+        'User Name',
+        'Battery Level',
+        'Battery State',
+        'Is Charging',
+        'Device Name',
+        'Device Model',
+        'OS Version',
+        'Device Unique ID',
+        'Device Serial Number',
+        'Is Connected',
+        'Connection Type',
+        'Received At',
+        'App Version'
+      ];
 
-        console.log(`[ExternalTrackingService] Created new sheet for user: ${normalizedUserName}`);
+      await this.sheetsClient.spreadsheets.values.update({
+        spreadsheetId: this.SHEET_ID,
+        range: `'${normalizedUserName}'!A1:U1`,
+        valueInputOption: 'RAW',
+        resource: {
+          values: [headers]
+        }
+      });
 
-        // Füge Header-Zeile hinzu
-        const headers = [
-          'Timestamp',
-          'Latitude',
-          'Longitude',
-          'Altitude',
-          'Accuracy',
-          'Altitude Accuracy',
-          'Heading',
-          'Speed',
-          'User Name',
-          'Battery Level',
-          'Battery State',
-          'Is Charging',
-          'Device Name',
-          'Device Model',
-          'OS Version',
-          'Device Unique ID',         // NEU: Eindeutige Geräte-ID
-          'Device Serial Number',     // NEU: Hardware-Seriennummer
-          'Is Connected',
-          'Connection Type',
-          'Received At', // Server-Zeitstempel
-          'App Version' // NEU: App-Version
-        ];
-
-        await this.sheetsClient.spreadsheets.values.update({
-          spreadsheetId: this.SHEET_ID,
-          range: `'${normalizedUserName}'!A1:U1`, // Range erweitert auf U
-          valueInputOption: 'RAW',
-          resource: {
-            values: [headers]
-          }
-        });
-
-        console.log(`[ExternalTrackingService] Added headers to sheet: ${normalizedUserName}`);
-        this.knownSheets.add(normalizedUserName);
-      }
+      console.log(`[ExternalTrackingService] Added headers to sheet: ${normalizedUserName}`);
+      this.knownSheets.add(normalizedUserName);
 
       return normalizedUserName;
     } catch (error) {
