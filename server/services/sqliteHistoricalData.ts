@@ -232,9 +232,21 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
             gpsData = logData.data;
           }
           
-          // Validate GPS coordinates
-          if (gpsData.latitude !== undefined && gpsData.longitude !== undefined &&
-              !isNaN(gpsData.latitude) && !isNaN(gpsData.longitude)) {
+          // Validate GPS coordinates - check for NaN, invalid ranges, and corrupted values
+          // Also reject lat=0 or lng=0 which indicates GPS not yet available on device
+          const lat = gpsData.latitude;
+          const lng = gpsData.longitude;
+          const isValidLat = lat !== undefined && !isNaN(lat) && lat >= -90 && lat <= 90 && Math.abs(lat) > 0.001;
+          const isValidLng = lng !== undefined && !isNaN(lng) && lng >= -180 && lng <= 180 && Math.abs(lng) > 0.001;
+          
+          // Debug: Log corrupted GPS coordinates
+          if ((lat !== undefined || lng !== undefined) && (!isValidLat || !isValidLng)) {
+            console.error(`[SQLiteHistorical] ⚠️ CORRUPTED GPS COORDINATE DETECTED for ${username}:`);
+            console.error(`[SQLiteHistorical]   lat=${lat} (valid: ${isValidLat}), lng=${lng} (valid: ${isValidLng})`);
+            console.error(`[SQLiteHistorical]   Raw log data:`, JSON.stringify(log.data).substring(0, 500));
+          }
+          
+          if (isValidLat && isValidLng) {
             // Use timestamp from data payload if available (especially for FollowMee/External), otherwise use log timestamp
             // This fixes the issue where FollowMee points use the fetch time instead of the device time
             let gpsTimestamp = log.timestamp;

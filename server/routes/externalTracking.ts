@@ -25,19 +25,25 @@ router.post('/location', async (req: Request, res: Response) => {
       });
     }
 
+    // Validate latitude - must be between -90 and 90, and not 0 (GPS not ready)
     if (typeof locationData.latitude !== 'number' ||
         locationData.latitude < -90 ||
-        locationData.latitude > 90) {
+        locationData.latitude > 90 ||
+        Math.abs(locationData.latitude) < 0.001) { // Reject lat=0 (GPS not available)
+      console.warn(`[External Tracking] Rejected invalid latitude: ${locationData.latitude} from ${locationData.userName}`);
       return res.status(400).json({
-        error: 'Missing or invalid required field: latitude (must be between -90 and 90)'
+        error: 'Missing or invalid required field: latitude (must be between -90 and 90, and not 0)'
       });
     }
 
+    // Validate longitude - must be between -180 and 180, and not 0 (GPS not ready)
     if (typeof locationData.longitude !== 'number' ||
         locationData.longitude < -180 ||
-        locationData.longitude > 180) {
+        locationData.longitude > 180 ||
+        Math.abs(locationData.longitude) < 0.001) { // Reject lng=0 (GPS not available)
+      console.warn(`[External Tracking] Rejected invalid longitude: ${locationData.longitude} from ${locationData.userName}`);
       return res.status(400).json({
-        error: 'Missing or invalid required field: longitude (must be between -180 and 180)'
+        error: 'Missing or invalid required field: longitude (must be between -180 and 180, and not 0)'
       });
     }
 
@@ -106,21 +112,29 @@ router.post('/location/batch', async (req: Request, res: Response) => {
       return res.json({ success: true, message: 'Empty batch received' });
     }
 
-    // Validierung: Prüfe ob alle Items die notwendigen Felder haben
-    const invalidItem = batchData.find(item => 
-      !item.timestamp || 
-      typeof item.latitude !== 'number' || 
-      typeof item.longitude !== 'number' ||
-      !item.userName
+    // Filter out invalid GPS coordinates (lat=0 or lng=0 means GPS not ready)
+    const originalCount = batchData.length;
+    batchData = batchData.filter(item => 
+      item.timestamp && 
+      typeof item.latitude === 'number' && 
+      typeof item.longitude === 'number' &&
+      item.userName &&
+      Math.abs(item.latitude) > 0.001 && // Reject lat=0
+      Math.abs(item.longitude) > 0.001 && // Reject lng=0
+      item.latitude >= -90 && item.latitude <= 90 &&
+      item.longitude >= -180 && item.longitude <= 180
     );
-
-    if (invalidItem) {
-      return res.status(400).json({
-        error: 'Invalid batch data. One or more items are missing required fields (timestamp, latitude, longitude, userName).'
-      });
+    
+    const filteredCount = originalCount - batchData.length;
+    if (filteredCount > 0) {
+      console.warn(`[External Tracking] Filtered ${filteredCount} invalid GPS points from batch (lat=0 or lng=0)`);
     }
 
-    console.log(`[External Tracking] Received batch of ${batchData.length} locations`);
+    if (batchData.length === 0) {
+      return res.json({ success: true, message: 'All items filtered out (invalid GPS coordinates)' });
+    }
+
+    console.log(`[External Tracking] Received batch of ${batchData.length} valid locations (filtered ${filteredCount})`);
 
     await externalTrackingService.saveBatchLocationData(batchData);
 

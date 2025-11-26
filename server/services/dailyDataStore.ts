@@ -126,6 +126,18 @@ class DailyDataStore {
       return; // Skip GPS points from other days
     }
     
+    // BUGFIX: Validate GPS coordinates - reject corrupted values
+    // Also reject lat=0 or lng=0 which indicates GPS not yet available on device
+    const lat = gps.latitude;
+    const lng = gps.longitude;
+    const isValidLat = lat !== undefined && !isNaN(lat) && lat >= -90 && lat <= 90 && Math.abs(lat) > 0.001;
+    const isValidLng = lng !== undefined && !isNaN(lng) && lng >= -180 && lng <= 180 && Math.abs(lng) > 0.001;
+    
+    if (!isValidLat || !isValidLng) {
+      console.error(`[DailyStore] ⚠️ CORRUPTED GPS REJECTED for ${username}: lat=${lat}, lng=${lng}`);
+      return; // Skip corrupted GPS points
+    }
+    
     // Add GPS point
     userData.gpsPoints.push(gps);
 

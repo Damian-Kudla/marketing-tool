@@ -327,7 +327,8 @@ export async function retryFailedLogs(): Promise<void> {
       await fallbackLogger.removeSuccessfulLogs(successfulLogs);
       console.log(`[RetryFailedLogs] Successfully retried ${successfulLogs.length} logs`);
       
-      // No Pushover notification for successful recovery - only errors need attention
+      // Send recovery notification (rate-limited to prevent spam)
+      await pushoverService.sendRecoverySuccess(successfulLogs.length);
     }
 
     const remainingFailed = failedLogs.length - successfulLogs.length;

@@ -175,18 +175,50 @@ export class GoogleSheetsLoggingService {
         dataString // Data (JSON)
       ];
 
-      await sheetsClient.spreadsheets.values.append({
-        spreadsheetId: this.LOG_SHEET_ID,
-        range: `${worksheetName}!A:J`,
-        valueInputOption: 'RAW',
-        insertDataOption: 'INSERT_ROWS',
-        resource: {
-          values: [logRow],
-        },
-      });
+      try {
+        await sheetsClient.spreadsheets.values.append({
+          spreadsheetId: this.LOG_SHEET_ID,
+          range: `${worksheetName}!A:J`,
+          valueInputOption: 'RAW',
+          insertDataOption: 'INSERT_ROWS',
+          resource: {
+            values: [logRow],
+          },
+        });
+      } catch (appendError: any) {
+        // Check if this is an "Unable to parse range" error (worksheet doesn't exist)
+        const isRangeError = appendError?.code === 400 || 
+          appendError?.status === 400 ||
+          appendError?.message?.includes('Unable to parse range');
+        
+        if (isRangeError) {
+          console.warn(`Worksheet ${worksheetName} not found, invalidating cache and recreating...`);
+          // Invalidate cache and retry once
+          this.worksheetCache.delete(worksheetName);
+          
+          // Re-ensure worksheet exists (this will create it)
+          await this.ensureUserWorksheet(req.userId, req.username);
+          
+          // Retry the append
+          await sheetsClient.spreadsheets.values.append({
+            spreadsheetId: this.LOG_SHEET_ID,
+            range: `${worksheetName}!A:J`,
+            valueInputOption: 'RAW',
+            insertDataOption: 'INSERT_ROWS',
+            resource: {
+              values: [logRow],
+            },
+          });
+          console.log(`Successfully recreated worksheet ${worksheetName} and logged entry`);
+        } else {
+          // Re-throw non-range errors
+          throw appendError;
+        }
+      }
 
     } catch (error) {
       console.error(`Failed to log to Google Sheets for user ${req.username}:`, error);
+      throw error; // Re-throw to trigger fallback logging
     }
   }
 
@@ -277,7 +309,7 @@ export class GoogleSheetsLoggingService {
   }
 
   // Batch append multiple rows to a worksheet
-  static async batchAppendToWorksheet(worksheetName: string, rows: any[][]): Promise<void> {
+  static async batchAppendToWorksheet(worksheetName: string, rows: any[][], userId?: string, username?: string): Promise<void> {
     if (!sheetsEnabled || !sheetsClient) {
       throw new Error('Google Sheets API not available');
     }
@@ -297,9 +329,35 @@ export class GoogleSheetsLoggingService {
       if (rows.length >= 5) {
         console.log(`[GoogleSheetsLoggingService] Batch appended ${rows.length} rows to ${worksheetName}`);
       }
-    } catch (error) {
-      console.error(`[GoogleSheetsLoggingService] Failed to batch append to ${worksheetName}:`, error);
-      throw error;
+    } catch (error: any) {
+      // Check if this is an "Unable to parse range" error (worksheet doesn't exist)
+      const isRangeError = error?.code === 400 || 
+        error?.status === 400 ||
+        error?.message?.includes('Unable to parse range');
+      
+      if (isRangeError && userId && username) {
+        console.warn(`[GoogleSheetsLoggingService] Worksheet ${worksheetName} not found, recreating...`);
+        // Invalidate cache and recreate worksheet
+        this.worksheetCache.delete(worksheetName);
+        
+        // Re-ensure worksheet exists (this will create it)
+        await this.ensureUserWorksheet(userId, username);
+        
+        // Retry the append
+        await sheetsClient.spreadsheets.values.append({
+          spreadsheetId: this.LOG_SHEET_ID,
+          range: `${worksheetName}!A:J`,
+          valueInputOption: 'RAW',
+          insertDataOption: 'INSERT_ROWS',
+          resource: {
+            values: rows,
+          },
+        });
+        console.log(`[GoogleSheetsLoggingService] Successfully recreated ${worksheetName} and appended ${rows.length} rows`);
+      } else {
+        console.error(`[GoogleSheetsLoggingService] Failed to batch append to ${worksheetName}:`, error);
+        throw error;
+      }
     }
   }
 

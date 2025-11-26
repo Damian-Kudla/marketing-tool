@@ -788,6 +788,21 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
       console.log(`[Admin API] Calculated ${breaks.length} breaks for route`);
     }
 
+    // DEBUG: Check for corrupted GPS coordinates before sending
+    // Also filter lat=0 or lng=0 which indicates GPS not yet available
+    const suspiciousPoints = gpsPoints.filter((p: any) => 
+      Math.abs(p.longitude) < 0.001 || // Near zero longitude (London meridian)
+      Math.abs(p.latitude) < 0.001 ||  // Near zero latitude (equator) - GPS not ready
+      Math.abs(p.longitude) > 1e10 ||  // Extremely large
+      Math.abs(p.latitude) > 90 ||     // Invalid latitude
+      !Number.isFinite(p.longitude) || // NaN or Infinity
+      !Number.isFinite(p.latitude)
+    );
+    if (suspiciousPoints.length > 0) {
+      console.error('[Admin API] ⚠️ CORRUPTED GPS POINTS DETECTED:', suspiciousPoints.length);
+      console.error('[Admin API] Corrupted data:', JSON.stringify(suspiciousPoints, null, 2));
+    }
+
     // Gebe immer 200 zurück, auch wenn keine Daten gefunden wurden
     // (verhindert Service Worker Cache-Probleme)
     res.json({

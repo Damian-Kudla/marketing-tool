@@ -349,6 +349,21 @@ function calculateZoomForBounds(bounds: { minLat: number; maxLat: number; minLng
 export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = [], date, userId, source = 'all', breaks = [] }: RouteReplayMapProps) {
   console.log(`[RouteReplay] Initialized for ${username}:`, { gpsPoints: gpsPoints.length, breaks: breaks.length, source });
   
+  // DEBUG: Check for corrupted coordinates
+  // Also detect lat=0 or lng=0 which indicates GPS not yet available on device
+  const suspiciousPoints = gpsPoints.filter(p => 
+    Math.abs(p.longitude) < 0.001 || // Near zero longitude (London meridian)
+    Math.abs(p.latitude) < 0.001 ||  // Near zero latitude (equator) - GPS not ready
+    Math.abs(p.longitude) > 1e10 ||  // Extremely large
+    Math.abs(p.latitude) > 90 ||     // Invalid latitude
+    !Number.isFinite(p.longitude) || // NaN or Infinity
+    !Number.isFinite(p.latitude)
+  );
+  if (suspiciousPoints.length > 0) {
+    console.error('[RouteReplay] ⚠️ CORRUPTED GPS POINTS DETECTED:', suspiciousPoints);
+    console.error('[RouteReplay] Full corrupted point data:', JSON.stringify(suspiciousPoints, null, 2));
+  }
+  
   if (breaks.length > 0) {
     console.log('[RouteReplay] Breaks data:', breaks);
   }
@@ -1010,6 +1025,44 @@ export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = 
     setCurrentTimestamp(displayPoints[0].timestamp);
     setIsPlaying(false);
   }, [baseRouteSignature]); // Only reset when route signature changes, not on every displayPoints change
+
+  // Ensure currentTimestamp is within valid range when displayPoints changes (e.g. filtering or pause mode)
+  useEffect(() => {
+    if (displayPoints.length === 0) return;
+
+    const start = displayPoints[0].timestamp;
+    const end = displayPoints[displayPoints.length - 1].timestamp;
+
+    // If currentTimestamp is significantly out of bounds (e.g. > 1 sec), clamp it
+    // This handles cases where filtering changes the time range (e.g. switching users or entering pause mode)
+    // Also fixes the issue where timer starts at 06:00 even if points start at 11:00
+    if (currentTimestamp < start - 1000 || currentTimestamp > end + 1000) {
+      console.log('[RouteReplay] Clamping timestamp to new range:', {
+        current: currentTimestamp,
+        newStart: start,
+        newEnd: end
+      });
+      
+      // If we are before start, jump to start
+      if (currentTimestamp < start) {
+        setCurrentTimestamp(start);
+        pausedTimestampRef.current = start;
+        // Find new index
+        const newIndex = 0;
+        setCurrentIndex(newIndex);
+        pausedIndexRef.current = newIndex;
+      } 
+      // If we are after end, jump to end
+      else {
+        setCurrentTimestamp(end);
+        pausedTimestampRef.current = end;
+        // Find new index
+        const newIndex = displayPoints.length - 1;
+        setCurrentIndex(newIndex);
+        pausedIndexRef.current = newIndex;
+      }
+    }
+  }, [displayPoints, currentTimestamp]);
 
   // Get time range for timeline
   const startTime = displayPoints.length > 0 ? displayPoints[0].timestamp : 0;
