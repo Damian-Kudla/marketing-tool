@@ -1,6 +1,6 @@
 import { type User, type InsertUser, type Customer, type InsertCustomer, type Address } from "@shared/schema";
 import { randomUUID } from "crypto";
-import { google } from "googleapis";
+import { google } from "./services/googleApiWrapper";
 import leven from "leven";
 
 export interface IStorage {

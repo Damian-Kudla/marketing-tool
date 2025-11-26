@@ -1,4 +1,4 @@
-import { google } from 'googleapis';
+import { google } from './googleApiWrapper';
 import { googleSheetsService } from './googleSheets';
 import { batchLogger } from './batchLogger';
 import { getBerlinTimestamp } from '../utils/timezone';

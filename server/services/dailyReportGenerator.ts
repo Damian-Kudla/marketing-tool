@@ -17,7 +17,7 @@
  * - Real-time cache hit rate tracking
  */
 
-import { google } from 'googleapis';
+import { google } from './googleApiWrapper';
 import { dailyDataStore } from './dailyDataStore';
 import { scrapeDayDataFromSQLite } from './sqliteHistoricalData';
 import { getBerlinDate, getBerlinTimestamp } from '../utils/timezone';

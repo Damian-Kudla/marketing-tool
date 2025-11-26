@@ -1,4 +1,4 @@
-import { google } from 'googleapis';
+import { google } from './googleApiWrapper';
 import type { LocationData } from '../../shared/externalTrackingTypes';
 import type { GPSCoordinates } from '../../shared/trackingTypes';
 import { googleSheetsService } from './googleSheets';

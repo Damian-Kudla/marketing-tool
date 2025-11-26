@@ -27,6 +27,7 @@ import { batchLogger } from './batchLogger';
 import type { LogEntry } from './fallbackLogging';
 import { getBerlinTimestamp } from '../utils/timezone';
 import { getCETDate, insertLog, type LogInsertData } from './sqliteLogService';
+import { google } from './googleApiWrapper';
 
 const FOLLOWMEE_API_KEY = process.env.FOLLOWMEE_API;
 const FOLLOWMEE_USERNAME = process.env.FOLLOWMEE_USERNAME || 'Saskia.zucht';
@@ -204,7 +205,6 @@ class FollowMeeApiService {
    */
   private async loadUserLogsFromSheets(mapping: UserFollowMeeMapping): Promise<LogEntry[]> {
     const { GoogleSheetsLoggingService } = await import('./googleSheetsLogging');
-    const { google } = await import('googleapis');
 
     const sheetsKey = process.env.GOOGLE_SHEETS_KEY;
     if (!sheetsKey) {

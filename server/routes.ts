@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import multer from "multer";
 import vision from "@google-cloud/vision";
-import { google } from "googleapis";
+import { google } from "./services/googleApiWrapper";
 import cookieParser from "cookie-parser";
 import { 
   geocodingRequestSchema, 

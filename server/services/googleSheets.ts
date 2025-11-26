@@ -1,4 +1,4 @@
-import { google } from 'googleapis';
+import { google } from './googleApiWrapper';
 import crypto from 'crypto';
 import type { AddressDataset, EditableResident } from '../../shared/schema';
 import { checkRateLimit, incrementRateLimit } from '../middleware/rateLimit';

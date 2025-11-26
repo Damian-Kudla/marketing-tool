@@ -9,7 +9,7 @@
  * - Single "Cookies" sheet that mirrors the RAM database
  */
 
-import { google } from 'googleapis';
+import { google } from './googleApiWrapper';
 import crypto from 'crypto';
 import type { DeviceInfo } from '../../shared/trackingTypes';
 import { getBerlinTimestamp } from '../utils/timezone';

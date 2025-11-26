@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import { google, drive_v3 } from "googleapis";
+import { google, drive_v3 } from "./googleApiWrapper";
 
 class GoogleDriveSyncService {
   private driveClient: drive_v3.Drive | null = null;

@@ -15,6 +15,7 @@ import { getCETDate, cleanupOldDBs, checkpointDB, dbExists, getDBStats } from '.
 import { sqliteBackupService } from './sqliteBackupService';
 import { pushoverService } from './pushover';
 import { getBerlinDate } from '../utils/timezone';
+import { google } from './googleApiWrapper';
 
 class SQLiteDailyArchiveService {
   private cronJob: cron.ScheduledTask | null = null;
@@ -443,7 +444,6 @@ class SQLiteDailyArchiveService {
       const sheetsKey = process.env.GOOGLE_SHEETS_KEY || '{}';
       const credentials = JSON.parse(sheetsKey);
 
-      const { google } = await import('googleapis');
       const auth = new google.auth.JWT({
         email: credentials.client_email,
         key: credentials.private_key,
@@ -484,7 +484,6 @@ class SQLiteDailyArchiveService {
       const sheetsKey = process.env.GOOGLE_SHEETS_KEY || '{}';
       const credentials = JSON.parse(sheetsKey);
 
-      const { google } = await import('googleapis');
       const auth = new google.auth.JWT({
         email: credentials.client_email,
         key: credentials.private_key,
@@ -626,7 +625,6 @@ class SQLiteDailyArchiveService {
       const sheetsKey = process.env.GOOGLE_SHEETS_KEY || '{}';
       const credentials = JSON.parse(sheetsKey);
 
-      const { google } = await import('googleapis');
       const auth = new google.auth.JWT({
         email: credentials.client_email,
         key: credentials.private_key,

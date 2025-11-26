@@ -5,7 +5,7 @@
  * DailyUserData für vergangene Tage. Daten werden aus RAM gelöscht nach Verwendung.
  */
 
-import { google, sheets_v4 } from 'googleapis';
+import { google, sheets_v4 } from './googleApiWrapper';
 import crypto from 'crypto';
 import type { DailyUserData, GPSCoordinates, ActionLog, DeviceStatus } from '../../shared/trackingTypes';
 import { getBerlinDate } from '../utils/timezone';

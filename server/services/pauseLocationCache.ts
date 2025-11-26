@@ -8,7 +8,7 @@
  * - Google Places API integration
  */
 
-import { google } from 'googleapis';
+import { google } from './googleApiWrapper';
 
 const SHEET_ID = process.env.GOOGLE_LOGS_SHEET_ID || '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
 const API_KEY = process.env.GOOGLE_GEOCODING_API_KEY || '';

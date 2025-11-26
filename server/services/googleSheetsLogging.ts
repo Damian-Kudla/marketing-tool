@@ -1,4 +1,4 @@
-import { google } from 'googleapis';
+import { google } from './googleApiWrapper';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { getBerlinDate, getBerlinTimestamp } from '../utils/timezone';
 

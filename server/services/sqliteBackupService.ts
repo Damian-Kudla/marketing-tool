@@ -8,7 +8,7 @@
  * - Rate-Limit-Awareness
  */
 
-import { google, drive_v3 } from 'googleapis';
+import { google, drive_v3 } from './googleApiWrapper';
 import fs from 'fs';
 import { promisify } from 'util';
 import { Readable } from 'stream';

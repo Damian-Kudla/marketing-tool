@@ -694,6 +694,7 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
     const dateStr = date as string;
     const userIdStr = userId as string;
     const sourceFilter = source as string | undefined; // 'native', 'followmee', 'external', 'external_app', or undefined (all)
+    const today = getBerlinDate(); // Für Cache-Logik am Ende
 
     console.log(`[Admin API] Fetching route data for user ${userIdStr} on ${dateStr} (source: ${sourceFilter || 'all'})`);
 
@@ -849,16 +850,26 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
       console.log(`[Admin API] ✅ GPS points under limit (${originalPointCount} <= ${MAX_GPS_POINTS}), no downsampling needed`);
     }
 
+    // Sanitize GPS points to prevent JSON serialization errors
+    // User-Agent strings can contain control characters that break JSON
+    const sanitizedGpsPoints = gpsPoints.map((point: any) => ({
+      ...point,
+      // Remove or sanitize userAgent if it contains problematic characters
+      userAgent: point.userAgent 
+        ? String(point.userAgent).replace(/[\x00-\x1F\x7F]/g, '') // Remove control characters
+        : undefined
+    }));
+
     // Gebe immer 200 zurück, auch wenn keine Daten gefunden wurden
     // (verhindert Service Worker Cache-Probleme)
     res.json({
-      gpsPoints: gpsPoints || [],
+      gpsPoints: sanitizedGpsPoints || [],
       photoTimestamps: photoTimestamps || [],
       breaks: breaks || [],
       username: username || 'Unknown',
       date: dateStr,
       source: sourceFilter || 'all',
-      totalPoints: gpsPoints.length,
+      totalPoints: sanitizedGpsPoints.length,
       originalPointCount: originalPointCount, // Send original count for info
       totalPhotos: photoTimestamps.length
     });
