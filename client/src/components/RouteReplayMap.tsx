@@ -204,7 +204,9 @@ const removeMarker = (marker: google.maps.Marker | null) => {
 const getGoogleMapsUrl = (lat: number, lng: number): string => {
   // Format: https://www.google.com/maps/search/?api=1&query=lat,lng
   // This format ensures a proper pin/marker is shown at the exact coordinates
-  return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+  // Use toFixed(6) to prevent scientific notation (e.g., 1.7123445e-7) and limit precision
+  // 6 decimal places = ~10cm accuracy, more than sufficient for GPS
+  return `https://www.google.com/maps/search/?api=1&query=${lat.toFixed(6)},${lng.toFixed(6)}`;
 };
 
 // Calculate distance between two GPS points in meters
@@ -346,23 +348,23 @@ function calculateZoomForBounds(bounds: { minLat: number; maxLat: number; minLng
 
 // calculateOptimalZoom function removed - auto-zoom disabled to prevent rendering conflicts
 
-export default function RouteReplayMap({ username, gpsPoints, photoTimestamps = [], date, userId, source = 'all', breaks = [] }: RouteReplayMapProps) {
-  console.log(`[RouteReplay] Initialized for ${username}:`, { gpsPoints: gpsPoints.length, breaks: breaks.length, source });
+export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, photoTimestamps = [], date, userId, source = 'all', breaks = [] }: RouteReplayMapProps) {
+  // CRITICAL: Filter out corrupted GPS coordinates BEFORE any processing
+  // This is a safety net in case backend filter didn't catch them
+  const gpsPoints = rawGpsPoints.filter(p => {
+    const lat = p.latitude;
+    const lng = p.longitude;
+    const isValidLat = typeof lat === 'number' && !isNaN(lat) && lat >= -90 && lat <= 90 && Math.abs(lat) > 0.001;
+    const isValidLng = typeof lng === 'number' && !isNaN(lng) && lng >= -180 && lng <= 180 && Math.abs(lng) > 0.001;
+    return isValidLat && isValidLng;
+  });
   
-  // DEBUG: Check for corrupted coordinates
-  // Also detect lat=0 or lng=0 which indicates GPS not yet available on device
-  const suspiciousPoints = gpsPoints.filter(p => 
-    Math.abs(p.longitude) < 0.001 || // Near zero longitude (London meridian)
-    Math.abs(p.latitude) < 0.001 ||  // Near zero latitude (equator) - GPS not ready
-    Math.abs(p.longitude) > 1e10 ||  // Extremely large
-    Math.abs(p.latitude) > 90 ||     // Invalid latitude
-    !Number.isFinite(p.longitude) || // NaN or Infinity
-    !Number.isFinite(p.latitude)
-  );
-  if (suspiciousPoints.length > 0) {
-    console.error('[RouteReplay] ⚠️ CORRUPTED GPS POINTS DETECTED:', suspiciousPoints);
-    console.error('[RouteReplay] Full corrupted point data:', JSON.stringify(suspiciousPoints, null, 2));
+  const filteredCount = rawGpsPoints.length - gpsPoints.length;
+  if (filteredCount > 0) {
+    console.warn(`[RouteReplay] ⚠️ Filtered ${filteredCount} corrupted GPS points (lat≈0 or lng≈0)`);
   }
+  
+  console.log(`[RouteReplay] Initialized for ${username}:`, { gpsPoints: gpsPoints.length, breaks: breaks.length, source });
   
   if (breaks.length > 0) {
     console.log('[RouteReplay] Breaks data:', breaks);

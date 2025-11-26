@@ -1404,7 +1404,7 @@ export default function AdminDashboard() {
                 </div>
                 {routeData && (
                   <span className="ml-2 text-xs text-muted-foreground">
-                    ({routeData.totalPoints} Punkte)
+                    ({routeData.totalPoints} Punkte{routeData.originalPointCount && routeData.originalPointCount > routeData.totalPoints ? ` von ${routeData.originalPointCount}` : ''})
                   </span>
                 )}
               </div>

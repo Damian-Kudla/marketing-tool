@@ -697,8 +697,6 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
 
     console.log(`[Admin API] Fetching route data for user ${userIdStr} on ${dateStr} (source: ${sourceFilter || 'all'})`);
 
-    // Prüfe ob es heute ist (Live-Daten) oder historische Daten
-    const today = getBerlinDate();
     let gpsPoints: any[] = [];
     let photoTimestamps: number[] = [];
     let username = '';
@@ -713,24 +711,19 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
     }
 
     // Lade Daten (native/followmee/external_app aus Logs/SQLite)
-    if (dateStr === today) {
-      // Live-Daten aus RAM
-      const userData = dailyDataStore.getUserDailyData(userIdStr);
-      if (userData) {
-        gpsPoints = userData.gpsPoints;
-        if (!username) username = userData.username;
-        photoTimestamps = userData.photoTimestamps || [];
-      }
-    } else {
-      // Historische Daten aus SQLite
-      const historicalData = await scrapeDayData(dateStr, userIdStr);
+    // WICHTIG: Immer aus SQLite laden, auch für heute!
+    // Der dailyDataStore (RAM) wird nur beim Server-Start aus Google Sheets initialisiert,
+    // aber wenn Sheets voll ist (10M Zellen Limit), werden neue GPS-Punkte nur in SQLite gespeichert.
+    // SQLite enthält IMMER alle GPS-Punkte (wird direkt beschrieben via enhancedLogging).
+    const historicalData = await scrapeDayData(dateStr, userIdStr);
+    
+    console.log(`[Admin API Route] 📊 SQLite loaded: ${historicalData?.length || 0} users, ${historicalData?.[0]?.gpsPoints?.length || 0} GPS points for ${dateStr}`);
 
-      if (historicalData && historicalData.length > 0) {
-        const userData = historicalData[0];
-        gpsPoints = userData.gpsPoints;
-        if (!username) username = userData.username;
-        photoTimestamps = userData.photoTimestamps || [];
-      }
+    if (historicalData && historicalData.length > 0) {
+      const userData = historicalData[0];
+      gpsPoints = userData.gpsPoints;
+      if (!username) username = userData.username;
+      photoTimestamps = userData.photoTimestamps || [];
     }
 
     // Externe Tracking-Daten sind bereits in gpsPoints enthalten (aus SQLite mit source: 'external_app')
@@ -795,18 +788,11 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
       }>;
     }> = [];
 
-    // Fetch raw logs for break calculation
+    // Fetch raw logs for break calculation (aus SQLite, nicht RAM)
     let rawLogs: TrackingData[] = [];
-    if (dateStr === today) {
-      const userData = dailyDataStore.getUserDailyData(userIdStr);
-      if (userData) {
-        rawLogs = userData.rawLogs;
-      }
-    } else {
-      const historicalData = await scrapeDayData(dateStr, userIdStr);
-      if (historicalData && historicalData.length > 0) {
-        rawLogs = historicalData[0].rawLogs;
-      }
+    // Lade aus SQLite (historicalData wurde oben bereits geladen)
+    if (historicalData && historicalData.length > 0) {
+      rawLogs = historicalData[0].rawLogs;
     }
 
     if (rawLogs.length > 0) {
