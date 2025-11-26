@@ -393,8 +393,15 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
 
     // Transformiere DailyUserData zu DashboardLiveData Format (async)
     const dashboardUsers = await Promise.all(usersArray.map(async userData => {
-      const lastGpsPoint = userData.gpsPoints.length > 0 
-        ? userData.gpsPoints[userData.gpsPoints.length - 1]
+      // Find the last VALID GPS point (filter out corrupted coordinates like lat=0, lng=0)
+      const validGpsPoints = userData.gpsPoints.filter(p => {
+        const lat = p.latitude;
+        const lng = p.longitude;
+        return typeof lat === 'number' && !isNaN(lat) && lat >= -90 && lat <= 90 && Math.abs(lat) > 0.001 &&
+               typeof lng === 'number' && !isNaN(lng) && lng >= -180 && lng <= 180 && Math.abs(lng) > 0.001;
+      });
+      const lastGpsPoint = validGpsPoints.length > 0 
+        ? validGpsPoints[validGpsPoints.length - 1]
         : undefined;
       
       // Status changes are now tracked consistently in statusChanges Map (backward compatible)
@@ -544,8 +551,15 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
 
     // Transformiere zu DashboardLiveData Format (async)
     const dashboardUsers = await Promise.all(userData.map(async user => {
-      const lastGpsPoint = user.gpsPoints.length > 0 
-        ? user.gpsPoints[user.gpsPoints.length - 1]
+      // Find the last VALID GPS point (filter out corrupted coordinates like lat=0, lng=0)
+      const validGpsPoints = user.gpsPoints.filter(p => {
+        const lat = p.latitude;
+        const lng = p.longitude;
+        return typeof lat === 'number' && !isNaN(lat) && lat >= -90 && lat <= 90 && Math.abs(lat) > 0.001 &&
+               typeof lng === 'number' && !isNaN(lng) && lng >= -180 && lng <= 180 && Math.abs(lng) > 0.001;
+      });
+      const lastGpsPoint = validGpsPoints.length > 0 
+        ? validGpsPoints[validGpsPoints.length - 1]
         : undefined;
       
       // Konvertiere Map zu Objekt für JSON-Serialisierung
@@ -722,7 +736,23 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
     // Externe Tracking-Daten sind bereits in gpsPoints enthalten (aus SQLite mit source: 'external_app')
     // Kein separates Laden mehr nötig
 
-    // CRITICAL FIX: Filter out points that don't match the requested date
+    // CRITICAL FIX #1: Filter out corrupted GPS coordinates IMMEDIATELY after loading
+    // This catches lat=0, lng=0, or near-zero values from the external tracking app
+    const loadedCount = gpsPoints.length;
+    gpsPoints = gpsPoints.filter(point => {
+      const lat = point.latitude;
+      const lng = point.longitude;
+      // Strict validation: must be number, finite, in valid range, and not near zero
+      const isValidLat = typeof lat === 'number' && Number.isFinite(lat) && lat >= -90 && lat <= 90 && Math.abs(lat) > 0.001;
+      const isValidLng = typeof lng === 'number' && Number.isFinite(lng) && lng >= -180 && lng <= 180 && Math.abs(lng) > 0.001;
+      return isValidLat && isValidLng;
+    });
+    const corruptedCount = loadedCount - gpsPoints.length;
+    if (corruptedCount > 0) {
+      console.warn(`[Admin API] ⚠️ IMMEDIATELY filtered ${corruptedCount} corrupted GPS points after loading`);
+    }
+
+    // CRITICAL FIX #2: Filter out points that don't match the requested date
     // This removes old FollowMee data that might have been merged incorrectly
     gpsPoints = gpsPoints.filter(point => {
       const pointDate = getBerlinDate(point.timestamp);
@@ -747,6 +777,8 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
       const hour = getBerlinHour(point.timestamp);
       return hour >= 6;
     });
+
+    // Note: Corrupted GPS coordinates already filtered immediately after loading (see above)
 
     // Calculate breaks with POI information (if available)
     let breaks: Array<{
@@ -788,19 +820,47 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
       console.log(`[Admin API] Calculated ${breaks.length} breaks for route`);
     }
 
-    // DEBUG: Check for corrupted GPS coordinates before sending
-    // Also filter lat=0 or lng=0 which indicates GPS not yet available
-    const suspiciousPoints = gpsPoints.filter((p: any) => 
-      Math.abs(p.longitude) < 0.001 || // Near zero longitude (London meridian)
-      Math.abs(p.latitude) < 0.001 ||  // Near zero latitude (equator) - GPS not ready
-      Math.abs(p.longitude) > 1e10 ||  // Extremely large
-      Math.abs(p.latitude) > 90 ||     // Invalid latitude
-      !Number.isFinite(p.longitude) || // NaN or Infinity
-      !Number.isFinite(p.latitude)
-    );
-    if (suspiciousPoints.length > 0) {
-      console.error('[Admin API] ⚠️ CORRUPTED GPS POINTS DETECTED:', suspiciousPoints.length);
-      console.error('[Admin API] Corrupted data:', JSON.stringify(suspiciousPoints, null, 2));
+    // PERFORMANCE: Downsample GPS points if too many (>5000 causes browser lag)
+    const MAX_GPS_POINTS = 5000;
+    const originalPointCount = gpsPoints.length;
+    
+    console.log(`[Admin API] 📊 GPS points before downsampling: ${originalPointCount}`);
+    
+    if (originalPointCount > MAX_GPS_POINTS) {
+      // Sort by timestamp first
+      gpsPoints.sort((a: any, b: any) => a.timestamp - b.timestamp);
+      
+      // Calculate minimum time interval needed to reduce to MAX_GPS_POINTS
+      const totalTimeSpan = gpsPoints[gpsPoints.length - 1].timestamp - gpsPoints[0].timestamp;
+      const minIntervalMs = Math.ceil(totalTimeSpan / MAX_GPS_POINTS);
+      
+      console.log(`[Admin API] 📉 Downsampling: totalTimeSpan=${Math.round(totalTimeSpan/1000)}s, minInterval=${Math.round(minIntervalMs/1000)}s`);
+      
+      // Downsample: keep points that are at least minIntervalMs apart
+      // Always keep first and last point
+      const downsampledPoints: any[] = [gpsPoints[0]];
+      let lastKeptTimestamp = gpsPoints[0].timestamp;
+      
+      for (let i = 1; i < gpsPoints.length - 1; i++) {
+        const point = gpsPoints[i];
+        const timeSinceLastKept = point.timestamp - lastKeptTimestamp;
+        
+        if (timeSinceLastKept >= minIntervalMs) {
+          downsampledPoints.push(point);
+          lastKeptTimestamp = point.timestamp;
+        }
+      }
+      
+      // Always keep last point
+      if (gpsPoints.length > 1) {
+        downsampledPoints.push(gpsPoints[gpsPoints.length - 1]);
+      }
+      
+      gpsPoints = downsampledPoints;
+      
+      console.log(`[Admin API] 📉 Downsampled GPS points: ${originalPointCount} → ${gpsPoints.length} (interval: ${Math.round(minIntervalMs / 1000)}s)`);
+    } else {
+      console.log(`[Admin API] ✅ GPS points under limit (${originalPointCount} <= ${MAX_GPS_POINTS}), no downsampling needed`);
     }
 
     // Gebe immer 200 zurück, auch wenn keine Daten gefunden wurden
@@ -813,6 +873,7 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
       date: dateStr,
       source: sourceFilter || 'all',
       totalPoints: gpsPoints.length,
+      originalPointCount: originalPointCount, // Send original count for info
       totalPhotos: photoTimestamps.length
     });
 
