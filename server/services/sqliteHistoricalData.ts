@@ -267,8 +267,23 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
               userAgent: topLevelData.userAgent || logData.userAgent || undefined 
             };
             
-            userData.gpsPoints.push(gps);
-            trackingData.gps = gps;
+            // CRITICAL: Validate GPS coordinates before adding
+            // Reject lat=0, lng=0, or corrupted near-zero values
+            const isValidLat = typeof gps.latitude === 'number' && 
+                               Number.isFinite(gps.latitude) && 
+                               gps.latitude >= -90 && gps.latitude <= 90 && 
+                               Math.abs(gps.latitude) > 0.001;
+            const isValidLng = typeof gps.longitude === 'number' && 
+                               Number.isFinite(gps.longitude) && 
+                               gps.longitude >= -180 && gps.longitude <= 180 && 
+                               Math.abs(gps.longitude) > 0.001;
+            
+            if (isValidLat && isValidLng) {
+              userData.gpsPoints.push(gps);
+              trackingData.gps = gps;
+            } else {
+              console.warn(`[SQLiteHistorical] ⚠️ Rejected corrupted GPS: lat=${gps.latitude}, lng=${gps.longitude} for ${username}`);
+            }
 
             // Distance calculation moved to after active time calculation
             // (needs to filter by walking speed and active periods)
@@ -344,15 +359,29 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
              const lon = logData.data?.longitude || logData.longitude;
              
              if (lat !== undefined && lon !== undefined) {
-                const gps: GPSCoordinates = {
-                  latitude: lat,
-                  longitude: lon,
-                  accuracy: logData.data?.accuracy || logData.accuracy || 0,
-                  timestamp: log.timestamp,
-                  source: logData.data?.source || logData.source || 'external_app'
-                };
-                userData.gpsPoints.push(gps);
-                trackingData.gps = gps;
+                // CRITICAL: Validate GPS coordinates before adding
+                const isValidLat = typeof lat === 'number' && 
+                                   Number.isFinite(lat) && 
+                                   lat >= -90 && lat <= 90 && 
+                                   Math.abs(lat) > 0.001;
+                const isValidLng = typeof lon === 'number' && 
+                                   Number.isFinite(lon) && 
+                                   lon >= -180 && lon <= 180 && 
+                                   Math.abs(lon) > 0.001;
+                
+                if (isValidLat && isValidLng) {
+                  const gps: GPSCoordinates = {
+                    latitude: lat,
+                    longitude: lon,
+                    accuracy: logData.data?.accuracy || logData.accuracy || 0,
+                    timestamp: log.timestamp,
+                    source: logData.data?.source || logData.source || 'external_app'
+                  };
+                  userData.gpsPoints.push(gps);
+                  trackingData.gps = gps;
+                } else {
+                  console.warn(`[SQLiteHistorical] ⚠️ Rejected corrupted GPS (action): lat=${lat}, lng=${lon} for ${username}`);
+                }
              }
              
              // Skip action counting
