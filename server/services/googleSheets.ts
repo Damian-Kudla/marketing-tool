@@ -4,6 +4,7 @@ import type { AddressDataset, EditableResident } from '../../shared/schema';
 import { checkRateLimit, incrementRateLimit } from '../middleware/rateLimit';
 import { LOG_CONFIG } from '../config/logConfig';
 import { getBerlinDate, getBerlinTimestamp } from '../utils/timezone';
+import { appointmentsDB, categoryChangesDB } from './systemDatabaseService';
 
 // Helper function to get current time in Berlin timezone (MEZ/MESZ)
 function getBerlinTime(): Date {
@@ -1305,7 +1306,8 @@ export async function initializeGoogleSheetsCaches(): Promise<void> {
 
 // Category Change Logging Service
 class CategoryChangeLoggingService {
-  private readonly SHEET_ID = process.env.GOOGLE_LOGS_SHEET_ID || '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+  // NOTE: Using SYSTEM_SHEET_ID for category changes (separate from user logs to avoid 10M cell limit)
+  private readonly SHEET_ID = process.env.GOOGLE_SYSTEM_SHEET_ID || '1OsXBfxE2Pe7cPBGjPD9C2-03gm8cNfMdR9_EfZicMyw';
   private readonly WORKSHEET_NAME = 'Log_Änderung_Kategorie';
 
   // Get Sheets client dynamically to avoid initialization issues
@@ -1379,24 +1381,43 @@ class CategoryChangeLoggingService {
     changedBy: string,
     addressDatasetSnapshot: string
   ): Promise<void> {
-    await this.ensureSheetExists();
-
     const id = `cc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const changedAt = formatBerlinTimeISO(getBerlinTime());
 
-    const rowData = [
-      id,
-      datasetId,
-      residentOriginalName,
-      residentCurrentName,
-      oldCategory,
-      newCategory,
-      changedBy,
-      changedAt,
-      addressDatasetSnapshot
-    ];
-
+    // 1. Save to SQLite FIRST (primary storage - reliable, local)
     try {
+      categoryChangesDB.insert({
+        timestamp: changedAt,
+        datasetId: datasetId,
+        residentOriginalName: residentOriginalName,
+        residentCurrentName: residentCurrentName,
+        oldCategory: oldCategory,
+        newCategory: newCategory,
+        changedBy: changedBy,
+        addressSnapshot: addressDatasetSnapshot
+      });
+      console.log(`[CategoryChangeLogging] Saved to SQLite: ${oldCategory} → ${newCategory} for ${residentOriginalName}`);
+    } catch (sqliteError) {
+      console.error('[CategoryChangeLogging] SQLite save error:', sqliteError);
+      // Continue to Sheets anyway as backup
+    }
+
+    // 2. Then sync to Google Sheets (backup - can fail gracefully)
+    try {
+      await this.ensureSheetExists();
+
+      const rowData = [
+        id,
+        datasetId,
+        residentOriginalName,
+        residentCurrentName,
+        oldCategory,
+        newCategory,
+        changedBy,
+        changedAt,
+        addressDatasetSnapshot
+      ];
+
       const client = this.sheetsAPI;
       await client.spreadsheets.values.append({
         spreadsheetId: this.SHEET_ID,
@@ -1407,10 +1428,10 @@ class CategoryChangeLoggingService {
         }
       });
 
-      console.log(`[CategoryChangeLogging] Logged category change: ${oldCategory} → ${newCategory} for ${residentOriginalName} by ${changedBy}`);
+      console.log(`[CategoryChangeLogging] Logged to Sheets: ${oldCategory} → ${newCategory} for ${residentOriginalName} by ${changedBy}`);
     } catch (error) {
-      console.error('[CategoryChangeLogging] Error logging category change:', error);
-      throw error;
+      console.error('[CategoryChangeLogging] Error logging to Google Sheets (SQLite backup exists):', error);
+      // Don't throw - SQLite has the data
     }
   }
 }
@@ -1424,7 +1445,8 @@ class AppointmentService {
   private cacheInitialized: boolean = false;
   private cacheLoadPromise: Promise<void> | null = null;
   private readonly SHEET_NAME = "Termine";
-  private readonly ADDRESSES_SHEET_ID = process.env.GOOGLE_LOGS_SHEET_ID || '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+  // NOTE: Using SYSTEM_SHEET_ID for appointments now (separate from user logs)
+  private readonly ADDRESSES_SHEET_ID = process.env.GOOGLE_SYSTEM_SHEET_ID || '1OsXBfxE2Pe7cPBGjPD9C2-03gm8cNfMdR9_EfZicMyw';
 
   // Ensure "Termine" sheet exists with proper headers
   async ensureSheetExists(): Promise<void> {
@@ -1509,15 +1531,48 @@ class AppointmentService {
     await this.cacheLoadPromise;
   }
 
-  // Sync appointments from Google Sheets to RAM cache
+  // Sync appointments: First load from SQLite, then merge from Google Sheets
   async syncFromSheets(): Promise<void> {
-    if (!sheetsEnabled || !sheetsClient) {
-      throw new Error('Google Sheets API not available');
-    }
-
-    console.log(`[AppointmentService] === SYNC FROM SHEETS START ===`);
+    console.log(`[AppointmentService] === SYNC START (SQLite + Sheets) ===`);
     
     try {
+      const previousCacheSize = this.appointmentsCache.size;
+      this.appointmentsCache.clear();
+
+      // Step 1: Load from local SQLite (PRIMARY SOURCE)
+      try {
+        const sqliteAppointments = appointmentsDB.getAll();
+        let loadedFromSQLite = 0;
+        
+        for (const apt of sqliteAppointments) {
+          const appointment = {
+            id: apt.id,
+            datasetId: apt.datasetId,
+            residentName: apt.residentName,
+            address: apt.address,
+            appointmentDate: apt.appointmentDate,
+            appointmentTime: apt.appointmentTime,
+            notes: apt.notes || "",
+            createdBy: apt.createdBy,
+            createdAt: new Date(apt.createdAt),
+          };
+          this.appointmentsCache.set(apt.id, appointment);
+          loadedFromSQLite++;
+        }
+        
+        console.log(`[AppointmentService] ✓ Loaded ${loadedFromSQLite} appointments from SQLite`);
+      } catch (error) {
+        console.error('[AppointmentService] Error loading from SQLite:', error);
+      }
+
+      // Step 2: Merge from Sheets (if available)
+      if (!sheetsEnabled || !sheetsClient) {
+        console.log('[AppointmentService] Google Sheets not available, using SQLite data only');
+        this.lastSync = new Date();
+        this.cacheInitialized = true;
+        return;
+      }
+
       await this.ensureSheetExists();
 
       const sheets = sheetsClient.spreadsheets;
@@ -1527,40 +1582,65 @@ class AppointmentService {
       });
 
       const rows = response.data.values || [];
-      console.log(`[AppointmentService] Retrieved ${rows.length} data rows from Google Sheets`);
+      console.log(`[AppointmentService] Retrieved ${rows.length} rows from Google Sheets`);
       
-      const previousCacheSize = this.appointmentsCache.size;
-      this.appointmentsCache.clear();
-
-      let validCount = 0;
+      let mergedFromSheets = 0;
       for (const row of rows) {
-        if (row.length >= 9) { // Need 9 columns (0-8) to include createdAt
-          const appointment = {
-            id: row[0],
-            datasetId: row[1],
-            residentName: row[2],
-            address: row[3],
-            appointmentDate: row[4],
-            appointmentTime: row[5],
-            notes: row[6] || "",
-            createdBy: row[7],
-            createdAt: new Date(row[8]),
-          };
-          this.appointmentsCache.set(appointment.id, appointment);
-          validCount++;
-        } else {
-          console.log(`[AppointmentService] Skipping invalid row (length: ${row.length}): [${row.join(', ')}]`);
+        if (row.length >= 9) {
+          const id = row[0];
+          
+          // Only add if not already in cache (from SQLite)
+          if (!this.appointmentsCache.has(id)) {
+            const appointment = {
+              id,
+              datasetId: row[1],
+              residentName: row[2],
+              address: row[3],
+              appointmentDate: row[4],
+              appointmentTime: row[5],
+              notes: row[6] || "",
+              createdBy: row[7],
+              createdAt: new Date(row[8]),
+            };
+            this.appointmentsCache.set(id, appointment);
+            
+            // Also persist to SQLite
+            try {
+              appointmentsDB.upsert({
+                id,
+                datasetId: appointment.datasetId,
+                residentName: appointment.residentName,
+                address: appointment.address,
+                appointmentDate: appointment.appointmentDate,
+                appointmentTime: appointment.appointmentTime,
+                notes: appointment.notes,
+                createdBy: appointment.createdBy,
+                createdAt: row[8]
+              });
+            } catch (e) {
+              // Ignore SQLite errors during merge
+            }
+            
+            mergedFromSheets++;
+          }
         }
       }
 
       this.lastSync = new Date();
       this.cacheInitialized = true;
-      console.log(`[AppointmentService] ✓ Synced ${validCount} valid appointments from Sheets`);
+      console.log(`[AppointmentService] ✓ Merged ${mergedFromSheets} additional appointments from Sheets`);
       console.log(`[AppointmentService] Cache: ${previousCacheSize} → ${this.appointmentsCache.size} appointments`);
-      console.log(`[AppointmentService] === SYNC FROM SHEETS END ===`);
+      console.log(`[AppointmentService] === SYNC END ===`);
     } catch (error) {
-      console.error("[AppointmentService] ✗ Error syncing from Sheets:", error);
-      throw error;
+      console.error("[AppointmentService] ✗ Error syncing:", error);
+      // If Sheets fails, we still have SQLite data
+      if (this.appointmentsCache.size > 0) {
+        this.lastSync = new Date();
+        this.cacheInitialized = true;
+        console.log('[AppointmentService] Using SQLite data despite Sheets error');
+      } else {
+        throw error;
+      }
     }
   }
 
@@ -1586,8 +1666,6 @@ class AppointmentService {
         }
       }
 
-      await this.ensureSheetExists();
-
       const id = crypto.randomUUID();
       const createdAt = formatBerlinTimeISO(getBerlinTime());
 
@@ -1605,31 +1683,55 @@ class AppointmentService {
 
       console.log(`[AppointmentService] Generated appointment ID: ${id}`);
 
-      // Write to Sheets first
-      if (!sheetsEnabled || !sheetsClient) {
-        throw new Error('Google Sheets API not available');
+      // Step 1: Write to SQLite FIRST (PRIMARY)
+      try {
+        appointmentsDB.upsert({
+          id,
+          datasetId,
+          residentName,
+          address,
+          appointmentDate,
+          appointmentTime,
+          notes: notes || "",
+          createdBy,
+          createdAt
+        });
+        console.log(`[AppointmentService] ✓ Saved to SQLite`);
+      } catch (error) {
+        console.error(`[AppointmentService] ✗ Error saving to SQLite:`, error);
+        // Continue anyway - we'll try Sheets
       }
-      const sheets = sheetsClient.spreadsheets;
-      const appendResult = await sheets.values.append({
-        spreadsheetId: this.ADDRESSES_SHEET_ID,
-        range: `${this.SHEET_NAME}!A:I`,
-        valueInputOption: "RAW",
-        requestBody: {
-          values: [[
-            id,
-            datasetId,
-            residentName,
-            address,
-            appointmentDate,
-            appointmentTime,
-            notes || "",
-            createdBy,
-            createdAt,
-          ]],
-        },
-      });
 
-      console.log(`[AppointmentService] ✓ Written to Google Sheets at range: ${appendResult.data.updates?.updatedRange}`);
+      // Step 2: Write to Sheets (BACKUP)
+      try {
+        await this.ensureSheetExists();
+        
+        if (sheetsEnabled && sheetsClient) {
+          const sheets = sheetsClient.spreadsheets;
+          const appendResult = await sheets.values.append({
+            spreadsheetId: this.ADDRESSES_SHEET_ID,
+            range: `${this.SHEET_NAME}!A:I`,
+            valueInputOption: "RAW",
+            requestBody: {
+              values: [[
+                id,
+                datasetId,
+                residentName,
+                address,
+                appointmentDate,
+                appointmentTime,
+                notes || "",
+                createdBy,
+                createdAt,
+              ]],
+            },
+          });
+
+          console.log(`[AppointmentService] ✓ Written to Google Sheets at range: ${appendResult.data.updates?.updatedRange}`);
+        }
+      } catch (error) {
+        console.warn('[AppointmentService] Failed to write to Sheets (SQLite backup exists):', error);
+      }
 
       // Add to cache
       this.appointmentsCache.set(id, appointment);
@@ -1687,17 +1789,32 @@ class AppointmentService {
     return allAppointments.filter(apt => apt.appointmentDate >= today);
   }
 
-  // Delete appointment from "Termine" sheet only
+  // Delete appointment from SQLite and "Termine" sheet
   // Note: This keeps the resident's status as "appointment" and their floor data intact
   // It only removes the specific appointment entry (date, time, notes) from the calendar
   async deleteAppointment(id: string): Promise<void> {
-    if (!sheetsEnabled || !sheetsClient) {
-      throw new Error('Google Sheets API not available');
-    }
-
     console.log(`[AppointmentService] === DELETE APPOINTMENT START === ID: ${id}`);
 
     try {
+      // Step 1: Delete from SQLite FIRST (PRIMARY)
+      try {
+        appointmentsDB.delete(id);
+        console.log(`[AppointmentService] ✓ Deleted from SQLite`);
+      } catch (error) {
+        console.error(`[AppointmentService] Error deleting from SQLite:`, error);
+      }
+
+      // Remove from cache
+      this.appointmentsCache.delete(id);
+      console.log(`[AppointmentService] ✓ Removed from cache`);
+
+      // Step 2: Delete from Sheets (BACKUP)
+      if (!sheetsEnabled || !sheetsClient) {
+        console.log('[AppointmentService] Google Sheets not available, only deleted from SQLite');
+        console.log(`[AppointmentService] === DELETE APPOINTMENT END ===`);
+        return;
+      }
+
       const sheetId = await this.getSheetId();
       console.log(`[AppointmentService] Sheet ID for "${this.SHEET_NAME}": ${sheetId}`);
 
@@ -1721,10 +1838,8 @@ class AppointmentService {
       });
 
       if (rowIndex === -1) {
-        console.log(`[AppointmentService] ERROR: Appointment ${id} not found in sheet!`);
-        console.log(`[AppointmentService] Searched through ${rows.length} rows`);
-        console.log(`[AppointmentService] First few IDs in sheet: ${rows.slice(1, 4).map((r: any) => r[0]).join(', ')}`);
-        this.appointmentsCache.delete(id);
+        console.log(`[AppointmentService] Appointment ${id} not found in sheet (already deleted or only in SQLite)`);
+        console.log(`[AppointmentService] === DELETE APPOINTMENT END ===`);
         return;
       }
 
@@ -1749,18 +1864,12 @@ class AppointmentService {
         },
       });
 
-      console.log(`[AppointmentService] Successfully sent delete request to Google Sheets API`);
-
-      this.appointmentsCache.delete(id);
-      if (LOG_CONFIG.APPOINTMENTS.logSummary) {
-        console.log(`[AppointmentService] Appointment ${id} removed from in-memory cache`);
-      }
-
+      console.log(`[AppointmentService] ✓ Successfully deleted from Google Sheets`);
       console.log(`[AppointmentService] === DELETE APPOINTMENT END ===`);
     } catch (error) {
       console.error("[AppointmentService] Error deleting appointment:", error);
       console.log(`[AppointmentService] === DELETE APPOINTMENT FAILED ===`);
-      throw error;
+      // Don't throw - we already deleted from SQLite
     }
   }
   // Helper to get sheet ID

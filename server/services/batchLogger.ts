@@ -3,6 +3,7 @@ import { fallbackLogger } from './fallbackLogging';
 import { pushoverService } from './pushover';
 import { LOG_CONFIG } from '../config/logConfig';
 import { googleSheetsRateLimitManager } from './googleSheetsRateLimitManager';
+import { authLogsDB, categoryChangesDB } from './systemDatabaseService';
 
 interface BatchQueueEntry {
   type: 'user_activity' | 'auth' | 'category';
@@ -239,22 +240,45 @@ class BatchLogger {
   }
 
   private async flushAuthLogs(entries: { type: 'auth'; data: AuthLogEntry }[]) {
-    const { GoogleSheetsLoggingService } = await import('./googleSheetsLogging');
+    // Step 1: Save to SQLite (PRIMARY)
+    try {
+      const logsToInsert = entries.map(entry => ({
+        timestamp: entry.data.timestamp,
+        ipAddress: entry.data.ipAddress,
+        success: entry.data.success,
+        username: entry.data.username || undefined,
+        userId: entry.data.userId || undefined,
+        reason: entry.data.reason || undefined,
+      }));
 
-    const logRows = entries.map(entry => {
-      const log = entry.data;
-      return [
-        log.timestamp,
-        log.ipAddress,
-        log.success ? 'SUCCESS' : 'FAILED',
-        log.username || 'unknown',
-        log.userId || 'unknown',
-        log.reason
-      ];
-    });
+      const inserted = authLogsDB.insertBatch(logsToInsert);
+      console.log(`[BatchLogger] Saved ${inserted} auth logs to SQLite`);
+    } catch (error) {
+      console.error('[BatchLogger] Failed to save auth logs to SQLite:', error);
+    }
 
-    // Batch append all rows to AuthLogs worksheet
-    await GoogleSheetsLoggingService.batchAppendToWorksheet('AuthLogs', logRows);
+    // Step 2: Save to Sheets (BACKUP) - using SYSTEM_SHEET now
+    // IMPORTANT: Use consistent data types with SQLite (0/1 for success, not SUCCESS/FAILED)
+    try {
+      const { GoogleSheetsLoggingService } = await import('./googleSheetsLogging');
+
+      const logRows = entries.map(entry => {
+        const log = entry.data;
+        return [
+          log.timestamp,
+          log.ipAddress,
+          log.success ? '1' : '0',  // Store as 0/1 like SQLite for consistency
+          log.username || '',
+          log.userId || '',
+          log.reason || ''
+        ];
+      });
+
+      // Batch append to AuthLogs worksheet (in System Sheet)
+      await GoogleSheetsLoggingService.batchAppendToWorksheet('AuthLogs', logRows);
+    } catch (error) {
+      console.warn('[BatchLogger] Failed to save auth logs to Sheets (SQLite backup exists):', error);
+    }
   }
 
   private async flushCategoryChangeLogs(

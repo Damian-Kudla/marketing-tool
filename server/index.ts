@@ -14,6 +14,9 @@ import { sqliteStartupSyncService } from "./services/sqliteStartupSync";
 import { sqliteDailyArchiveService } from "./services/sqliteDailyArchive";
 import { closeAllDBs } from "./services/sqliteLogService";
 import { shouldLogEndpoint } from "./config/logConfig";
+import { batchLogger } from "./services/batchLogger";
+import { systemStartupSync, systemDB } from "./services/systemDatabaseService";
+import { egonScraperService } from "./services/egonScraperService";
 
 // Force Railway rebuild - production path fix
 
@@ -161,6 +164,28 @@ app.use((req, res, next) => {
     log('Starting SQLite Startup Sync (this may take a moment)...');
     await sqliteStartupSyncService.performStartupSync();
 
+    // Perform System Database Startup Sync (Cookies, Appointments, etc.)
+    log('Starting System Database Startup Sync...');
+    try {
+      const systemSyncResult = await systemStartupSync.performStartupSync();
+      if (systemSyncResult.errors.length > 0) {
+        log(`⚠️ System DB sync completed with ${systemSyncResult.errors.length} errors`);
+      } else {
+        log('✅ System Database Startup Sync completed');
+      }
+    } catch (error) {
+      log(`⚠️ System DB startup sync failed: ${error}`);
+    }
+
+    // Perform EGON Orders Startup Sync (restore from Drive/Sheets if local is empty)
+    log('Starting EGON Orders Startup Sync...');
+    try {
+      await egonScraperService.performStartupSync();
+      log(`✅ EGON Orders Startup Sync completed (${egonScraperService.getOrderCount()} orders)`);
+    } catch (error) {
+      log(`⚠️ EGON Orders startup sync failed: ${error}`);
+    }
+
     // Start Daily Archive Cron Job (runs at midnight CET)
     log('Starting SQLite Daily Archive cron job...');
     sqliteDailyArchiveService.start();
@@ -196,6 +221,8 @@ app.use((req, res, next) => {
     googleDriveSyncService.stop();
     sqliteDailyArchiveService.stop();
     closeAllDBs();
+    systemDB.closeAll();
+    egonScraperService.close();
     process.exit(0);
   });
 
@@ -205,6 +232,8 @@ app.use((req, res, next) => {
     googleDriveSyncService.stop();
     sqliteDailyArchiveService.stop();
     closeAllDBs();
+    systemDB.closeAll();
+    egonScraperService.close();
     process.exit(0);
   });
 })();

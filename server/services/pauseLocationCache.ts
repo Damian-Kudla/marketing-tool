@@ -3,14 +3,17 @@
  * 
  * Manages POI (Point of Interest) data for pause locations:
  * - RAM cache for fast lookups
- * - Google Sheets persistence (PauseLocations sheet)
+ * - Local SQLite persistence (PRIMARY)
+ * - Google Sheets persistence (PauseLocations sheet) - BACKUP
  * - 50m radius matching for cached locations
  * - Google Places API integration
  */
 
 import { google } from './googleApiWrapper';
+import { pauseLocationsDB } from './systemDatabaseService';
 
-const SHEET_ID = process.env.GOOGLE_LOGS_SHEET_ID || '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+// NOTE: Using SYSTEM_SHEET_ID now (separate from user logs)
+const SHEET_ID = process.env.GOOGLE_SYSTEM_SHEET_ID || '1OsXBfxE2Pe7cPBGjPD9C2-03gm8cNfMdR9_EfZicMyw';
 const API_KEY = process.env.GOOGLE_GEOCODING_API_KEY || '';
 const SHEET_NAME = 'PauseLocations';
 
@@ -73,62 +76,107 @@ class PauseLocationCacheService {
   };
 
   /**
-   * Initialize cache by loading from Google Sheets
+   * Initialize cache: First from SQLite, then merge from Google Sheets
    */
   async initialize(): Promise<void> {
     if (this.initialized) return;
 
-    console.log('[PauseLocationCache] Initializing cache from Google Sheets...');
+    console.log('[PauseLocationCache] Initializing cache (SQLite + Sheets)...');
 
     try {
-      const auth = getGoogleAuth();
-      const sheets = google.sheets({ version: 'v4', auth });
-
-      // Check if sheet exists, create if not
-      await this.ensureSheetExists(sheets);
-
-      // Load data from sheet
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId: SHEET_ID,
-        range: `${SHEET_NAME}!A2:G`, // Skip header row
-      });
-
-      const rows = response.data.values || [];
+      // Step 1: Load from SQLite (PRIMARY SOURCE)
+      const sqliteLocations = pauseLocationsDB.getAll();
       const seenPlaceIds = new Set<string>();
       
-      for (const row of rows) {
-        if (row.length < 7) continue; // Skip incomplete rows
-
-        const [latStr, lngStr, name, type, address, placeId, createdAt] = row;
+      for (const loc of sqliteLocations) {
+        if (seenPlaceIds.has(loc.placeId)) continue;
+        seenPlaceIds.add(loc.placeId);
         
-        // Skip duplicates (same place_id already loaded)
-        if (seenPlaceIds.has(placeId)) {
-          console.log(`[PauseLocationCache] Skipping duplicate place_id: ${placeId} (${name})`);
-          continue;
-        }
-        seenPlaceIds.add(placeId);
-        
-        // Parse coordinates with German decimal separator support (comma → dot)
-        const lat = parseFloat(latStr.toString().replace(',', '.'));
-        const lng = parseFloat(lngStr.toString().replace(',', '.'));
-        
-        // Use place_id as cache key (unique identifier)
-        this.cache.set(placeId, {
-          lat,
-          lng,
-          name,
-          type,
-          address,
-          placeId,
-          createdAt: parseInt(createdAt, 10),
+        this.cache.set(loc.placeId, {
+          lat: loc.lat,
+          lng: loc.lng,
+          name: loc.name,
+          type: loc.type,
+          address: loc.address || '',
+          placeId: loc.placeId,
+          createdAt: loc.createdAt,
         });
+      }
+      
+      console.log(`[PauseLocationCache] Loaded ${this.cache.size} locations from SQLite`);
+
+      // Step 2: Merge from Sheets (if available)
+      try {
+        const auth = getGoogleAuth();
+        const sheets = google.sheets({ version: 'v4', auth });
+
+        await this.ensureSheetExists(sheets);
+
+        const response = await sheets.spreadsheets.values.get({
+          spreadsheetId: SHEET_ID,
+          range: `${SHEET_NAME}!A2:G`,
+        });
+
+        const rows = response.data.values || [];
+        let mergedFromSheets = 0;
+        
+        for (const row of rows) {
+          if (row.length < 6) continue;
+
+          const [latStr, lngStr, name, type, address, placeId, createdAt] = row;
+          
+          // Skip if already in cache
+          if (seenPlaceIds.has(placeId)) continue;
+          seenPlaceIds.add(placeId);
+          
+          const lat = parseFloat(latStr.toString().replace(',', '.'));
+          const lng = parseFloat(lngStr.toString().replace(',', '.'));
+          const timestamp = parseInt(createdAt, 10) || Date.now();
+          
+          this.cache.set(placeId, {
+            lat,
+            lng,
+            name,
+            type,
+            address: address || '',
+            placeId,
+            createdAt: timestamp,
+          });
+          
+          // Also persist to SQLite
+          try {
+            pauseLocationsDB.upsert({
+              placeId,
+              lat,
+              lng,
+              name,
+              type,
+              address: address || undefined,
+              createdAt: timestamp,
+            });
+          } catch (e) {
+            // Ignore SQLite errors during merge
+          }
+          
+          mergedFromSheets++;
+        }
+
+        console.log(`[PauseLocationCache] Merged ${mergedFromSheets} additional locations from Sheets`);
+      } catch (error) {
+        console.warn('[PauseLocationCache] Could not load from Sheets, using SQLite data only:', error);
       }
 
       this.initialized = true;
-      console.log(`[PauseLocationCache] Loaded ${this.cache.size} unique locations from sheet (${seenPlaceIds.size} place_ids)`);
+      console.log(`[PauseLocationCache] Total: ${this.cache.size} unique locations`);
     } catch (error) {
       console.error('[PauseLocationCache] Failed to initialize:', error);
-      throw error;
+      // Still mark as initialized if we have any data
+      if (this.cache.size > 0) {
+        this.initialized = true;
+        console.log(`[PauseLocationCache] Using ${this.cache.size} locations from partial load`);
+      } else {
+        throw error;
+      }
     }
   }
 
@@ -274,7 +322,7 @@ class PauseLocationCacheService {
   }
 
   /**
-   * Save multiple POIs to cache and Google Sheets (batch)
+   * Save multiple POIs to SQLite, cache and Google Sheets (batch)
    * Checks for duplicate place_id to prevent redundant saves
    */
   private async savePOIs(pois: POIInfo[]): Promise<void> {
@@ -296,12 +344,44 @@ class PauseLocationCacheService {
       this.cache.set(poi.placeId, poi);
     }
 
-    // Batch save to Google Sheets (only new POIs)
+    // Step 1: Save to SQLite (PRIMARY)
+    try {
+      const inserted = pauseLocationsDB.upsertBatch(newPOIs.map(poi => ({
+        placeId: poi.placeId,
+        lat: poi.lat,
+        lng: poi.lng,
+        name: poi.name,
+        type: poi.type,
+        address: poi.address || undefined,
+        createdAt: poi.createdAt,
+      })));
+      console.log(`[PauseLocationCache] Saved ${inserted} POIs to SQLite`);
+    } catch (error) {
+      console.error('[PauseLocationCache] Failed to save POIs to SQLite:', error);
+    }
+
+    // Step 2: Save to Google Sheets (BACKUP) - with duplicate prevention
     try {
       const auth = getGoogleAuth();
       const sheets = google.sheets({ version: 'v4', auth });
 
-      const rows = newPOIs.map(poi => [
+      // Get existing placeIds from Sheets to prevent duplicates
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID,
+        range: `${SHEET_NAME}!F2:F`, // Column F = place_id
+      });
+
+      const existingPlaceIds = new Set((response.data.values || []).map(row => row[0]));
+
+      // Filter out POIs that already exist in Sheets
+      const poisToAdd = newPOIs.filter(poi => !existingPlaceIds.has(poi.placeId));
+
+      if (poisToAdd.length === 0) {
+        console.log(`[PauseLocationCache] All ${newPOIs.length} POIs already in Sheets, skipping append`);
+        return;
+      }
+
+      const rows = poisToAdd.map(poi => [
         poi.lat,
         poi.lng,
         poi.name,
@@ -320,10 +400,9 @@ class PauseLocationCacheService {
         },
       });
 
-      console.log(`[PauseLocationCache] Batch saved ${newPOIs.length} POIs to sheet (Total: ${this.stats.savedPOIs})`);
+      console.log(`[PauseLocationCache] Saved ${poisToAdd.length}/${newPOIs.length} new POIs to Sheets (${newPOIs.length - poisToAdd.length} duplicates skipped)`);
     } catch (error) {
-      console.error('[PauseLocationCache] Failed to batch save POIs to sheet:', error);
-      // Continue anyway - at least it's in RAM cache
+      console.warn('[PauseLocationCache] Failed to save POIs to Sheets (SQLite backup exists):', error);
     }
   }
 

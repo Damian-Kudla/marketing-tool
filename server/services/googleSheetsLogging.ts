@@ -50,7 +50,21 @@ export interface LogEntry {
 
 export class GoogleSheetsLoggingService {
   private static readonly LOG_SHEET_ID = process.env.GOOGLE_LOGS_SHEET_ID || '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+  // System worksheets (AuthLogs, CategoryChanges) use separate sheet
+  private static readonly SYSTEM_SHEET_ID = process.env.GOOGLE_SYSTEM_SHEET_ID || '1OsXBfxE2Pe7cPBGjPD9C2-03gm8cNfMdR9_EfZicMyw';
+  // List of worksheets that belong in the SYSTEM_SHEET
+  private static readonly SYSTEM_WORKSHEETS = ['AuthLogs', 'Log_Änderung_Kategorie', 'CategoryChanges'];
   private static readonly worksheetCache = new Map<string, boolean>();
+
+  /**
+   * Helper: Get the correct Sheet ID for a worksheet
+   */
+  private static getSheetIdForWorksheet(worksheetName: string): string {
+    if (this.SYSTEM_WORKSHEETS.includes(worksheetName)) {
+      return this.SYSTEM_SHEET_ID;
+    }
+    return this.LOG_SHEET_ID;
+  }
 
   // Ensure worksheet exists for user, create if it doesn't
   static async ensureUserWorksheet(userId: string, username: string): Promise<string> {
@@ -236,13 +250,14 @@ export class GoogleSheetsLoggingService {
     }
 
     try {
-      // Log authentication attempts to a special "AuthLogs" worksheet
+      // Log authentication attempts to a special "AuthLogs" worksheet in SYSTEM_SHEET
       const authWorksheetName = 'AuthLogs';
+      const sheetId = this.SYSTEM_SHEET_ID;
       
-      // Ensure auth logs worksheet exists
+      // Ensure auth logs worksheet exists in SYSTEM_SHEET
       try {
         const response = await sheetsClient.spreadsheets.get({
-          spreadsheetId: this.LOG_SHEET_ID,
+          spreadsheetId: sheetId,
         });
 
         const existingSheets = response.data.sheets || [];
@@ -253,7 +268,7 @@ export class GoogleSheetsLoggingService {
         if (!authSheetExists) {
           // Create auth logs worksheet
           await sheetsClient.spreadsheets.batchUpdate({
-            spreadsheetId: this.LOG_SHEET_ID,
+            spreadsheetId: sheetId,
             resource: {
               requests: [
                 {
@@ -269,7 +284,7 @@ export class GoogleSheetsLoggingService {
 
           // Add header row
           await sheetsClient.spreadsheets.values.update({
-            spreadsheetId: this.LOG_SHEET_ID,
+            spreadsheetId: sheetId,
             range: `${authWorksheetName}!A1:F1`,
             valueInputOption: 'RAW',
             resource: {
@@ -294,7 +309,7 @@ export class GoogleSheetsLoggingService {
       ];
 
       await sheetsClient.spreadsheets.values.append({
-        spreadsheetId: this.LOG_SHEET_ID,
+        spreadsheetId: sheetId,
         range: `${authWorksheetName}!A:F`,
         valueInputOption: 'RAW',
         insertDataOption: 'INSERT_ROWS',
@@ -314,9 +329,12 @@ export class GoogleSheetsLoggingService {
       throw new Error('Google Sheets API not available');
     }
 
+    // Use correct Sheet ID based on worksheet type
+    const sheetId = this.getSheetIdForWorksheet(worksheetName);
+
     try {
       await sheetsClient.spreadsheets.values.append({
-        spreadsheetId: this.LOG_SHEET_ID,
+        spreadsheetId: sheetId,
         range: `${worksheetName}!A:J`,
         valueInputOption: 'RAW',
         insertDataOption: 'INSERT_ROWS',
@@ -345,7 +363,7 @@ export class GoogleSheetsLoggingService {
         
         // Retry the append
         await sheetsClient.spreadsheets.values.append({
-          spreadsheetId: this.LOG_SHEET_ID,
+          spreadsheetId: sheetId,
           range: `${worksheetName}!A:J`,
           valueInputOption: 'RAW',
           insertDataOption: 'INSERT_ROWS',

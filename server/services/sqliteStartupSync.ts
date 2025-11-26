@@ -21,7 +21,8 @@ import {
   getDBPath,
   checkDBIntegrity,
   closeDB,
-  LogInsertData
+  LogInsertData,
+  getAllLogsForDate
 } from './sqliteLogService';
 import { sqliteBackupService } from './sqliteBackupService';
 import { GoogleSheetsLoggingService, LogEntry } from './googleSheetsLogging';
@@ -41,6 +42,7 @@ interface SyncStats {
   dbsUploaded: number;
   sheetsProcessed: number;
   logsMerged: number;
+  logsWrittenToSheets: number; // NEW: Logs from SQLite → Sheets
   sheetsRowsDeleted: number;
   conflicts: number;
   errors: string[];
@@ -291,12 +293,15 @@ class SQLiteStartupSyncService {
   }
 
   /**
-   * PHASE 4: Merge alte Logs aus Google Sheets
+   * PHASE 4: Bidirektionaler Sync zwischen Sheets und SQLite
+   * 
+   * - Logs die NUR in Sheets sind → SQLite einfügen
+   * - Logs die NUR in SQLite sind → Sheets schreiben (wenn möglich)
+   * 
+   * Verwendet Timestamp als unique key für Duplikat-Erkennung
    */
   private async phase4_MergeSheetsLogs(stats: SyncStats): Promise<void> {
     try {
-      // Get ALL user worksheets from spreadsheet (not just active users)
-      // This ensures we also process sheets from former employees or renamed accounts
       const allWorksheets = await this.getAllUserWorksheets();
 
       if (allWorksheets.length === 0) {
@@ -304,189 +309,253 @@ class SQLiteStartupSyncService {
         return;
       }
 
-      console.log(`[Phase 4] Processing ${allWorksheets.length} user sheets...`);
-
-      // Log all worksheet names for debugging
+      console.log(`[Phase 4] 🔄 BIDIRECTIONAL SYNC: Processing ${allWorksheets.length} user sheets...`);
       console.log('[Phase 4] Found worksheets:');
       allWorksheets.forEach(ws => console.log(`  - ${ws}`));
 
       const today = getCETDate();
+      const yesterday = this.getYesterday(today);
 
-      // Map: date -> LogInsertData[]
-      const logsByDate = new Map<string, LogInsertData[]>();
-
-      // Track sheets with old logs for cleanup
+      // Track which sheets have old logs (for cleanup in Phase 6)
       const sheetsWithOldLogs: string[] = [];
+      const datesNeedingUpload: string[] = [];
 
       // Process each user's sheet
       for (const worksheetName of allWorksheets) {
         stats.sheetsProcessed++;
-
-        console.log(`[Phase 4] Processing sheet: ${worksheetName}...`);
+        console.log(`\n[Phase 4] Processing sheet: ${worksheetName}...`);
 
         try {
-          // Get all logs from this user's sheet
-          const logs = await this.getAllLogsFromSheet(worksheetName);
-
-          if (!logs || logs.length === 0) {
-            console.log(`[Phase 4]   No logs found`);
+          // Extract userId and username from worksheet name (format: "Username_UserId")
+          const parts = worksheetName.split('_');
+          if (parts.length < 2) {
+            console.warn(`[Phase 4]   Invalid worksheet name format: ${worksheetName}`);
             continue;
           }
+          const sheetUsername = parts.slice(0, -1).join('_'); // Handle usernames with underscores
+          const sheetUserId = parts[parts.length - 1];
 
-          console.log(`[Phase 4]   Retrieved ${logs.length} logs from sheet`);
+          // Get all logs from Sheets for this user
+          const sheetsLogs = await this.getAllLogsFromSheet(worksheetName);
+          console.log(`[Phase 4]   Sheets: ${sheetsLogs.length} logs`);
 
-          // Warn if too many logs (potential performance issue)
-          if (logs.length > 50000) {
-            console.warn(`[Phase 4]   ⚠️  Large dataset detected (${logs.length} logs) - may take a while`);
-          }
-
-          // Filter for old logs (YESTERDAY or earlier, not today or same day)
-          // WICHTIG: Nur Logs von GESTERN (oder früher) als "old" behandeln
-          // Dadurch wird verhindert, dass Logs vom gleichen Tag gelöscht werden,
-          // wenn der Server kurz nach Mitternacht startet, aber noch Batch-Uploads
-          // vom Vortag ausstehen (z.B. 23:05-23:59 Uhr Logs)
-          const oldLogs = logs.filter(log => {
+          // Group Sheets logs by date
+          const sheetsLogsByDate = new Map<string, any[]>();
+          for (const log of sheetsLogs) {
             try {
-              // Validate timestamp
-              if (!log.timestamp) return false;
-
+              if (!log.timestamp) continue;
               const timestamp = new Date(log.timestamp).getTime();
-              if (isNaN(timestamp)) return false;
-
+              if (isNaN(timestamp)) continue;
+              
               const logDate = getCETDate(timestamp);
-              // Nur Logs VOR heute (gestern oder früher) als "old" markieren
-              return logDate < today;
-            } catch (error) {
-              console.warn(`[Phase 4]   Invalid timestamp: ${log.timestamp}`);
-              return false;
-            }
-          });
-
-          if (oldLogs.length > 0) {
-            console.log(`[Phase 4]   Found ${oldLogs.length} old logs (${logs.length} total)`);
-            sheetsWithOldLogs.push(worksheetName);
-
-            // Group by date (process in batches to avoid memory issues)
-            const BATCH_SIZE = 1000;
-            for (let i = 0; i < oldLogs.length; i += BATCH_SIZE) {
-              const batch = oldLogs.slice(i, Math.min(i + BATCH_SIZE, oldLogs.length));
-
-              for (const log of batch) {
-                try {
-                  const timestamp = new Date(log.timestamp).getTime();
-                  if (isNaN(timestamp)) {
-                    console.warn(`[Phase 4]   Skipping log with invalid timestamp: ${log.timestamp}`);
-                    continue;
-                  }
-
-                  const logDate = getCETDate(timestamp);
-
-                  if (!logsByDate.has(logDate)) {
-                    logsByDate.set(logDate, []);
-                  }
-
-                  // Convert to LogInsertData
-                  const insertData: LogInsertData = {
-                    userId: log.userId || '',
-                    username: log.username || '',
-                    timestamp: timestamp,
-                    logType: this.inferLogType(log),
-                    data: this.extractLogData(log)
-                  };
-
-                  logsByDate.get(logDate)!.push(insertData);
-                } catch (error) {
-                  console.warn(`[Phase 4]   Error converting log:`, error);
-                  continue;
-                }
+              if (!sheetsLogsByDate.has(logDate)) {
+                sheetsLogsByDate.set(logDate, []);
               }
-
-              // Progress logging for large datasets
-              if (oldLogs.length > 5000 && i > 0 && i % 5000 === 0) {
-                console.log(`[Phase 4]   Processed ${i}/${oldLogs.length} logs...`);
-              }
+              sheetsLogsByDate.get(logDate)!.push({ ...log, timestampMs: timestamp });
+            } catch (e) {
+              continue;
             }
-          } else {
-            console.log(`[Phase 4]   All logs are from today, skipping`);
           }
+
+          // Process each date that has logs in Sheets
+          const allDates = Array.from(sheetsLogsByDate.keys()).sort();
+          console.log(`[Phase 4]   Dates in Sheets: ${allDates.join(', ') || 'none'}`);
+
+          for (const date of allDates) {
+            const sheetsLogsForDate = sheetsLogsByDate.get(date)!;
+            
+            // Get SQLite logs for this user on this date
+            const sqliteLogs = getAllLogsForDate(date).filter(l => l.userId === sheetUserId);
+            
+            // Create sets of timestamps for comparison
+            const sheetsTimestamps = new Set(sheetsLogsForDate.map(l => l.timestampMs));
+            const sqliteTimestamps = new Set(sqliteLogs.map(l => l.timestamp));
+
+            // Find logs ONLY in Sheets (need to insert into SQLite)
+            const onlyInSheets = sheetsLogsForDate.filter(l => !sqliteTimestamps.has(l.timestampMs));
+            
+            // Find logs ONLY in SQLite (need to write to Sheets)
+            const onlyInSQLite = sqliteLogs.filter(l => !sheetsTimestamps.has(l.timestamp));
+
+            if (onlyInSheets.length > 0 || onlyInSQLite.length > 0) {
+              console.log(`[Phase 4]   ${date}: Sheets=${sheetsLogsForDate.length}, SQLite=${sqliteLogs.length}`);
+              console.log(`[Phase 4]     → Only in Sheets: ${onlyInSheets.length}, Only in SQLite: ${onlyInSQLite.length}`);
+            }
+
+            // SYNC 1: Sheets → SQLite (Logs nur in Sheets)
+            if (onlyInSheets.length > 0) {
+              const logsToInsert: LogInsertData[] = onlyInSheets.map(log => ({
+                userId: log.userId || sheetUserId,
+                username: log.username || sheetUsername,
+                timestamp: log.timestampMs,
+                logType: this.inferLogType(log),
+                data: this.extractLogData(log)
+              }));
+
+              const inserted = insertLogsBatch(date, logsToInsert);
+              stats.logsMerged += inserted;
+              console.log(`[Phase 4]     ✅ Sheets→SQLite: Inserted ${inserted} logs`);
+
+              if (inserted > 0 && date !== today) {
+                datesNeedingUpload.push(date);
+              }
+            }
+
+            // SYNC 2: SQLite → Sheets (Logs nur in SQLite)
+            // Nur für Daten von gestern oder früher (nicht heute)
+            if (onlyInSQLite.length > 0 && date < today) {
+              try {
+                const logsToWrite = onlyInSQLite.map(log => this.convertSQLiteLogToSheetRow(log));
+                
+                // Write to Sheets (with rate limit check)
+                const written = await this.writeLogsToSheet(worksheetName, logsToWrite);
+                stats.logsWrittenToSheets += written;
+                
+                if (written > 0) {
+                  console.log(`[Phase 4]     ✅ SQLite→Sheets: Wrote ${written} logs`);
+                } else if (written === -1) {
+                  console.log(`[Phase 4]     ⚠️  SQLite→Sheets: Skipped (Sheets full or rate limited)`);
+                }
+              } catch (error: any) {
+                // Don't fail the whole sync if Sheets write fails
+                console.warn(`[Phase 4]     ⚠️  SQLite→Sheets failed: ${error.message || error}`);
+              }
+            }
+
+            // Track sheets with old logs for cleanup
+            if (date < yesterday && sheetsLogsForDate.length > 0) {
+              if (!sheetsWithOldLogs.includes(worksheetName)) {
+                sheetsWithOldLogs.push(worksheetName);
+              }
+            }
+          }
+
+          // Also check SQLite for dates NOT in Sheets (completely missing from Sheets)
+          const last7Days = this.getLast7Days(today);
+          for (const date of last7Days) {
+            if (sheetsLogsByDate.has(date)) continue; // Already processed
+            if (date === today) continue; // Skip today
+
+            const sqliteLogs = getAllLogsForDate(date).filter(l => l.userId === sheetUserId);
+            if (sqliteLogs.length === 0) continue;
+
+            console.log(`[Phase 4]   ${date}: SQLite has ${sqliteLogs.length} logs, Sheets has 0`);
+            
+            try {
+              const logsToWrite = sqliteLogs.map(log => this.convertSQLiteLogToSheetRow(log));
+              const written = await this.writeLogsToSheet(worksheetName, logsToWrite);
+              stats.logsWrittenToSheets += written;
+              
+              if (written > 0) {
+                console.log(`[Phase 4]     ✅ SQLite→Sheets: Wrote ${written} missing logs`);
+              } else if (written === -1) {
+                console.log(`[Phase 4]     ⚠️  Sheets full or rate limited, skipping`);
+              }
+            } catch (error: any) {
+              console.warn(`[Phase 4]     ⚠️  SQLite→Sheets failed: ${error.message || error}`);
+            }
+          }
+
         } catch (error: any) {
           console.error(`[Phase 4]   Error processing ${worksheetName}:`, error?.message || error);
           stats.errors.push(`Failed to process sheet ${worksheetName}: ${error?.message || 'Unknown error'}`);
-          // Continue with next sheet instead of crashing
         }
 
-        // Rate limiting
+        // Rate limiting between sheets
         await this.sleep(2000);
       }
 
-      // Now merge all collected logs into DBs (grouped by date)
-      console.log(`[Phase 4] Merging logs into ${logsByDate.size} DBs...`);
+      console.log(`\n[Phase 4] ✅ Bidirectional sync complete:`);
+      console.log(`   → Sheets→SQLite: ${stats.logsMerged} logs merged`);
+      console.log(`   → SQLite→Sheets: ${stats.logsWrittenToSheets} logs written`);
 
-      const datesNeedingUpload: string[] = [];
-      const newlyCreatedDBs: string[] = []; // Track DBs created during this phase
-
-      for (const [date, logs] of logsByDate.entries()) {
-        console.log(`[Phase 4] Merging ${logs.length} logs into ${date}...`);
-
-        // Check if DB exists locally
-        let dbPath = getDBPath(date);
-        let wasCreatedNow = false;
-
-        if (!(await dbExists(date))) {
-          wasCreatedNow = true; // Mark as newly created
-          
-          // DB not local, check if >7 days old
-          const daysAgo = Math.floor(
-            (new Date(today).getTime() - new Date(date).getTime()) / (1000 * 60 * 60 * 24)
-          );
-
-          if (daysAgo > 7) {
-            console.log(`[Phase 4]   ${date} is >7 days old, downloading from Drive...`);
-
-            // Try to download
-            const downloaded = await sqliteBackupService.downloadDB(date, dbPath);
-
-            if (downloaded) {
-              wasCreatedNow = false; // Downloaded from Drive, not newly created
-            } else {
-              console.log(`[Phase 4]   Not in Drive, creating new DB for ${date}`);
-            }
-          } else {
-            console.log(`[Phase 4]   Creating new DB for ${date}`);
-          }
-        }
-
-        // Insert logs (batch)
-        const inserted = insertLogsBatch(date, logs);
-        stats.logsMerged += inserted;
-
-        console.log(`[Phase 4]   ✅ Merged ${inserted}/${logs.length} logs into ${date}`);
-
-        // Mark for upload if:
-        // 1. New logs were inserted (inserted > 0), OR
-        // 2. DB was newly created (not in Drive yet)
-        if (date !== today && (inserted > 0 || wasCreatedNow)) {
-          datesNeedingUpload.push(date);
-          if (wasCreatedNow && inserted > 0) {
-            newlyCreatedDBs.push(date);
-          }
-        }
-
-        await this.sleep(100);
-      }
-
-      console.log(`[Phase 4] ✅ Merged ${stats.logsMerged} logs from Sheets`);
-      
-      if (newlyCreatedDBs.length > 0) {
-        console.log(`[Phase 4] ℹ️  Created ${newlyCreatedDBs.length} new DBs: ${newlyCreatedDBs.join(', ')}`);
-      }
-
-      // Store dates for upload in next phase
-      (stats as any)._datesNeedingUpload = datesNeedingUpload;
+      // Store for next phases
+      (stats as any)._datesNeedingUpload = [...new Set(datesNeedingUpload)];
       (stats as any)._sheetsWithOldLogs = sheetsWithOldLogs;
     } catch (error) {
-      console.error('[Phase 4] Error merging sheets logs:', error);
-      stats.errors.push(`Sheets merge error: ${error}`);
+      console.error('[Phase 4] Error in bidirectional sync:', error);
+      stats.errors.push(`Bidirectional sync error: ${error}`);
+    }
+  }
+
+  /**
+   * Helper: Convert SQLite log to Sheets row format
+   */
+  private convertSQLiteLogToSheetRow(log: any): any[] {
+    const data = typeof log.data === 'string' ? log.data : JSON.stringify(log.data);
+    const timestamp = new Date(log.timestamp).toISOString();
+    
+    return [
+      timestamp,           // A: Timestamp
+      log.userId,          // B: User ID
+      log.username,        // C: Username
+      log.data?.endpoint || '',  // D: Endpoint
+      log.data?.method || '',    // E: Method
+      log.data?.address || '',   // F: Address
+      '',                  // G: New Prospects (reconstructed from data if needed)
+      '',                  // H: Existing Customers
+      log.data?.userAgent || '', // I: User Agent
+      data                 // J: Full Data JSON
+    ];
+  }
+
+  /**
+   * Helper: Write logs to a Sheets worksheet
+   * Returns number of logs written, or -1 if Sheets is full/rate limited
+   */
+  private async writeLogsToSheet(worksheetName: string, rows: any[][]): Promise<number> {
+    if (rows.length === 0) return 0;
+
+    try {
+      // Check global rate limit
+      const { googleSheetsRateLimitManager } = await import('./googleSheetsRateLimitManager');
+      if (googleSheetsRateLimitManager.isRateLimited()) {
+        console.log(`[WriteToSheet] Rate limited, skipping write to ${worksheetName}`);
+        return -1;
+      }
+
+      const sheetsKey = process.env.GOOGLE_SHEETS_KEY || '{}';
+      const credentials = JSON.parse(sheetsKey);
+
+      const auth = new google.auth.JWT({
+        email: credentials.client_email,
+        key: credentials.private_key,
+        scopes: ['https://www.googleapis.com/auth/spreadsheets']
+      });
+
+      const sheets = google.sheets({ version: 'v4', auth });
+      const LOG_SHEET_ID = process.env.GOOGLE_LOGS_SHEET_ID || '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+
+      // Append rows
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: LOG_SHEET_ID,
+        range: `${worksheetName}!A:J`,
+        valueInputOption: 'RAW',
+        insertDataOption: 'INSERT_ROWS',
+        requestBody: {
+          values: rows
+        }
+      });
+
+      return rows.length;
+    } catch (error: any) {
+      // Check for rate limit or quota errors
+      if (error?.status === 429 || error?.code === 429 || 
+          error?.message?.includes('Quota exceeded') ||
+          error?.message?.includes('RESOURCE_EXHAUSTED')) {
+        const { googleSheetsRateLimitManager } = await import('./googleSheetsRateLimitManager');
+        googleSheetsRateLimitManager.triggerRateLimit();
+        return -1;
+      }
+
+      // Check for cell limit error
+      if (error?.message?.includes('maximum cell') || 
+          error?.message?.includes('10000000 cells')) {
+        console.warn(`[WriteToSheet] Sheets cell limit reached`);
+        return -1;
+      }
+
+      throw error;
     }
   }
 
@@ -908,6 +977,7 @@ class SQLiteStartupSyncService {
       dbsUploaded: 0,
       sheetsProcessed: 0,
       logsMerged: 0,
+      logsWrittenToSheets: 0,
       sheetsRowsDeleted: 0,
       conflicts: 0,
       errors: []
@@ -923,7 +993,8 @@ class SQLiteStartupSyncService {
     console.log(`   DBs downloaded: ${stats.dbsDownloaded}`);
     console.log(`   DBs uploaded: ${stats.dbsUploaded}`);
     console.log(`   Sheets processed: ${stats.sheetsProcessed}`);
-    console.log(`   Logs merged: ${stats.logsMerged}`);
+    console.log(`   Logs merged (Sheets→SQLite): ${stats.logsMerged}`);
+    console.log(`   Logs written (SQLite→Sheets): ${stats.logsWrittenToSheets}`);
     console.log(`   Sheets rows deleted: ${stats.sheetsRowsDeleted}`);
     console.log(`   Conflicts: ${stats.conflicts}`);
     console.log(`   Errors: ${stats.errors.length}`);
@@ -945,7 +1016,8 @@ Startup Sync Completed (${duration}s)
 ↓ ${stats.dbsDownloaded} downloaded
 ↑ ${stats.dbsUploaded} uploaded
 📄 ${stats.sheetsProcessed} sheets processed
-🔀 ${stats.logsMerged} logs merged
+🔀 ${stats.logsMerged} logs Sheets→SQLite
+📝 ${stats.logsWrittenToSheets} logs SQLite→Sheets
 🗑️  ${stats.sheetsRowsDeleted} rows deleted
 ⚠️  ${stats.conflicts} conflicts
 ❌ ${stats.errors.length} errors

@@ -3,16 +3,17 @@
  *
  * Manages session cookies with:
  * - RAM-based storage for fast access
+ * - Local SQLite storage for persistence (PRIMARY)
  * - 1-month expiration per cookie
  * - Automatic sync to Google Sheets "Cookies" sheet every 10 minutes
- * - Persistence across server restarts via Google Sheets
- * - Single "Cookies" sheet that mirrors the RAM database
+ * - Persistence across server restarts via SQLite + Google Sheets
  */
 
 import { google } from './googleApiWrapper';
 import crypto from 'crypto';
 import type { DeviceInfo } from '../../shared/trackingTypes';
 import { getBerlinTimestamp } from '../utils/timezone';
+import { cookiesDB } from './systemDatabaseService';
 
 interface CookieData {
   userId: string;
@@ -130,6 +131,26 @@ class CookieStorageService {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + this.COOKIE_LIFETIME_MS);
 
+    // CRITICAL: Save to SQLite FIRST (persistence layer)
+    try {
+      cookiesDB.upsert({
+        sessionId,
+        userId,
+        username,
+        isAdmin,
+        createdAt: now.getTime(),
+        expiresAt: expiresAt.getTime(),
+        deviceId: deviceInfo?.deviceId,
+        deviceName: deviceInfo?.deviceName,
+        platform: deviceInfo?.platform,
+        userAgent: deviceInfo?.userAgent
+      });
+    } catch (error) {
+      console.error(`[CookieStorage] CRITICAL: Failed to save cookie to SQLite, aborting:`, error);
+      throw new Error(`Failed to persist session: ${error}`);
+    }
+
+    // Only add to RAM if SQLite succeeded
     this.cookieStore.set(sessionId, {
       userId,
       password,
@@ -165,10 +186,20 @@ class CookieStorageService {
   }
 
   /**
-   * Remove a cookie
+   * Remove a cookie (atomic: SQLite first, then RAM)
    */
   removeCookie(sessionId: string): void {
+    // CRITICAL: Remove from SQLite FIRST (persistence layer)
+    try {
+      cookiesDB.delete(sessionId);
+    } catch (error) {
+      console.error(`[CookieStorage] CRITICAL: Failed to remove cookie from SQLite, aborting:`, error);
+      throw new Error(`Failed to delete session: ${error}`);
+    }
+
+    // Only remove from RAM if SQLite succeeded
     this.cookieStore.delete(sessionId);
+
     console.log(`[CookieStorage] Cookie removed: ${sessionId}`);
   }
 
@@ -192,8 +223,18 @@ class CookieStorageService {
       removedCount++;
     });
 
+    // Also cleanup expired in SQLite
+    try {
+      const sqliteDeleted = cookiesDB.deleteExpired();
+      if (sqliteDeleted > 0) {
+        console.log(`[CookieStorage] Cleaned up ${sqliteDeleted} expired cookies from SQLite`);
+      }
+    } catch (error) {
+      console.error(`[CookieStorage] Error cleaning up SQLite cookies:`, error);
+    }
+
     if (removedCount > 0) {
-      console.log(`[CookieStorage] Cleaned up ${removedCount} expired cookies`);
+      console.log(`[CookieStorage] Cleaned up ${removedCount} expired cookies from RAM`);
     }
 
     return removedCount;
@@ -313,16 +354,49 @@ class CookieStorageService {
   }
 
   /**
-   * Load cookies from the "Cookies" sheet
+   * Load cookies from local SQLite first, then merge from Google Sheets
    */
   async loadFromGoogleSheets(): Promise<void> {
+    // Step 1: Load from local SQLite (PRIMARY SOURCE)
+    try {
+      const sqliteCookies = cookiesDB.getAll();
+      let loadedFromSQLite = 0;
+      
+      for (const cookie of sqliteCookies) {
+        // Only load cookies that haven't expired
+        if (cookie.expiresAt > Date.now()) {
+          this.cookieStore.set(cookie.sessionId, {
+            userId: cookie.userId,
+            password: '', // Password not stored for security
+            username: cookie.username,
+            isAdmin: cookie.isAdmin,
+            createdAt: new Date(cookie.createdAt),
+            expiresAt: new Date(cookie.expiresAt),
+            deviceInfo: cookie.deviceId ? {
+              deviceId: cookie.deviceId,
+              deviceName: cookie.deviceName || 'Unknown Device',
+              platform: cookie.platform || 'Unknown',
+              userAgent: cookie.userAgent || '',
+              screenResolution: ''
+            } : undefined
+          });
+          loadedFromSQLite++;
+        }
+      }
+      
+      console.log(`[CookieStorage] Loaded ${loadedFromSQLite} valid cookies from SQLite`);
+    } catch (error) {
+      console.error('[CookieStorage] Error loading from SQLite:', error);
+    }
+
+    // Step 2: Also load from Sheets and merge (for bidirectional sync)
     if (!this.sheetsClient) {
-      console.log('[CookieStorage] Skipping load - Sheets client not initialized');
+      console.log('[CookieStorage] Skipping Sheets load - Sheets client not initialized');
       return;
     }
 
     try {
-      console.log('[CookieStorage] Loading cookies from Google Sheets...');
+      console.log('[CookieStorage] Merging cookies from Google Sheets...');
 
       // Ensure "Cookies" sheet exists
       await this.ensureSheetExists();
@@ -334,7 +408,7 @@ class CookieStorageService {
       });
 
       const rows = response.data.values || [];
-      let loadedCookies = 0;
+      let mergedFromSheets = 0;
 
       rows.forEach((row: any[]) => {
         if (row.length < 3) return;
@@ -349,13 +423,13 @@ class CookieStorageService {
           cookies.forEach((cookie: any) => {
             const expiresAt = new Date(cookie.expiresAt);
 
-            // Only load cookies that haven't expired
-            if (expiresAt > new Date()) {
+            // Only merge cookies that: 1) haven't expired, 2) don't already exist in RAM
+            if (expiresAt > new Date() && !this.cookieStore.has(cookie.sessionId)) {
               this.cookieStore.set(cookie.sessionId, {
                 userId,
                 password: '', // Password not stored in sheets for security
                 username,
-                isAdmin: cookie.isAdmin || false, // Load admin status from sheet
+                isAdmin: cookie.isAdmin || false,
                 createdAt: new Date(cookie.createdAt),
                 expiresAt,
                 deviceInfo: cookie.deviceId ? {
@@ -366,7 +440,25 @@ class CookieStorageService {
                   screenResolution: ''
                 } : undefined
               });
-              loadedCookies++;
+              
+              // Also persist to SQLite
+              try {
+                cookiesDB.upsert({
+                  sessionId: cookie.sessionId,
+                  userId,
+                  username,
+                  isAdmin: cookie.isAdmin || false,
+                  createdAt: new Date(cookie.createdAt).getTime(),
+                  expiresAt: expiresAt.getTime(),
+                  deviceId: cookie.deviceId,
+                  deviceName: cookie.deviceName,
+                  platform: cookie.platform
+                });
+              } catch (e) {
+                // Ignore SQLite errors during merge
+              }
+              
+              mergedFromSheets++;
             }
           });
         } catch (error) {
@@ -374,7 +466,7 @@ class CookieStorageService {
         }
       });
 
-      console.log(`[CookieStorage] Loaded ${loadedCookies} valid cookies from ${rows.length} users`);
+      console.log(`[CookieStorage] Merged ${mergedFromSheets} additional cookies from Sheets`);
 
     } catch (error) {
       console.error('[CookieStorage] Error loading from Google Sheets:', error);

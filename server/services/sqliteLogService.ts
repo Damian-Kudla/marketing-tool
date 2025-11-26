@@ -439,6 +439,40 @@ function queryUserLogsFromDB(db: Database.Database, userId: string): UserLogResu
 }
 
 /**
+ * Query: Alle Logs für ein Datum (alle User) - für bidirektionalen Sync
+ */
+export function getAllLogsForDate(date: string): UserLogResult[] {
+  try {
+    if (!fs.existsSync(getDBPath(date))) {
+      return [];
+    }
+
+    const db = initDB(date, true); // readonly
+    const stmt = db.prepare(`
+      SELECT id, user_id, username, timestamp, log_type, data, created_at
+      FROM user_logs
+      ORDER BY timestamp ASC
+    `);
+
+    const rows = stmt.all() as any[];
+    db.close();
+
+    return rows.map(row => ({
+      id: row.id,
+      userId: row.user_id,
+      username: row.username,
+      timestamp: row.timestamp,
+      logType: row.log_type,
+      data: JSON.parse(row.data),
+      createdAt: row.created_at
+    }));
+  } catch (error) {
+    console.error(`[SQLite] Error getting all logs for ${date}:`, error);
+    return [];
+  }
+}
+
+/**
  * Query: Alle User-IDs mit Logs an einem Tag
  */
 export function getAllUserIds(date: string): string[] {
