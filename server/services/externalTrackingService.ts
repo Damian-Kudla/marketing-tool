@@ -192,9 +192,31 @@ class ExternalTrackingService {
   }
 
   /**
+   * Prüft, ob GPS-Koordinaten gültig sind (nicht 0 oder nahe 0)
+   */
+  private isValidGPSCoordinate(lat: number, lng: number): boolean {
+    // Reject lat=0 or lng=0 (GPS not ready) or near-zero values
+    const isValidLat = typeof lat === 'number' && 
+                       Number.isFinite(lat) && 
+                       lat >= -90 && lat <= 90 && 
+                       Math.abs(lat) > 0.001;
+    const isValidLng = typeof lng === 'number' && 
+                       Number.isFinite(lng) && 
+                       lng >= -180 && lng <= 180 && 
+                       Math.abs(lng) > 0.001;
+    return isValidLat && isValidLng;
+  }
+
+  /**
    * Speichert Location-Daten - entweder in Nutzer-Log oder als Fallback in Google Sheet
    */
   async saveLocationData(locationData: LocationData): Promise<void> {
+    // CRITICAL: Validate GPS coordinates BEFORE any logging
+    if (!this.isValidGPSCoordinate(locationData.latitude, locationData.longitude)) {
+      console.warn(`[ExternalTrackingService] ⚠️ REJECTED invalid GPS: lat=${locationData.latitude}, lng=${locationData.longitude} from ${locationData.userName} - NOT logging`);
+      return; // Don't log, don't buffer, just reject silently
+    }
+
     try {
       // Versuche, den Nutzer anhand des userName zu finden
       const user = await googleSheetsService.getUserByTrackingName(locationData.userName);
@@ -218,6 +240,20 @@ class ExternalTrackingService {
    * Speichert einen Batch von Location-Daten
    */
   async saveBatchLocationData(batchData: LocationData[]): Promise<void> {
+    // CRITICAL: Filter out invalid GPS coordinates BEFORE any processing/logging
+    const originalCount = batchData.length;
+    batchData = batchData.filter(data => this.isValidGPSCoordinate(data.latitude, data.longitude));
+    const filteredCount = originalCount - batchData.length;
+    
+    if (filteredCount > 0) {
+      console.warn(`[ExternalTrackingService] ⚠️ REJECTED ${filteredCount} invalid GPS points from batch (lat=0 or lng=0) - NOT logging`);
+    }
+
+    if (batchData.length === 0) {
+      console.log('[ExternalTrackingService] Batch completely filtered - no valid GPS points');
+      return;
+    }
+
     // Gruppiere nach User, um effizient zu verarbeiten
     const userBatches = new Map<string, LocationData[]>();
 
@@ -540,8 +576,22 @@ class ExternalTrackingService {
     console.log(`[ExternalTrackingService] Flushing ${this.locationBuffer.length} buffered locations to Google Sheets...`);
     
     // Copy and clear buffer immediately to handle new incoming data
-    const bufferToProcess = [...this.locationBuffer];
+    let bufferToProcess = [...this.locationBuffer];
     this.locationBuffer = [];
+
+    // CRITICAL: Filter out invalid GPS coordinates before writing to Google Sheets
+    const originalCount = bufferToProcess.length;
+    bufferToProcess = bufferToProcess.filter(data => this.isValidGPSCoordinate(data.latitude, data.longitude));
+    const filteredCount = originalCount - bufferToProcess.length;
+    
+    if (filteredCount > 0) {
+      console.warn(`[ExternalTrackingService] ⚠️ Filtered ${filteredCount} invalid GPS points from buffer before flush`);
+    }
+
+    if (bufferToProcess.length === 0) {
+      console.log('[ExternalTrackingService] Buffer completely filtered - no valid GPS points to flush');
+      return;
+    }
 
     // Group by user
     const userBatches = new Map<string, LocationData[]>();
