@@ -5,12 +5,16 @@ import { pushoverService } from './pushover';
 import { batchLogger } from './batchLogger';
 import { getCETDate, insertLog, LogInsertData } from './sqliteLogService';
 import { getBerlinTimestamp } from '../utils/timezone';
+import { googleSheetsRateLimitManager } from './googleSheetsRateLimitManager';
 import type {
   LogEntry,
   AuthLogEntry,
   CategoryChangeLogEntry,
   AnyLogEntry
 } from './fallbackLogging';
+
+// Re-export for backwards compatibility
+export { googleSheetsRateLimitManager };
 
 class LoggingMetrics {
   private successCount = 0;
@@ -78,11 +82,19 @@ function sleep(ms: number): Promise<void> {
 }
 
 // Retry with exponential backoff (max 1 minute total wait time)
+// Respects global rate limit manager
 async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   maxRetries: number = 3,
   maxWaitTime: number = 60000 // 60 seconds
 ): Promise<T> {
+  // Check global rate limit BEFORE attempting
+  if (googleSheetsRateLimitManager.isRateLimited()) {
+    const remaining = googleSheetsRateLimitManager.getRemainingCooldownSeconds();
+    console.warn(`[RetryWithBackoff] Skipping - Global rate limit active (${remaining}s remaining)`);
+    throw new Error(`Google Sheets rate limited for ${remaining} more seconds`);
+  }
+
   let lastError: any;
   let totalWaitTime = 0;
 
@@ -91,9 +103,16 @@ async function retryWithBackoff<T>(
       const result = await fn();
       loggingMetrics.recordSuccess();
       return result;
-    } catch (error) {
+    } catch (error: any) {
       lastError = error;
       
+      // Check if it's a rate limit error - trigger global cooldown
+      if (googleSheetsRateLimitManager.isRateLimitError(error)) {
+        googleSheetsRateLimitManager.triggerRateLimit();
+        loggingMetrics.recordFailure();
+        throw error; // Don't retry, just fail immediately
+      }
+
       if (attempt === maxRetries - 1) {
         // Last attempt failed
         loggingMetrics.recordFailure();
@@ -244,6 +263,13 @@ export async function logCategoryChangeWithRetry(
 
 // Cron job to retry failed logs
 export async function retryFailedLogs(): Promise<void> {
+  // Check global rate limit FIRST - don't even try if we're rate limited
+  if (googleSheetsRateLimitManager.isRateLimited()) {
+    const remaining = googleSheetsRateLimitManager.getRemainingCooldownSeconds();
+    console.log(`[RetryFailedLogs] Skipping - Global rate limit active (${remaining}s remaining)`);
+    return;
+  }
+
   try {
     // Check if there are failed logs
     const hasFailedLogs = await fallbackLogger.hasFailedLogs();
