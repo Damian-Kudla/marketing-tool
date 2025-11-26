@@ -310,12 +310,38 @@ class ExternalTrackingService {
       method: 'POST',
       userAgent: 'External Tracking App',
       data: {
+        // Koordinaten
         latitude: locationData.latitude,
         longitude: locationData.longitude,
         timestamp: locationData.timestamp,
         source: 'external_app', // Markierung für spätere Auswertung
-        receivedAt: getBerlinTimestamp(), // Optional: Server-Empfangszeit
-        appVersion: locationData.appVersion // NEU: App-Version
+        receivedAt: getBerlinTimestamp(), // Server-Empfangszeit
+        
+        // Position Details
+        altitude: locationData.altitude,
+        accuracy: locationData.accuracy,
+        altitudeAccuracy: locationData.altitudeAccuracy,
+        heading: locationData.heading,
+        speed: locationData.speed,
+        
+        // Batterie-Status
+        batteryLevel: locationData.batteryLevel,
+        batteryState: locationData.batteryState,
+        isCharging: locationData.isCharging,
+        
+        // Geräte-Info
+        deviceName: locationData.deviceName,
+        deviceModel: locationData.deviceModel,
+        osVersion: locationData.osVersion,
+        deviceUniqueId: locationData.deviceUniqueId,
+        deviceSerialNumber: locationData.deviceSerialNumber,
+        
+        // Netzwerk-Info
+        isConnected: locationData.isConnected,
+        connectionType: locationData.connectionType,
+        
+        // App-Info
+        appVersion: locationData.appVersion
       }
     };
 
