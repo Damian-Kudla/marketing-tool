@@ -500,6 +500,46 @@ export function cacheOldDB(date: string, dbPath: string): void {
 }
 
 /**
+ * Query: Hole alle FollowMee-Timestamps für einen User an einem Tag
+ * Für Duplikat-Erkennung bei FollowMee-Import
+ */
+export function getFollowMeeTimestamps(date: string, userId: string): Set<number> {
+  const timestamps = new Set<number>();
+  
+  try {
+    if (!dbExists(date)) {
+      return timestamps;
+    }
+    
+    const db = initDB(date, true); // readonly
+    const stmt = db.prepare(`
+      SELECT data FROM user_logs 
+      WHERE user_id = ? AND log_type = 'gps'
+    `);
+    
+    const rows = stmt.all(userId) as any[];
+    
+    for (const row of rows) {
+      try {
+        const data = JSON.parse(row.data);
+        // Nur FollowMee-Einträge berücksichtigen
+        if (data?.source === 'followmee' && data?.timestamp) {
+          timestamps.add(data.timestamp);
+        }
+      } catch (e) {
+        // Ignoriere parse errors
+      }
+    }
+    
+    console.log(`[SQLite] Found ${timestamps.size} FollowMee timestamps for user ${userId} on ${date}`);
+  } catch (error) {
+    console.error(`[SQLite] Error getting FollowMee timestamps for ${userId} on ${date}:`, error);
+  }
+  
+  return timestamps;
+}
+
+/**
  * Cleanup: Lösche DBs älter als N Tage
  */
 export async function cleanupOldDBs(daysToKeep = 7): Promise<number> {

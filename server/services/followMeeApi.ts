@@ -26,7 +26,7 @@
 import { batchLogger } from './batchLogger';
 import type { LogEntry } from './fallbackLogging';
 import { getBerlinTimestamp } from '../utils/timezone';
-import { getCETDate, insertLog, type LogInsertData } from './sqliteLogService';
+import { getCETDate, insertLog, getFollowMeeTimestamps, type LogInsertData } from './sqliteLogService';
 import { google } from './googleApiWrapper';
 
 const FOLLOWMEE_API_KEY = process.env.FOLLOWMEE_API;
@@ -384,24 +384,33 @@ class FollowMeeApiService {
           continue;
         }
 
-        // Load existing logs from Google Sheets (only today)
-        const existingLogs = await this.loadUserLogsFromSheets(mapping);
+        // CRITICAL: Load existing timestamps from BOTH sources to prevent duplicates
+        // 1. SQLite (primary source - always available)
+        const sqliteTimestamps = getFollowMeeTimestamps(today, mapping.userId);
+        console.log(`[FollowMee] Found ${sqliteTimestamps.size} existing FollowMee entries in SQLite for ${mapping.username}`);
 
-        // Build set of existing timestamps (for fast lookup)
-        const existingTimestamps = new Set<number>();
-        for (const log of existingLogs) {
-          // Only track FollowMee entries (to avoid conflicts with manual GPS entries)
-          try {
-            const data = typeof log.data === 'string' ? JSON.parse(log.data) : log.data;
-            if (data?.source === 'followmee') {
-              existingTimestamps.add(data.timestamp);
+        // 2. Google Sheets (backup source - may be unavailable if quota exceeded)
+        let sheetsTimestamps = new Set<number>();
+        try {
+          const existingLogs = await this.loadUserLogsFromSheets(mapping);
+          for (const log of existingLogs) {
+            try {
+              const data = typeof log.data === 'string' ? JSON.parse(log.data) : log.data;
+              if (data?.source === 'followmee') {
+                sheetsTimestamps.add(data.timestamp);
+              }
+            } catch (e) {
+              // Ignore parse errors
             }
-          } catch (e) {
-            // Ignore parse errors
           }
+          console.log(`[FollowMee] Found ${sheetsTimestamps.size} existing FollowMee entries in Sheets for ${mapping.username}`);
+        } catch (error) {
+          console.warn(`[FollowMee] Could not load Sheets data for ${mapping.username} (may be quota exceeded), using SQLite only`);
         }
 
-        console.log(`[FollowMee] Found ${existingTimestamps.size} existing FollowMee entries in logs for ${mapping.username}`);
+        // Merge timestamps from both sources
+        const existingTimestamps = new Set(Array.from(sqliteTimestamps).concat(Array.from(sheetsTimestamps)));
+        console.log(`[FollowMee] Total unique existing FollowMee entries: ${existingTimestamps.size} for ${mapping.username}`);
 
         // Filter new locations (not in existing logs) - using today's locations only
         const newLocations = todaysLocations.filter(loc => {
@@ -517,17 +526,28 @@ class FollowMeeApiService {
         // Get cached data for comparison
         const cachedData = this.gpsDataCache.get(mapping.userId) || [];
         const cachedTimestamps = new Set(cachedData.map(d => d.timestamp));
+        
+        // FALLBACK: If cache is empty, also check SQLite to prevent duplicates
+        // This handles edge cases like server restart with empty cache
+        const today = getCETDate();
+        let sqliteTimestamps = new Set<number>();
+        if (cachedTimestamps.size === 0) {
+          sqliteTimestamps = getFollowMeeTimestamps(today, mapping.userId);
+          console.log(`[FollowMee] Cache empty, loaded ${sqliteTimestamps.size} timestamps from SQLite for ${mapping.username}`);
+        }
+        
+        // Merge cache and SQLite timestamps
+        const existingTimestamps = new Set(Array.from(cachedTimestamps).concat(Array.from(sqliteTimestamps)));
 
-        // Find NEW locations (not in cache)
+        // Find NEW locations (not in cache or SQLite)
         // CRITICAL: Filter to ONLY today's locations to prevent re-importing yesterday's data
         // (The cache is trimmed to today, so yesterday's data would otherwise look "new")
-        const today = getCETDate();
         const newLocations = deviceLocations.filter(loc => {
           const timestamp = this.parseFollowMeeDate(loc.Date);
           const locDate = getCETDate(timestamp);
           
-          // Must be from today AND not in cache
-          return locDate === today && !cachedTimestamps.has(timestamp);
+          // Must be from today AND not in cache/SQLite
+          return locDate === today && !existingTimestamps.has(timestamp);
         });
 
         if (newLocations.length === 0) {
