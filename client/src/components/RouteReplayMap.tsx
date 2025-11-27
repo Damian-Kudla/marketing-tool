@@ -367,14 +367,23 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
   if (filteredCount > 0) {
     console.warn(`[RouteReplay] ⚠️ Filtered ${filteredCount} corrupted GPS points (lat≈0 or lng≈0)`);
   }
-  
-  console.log(`[RouteReplay] Initialized for ${username}:`, { gpsPoints: gpsPoints.length, breaks: breaks.length, contracts: contracts.length, source });
-  
-  if (breaks.length > 0) {
-    console.log('[RouteReplay] Breaks data:', breaks);
-  }
-  if (contracts.length > 0) {
-    console.log('[RouteReplay] Contracts:', contracts.map(ts => new Date(ts).toLocaleTimeString()));
+
+  // DEBUG: Only log initialization details when DEBUG_ROUTE_REPLAY is enabled
+  if (import.meta.env.VITE_DEBUG_ROUTE_REPLAY === 'true') {
+    console.log(`[RouteReplay] Initialized for ${username}:`, { gpsPoints: gpsPoints.length, breaks: breaks.length, contracts: contracts.length, source });
+
+    if (breaks.length > 0) {
+      console.log('[RouteReplay] Breaks data:', breaks);
+    }
+    if (contracts.length > 0) {
+      console.log('[RouteReplay] Contracts:', contracts.map(ts => `${ts} (${new Date(ts).toLocaleTimeString()})`));
+    }
+    // Also log first and last GPS point timestamps for comparison
+    if (gpsPoints.length > 0) {
+      const sorted = [...gpsPoints].sort((a, b) => a.timestamp - b.timestamp);
+      console.log(`[RouteReplay] GPS time range: ${new Date(sorted[0].timestamp).toLocaleTimeString()} - ${new Date(sorted[sorted.length - 1].timestamp).toLocaleTimeString()}`);
+      console.log(`[RouteReplay] GPS timestamp range: ${sorted[0].timestamp} - ${sorted[sorted.length - 1].timestamp}`);
+    }
   }
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -448,6 +457,8 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
   const zoomListenerRef = useRef<google.maps.MapsEventListener | null>(null);
   const lastViewportChange = useRef(0); // Für 3-Sekunden-Regel
   const currentTimestampRef = useRef(0); // Aktueller Timestamp für Auto-Zoom
+  const contractPauseRef = useRef<{ paused: boolean; resumeAt: number | null }>({ paused: false, resumeAt: null }); // Contract pause state
+  const animationGPSStartRef = useRef(0); // GPS timestamp when animation segment started
   const lastBoundsRef = useRef<{ latRange: number; lngRange: number } | null>(null); // Letzte Bounds für Vergleich
   const cameraStateRef = useRef<{
     datasetSignature: string;
@@ -464,47 +475,47 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
   const displayPointsRef = useRef<GPSPoint[]>([]);
   const pauseModeRef = useRef<{ active: boolean; periodIndex: number | null }>({ active: false, periodIndex: null });
   const snapRequestIdRef = useRef(0);
+  const prevUserAgentsRef = useRef<string[]>([]);
 
-  // Extract unique User-Agents from GPS points and initialize active set
-  useEffect(() => {
+  // Memoize available User-Agents to prevent re-computation on every render
+  const availableUserAgentsMemo = useMemo(() => {
     // Only extract User-Agents from native GPS points
     const nativePoints = gpsPoints.filter(p => p.source === 'native' || !p.source);
-    
-    // DEBUG LOGGING: Check why User-Agents might be missing
-    console.log('[RouteReplay] Debug User-Agents:', {
-      totalPoints: gpsPoints.length,
-      nativePoints: nativePoints.length,
-      samplePoint: nativePoints.length > 0 ? nativePoints[0] : null,
-      hasUserAgent: nativePoints.some(p => !!p.userAgent),
-      uniqueUAs: extractUniqueUserAgents(nativePoints),
-      sourceProp: source
-    });
+    return extractUniqueUserAgents(nativePoints);
+  }, [gpsPoints]);
 
-    const userAgents = extractUniqueUserAgents(nativePoints);
-    
-    setAvailableUserAgents(userAgents);
-    
-    // Initialize with all User-Agents active (or first one for 'all' source)
-    if (userAgents.length > 0) {
-      if (source === 'all') {
-        // For 'all': Only activate first User-Agent
-        setActiveUserAgents(new Set([userAgents[0]]));
-      } else {
-        // For 'native': Activate all User-Agents
-        setActiveUserAgents(new Set(userAgents));
+  // Update availableUserAgents state only when the array content actually changes
+  useEffect(() => {
+    const hasChanged =
+      availableUserAgentsMemo.length !== prevUserAgentsRef.current.length ||
+      availableUserAgentsMemo.some((ua, i) => ua !== prevUserAgentsRef.current[i]);
+
+    if (hasChanged) {
+      prevUserAgentsRef.current = availableUserAgentsMemo;
+      setAvailableUserAgents(availableUserAgentsMemo);
+
+      // Initialize active User-Agents when they change
+      if (availableUserAgentsMemo.length > 0) {
+        if (source === 'all') {
+          // For 'all': Only activate first User-Agent
+          setActiveUserAgents(new Set([availableUserAgentsMemo[0]]));
+        } else {
+          // For 'native': Activate all User-Agents
+          setActiveUserAgents(new Set(availableUserAgentsMemo));
+        }
       }
     }
-    
-    console.log(`[RouteReplay] Found ${userAgents.length} unique User-Agents:`, userAgents);
-  }, [gpsPoints, source]);
+  }, [availableUserAgentsMemo, source]);
 
   // Auto-disable Auto-Zoom when multiple User-Agents are active
   useEffect(() => {
     if (activeUserAgents.size > 1 && autoZoomEnabled) {
       setAutoZoomEnabled(false);
-      console.log('[RouteReplay] Auto-Zoom disabled: multiple User-Agents active');
+      if (import.meta.env.VITE_DEBUG_ROUTE_REPLAY === 'true') {
+        console.log('[RouteReplay] Auto-Zoom disabled: multiple User-Agents active');
+      }
     }
-  }, [activeUserAgents.size]);
+  }, [activeUserAgents.size, autoZoomEnabled]);
 
   // Drag handlers for movable panels
   const handleMouseDown = (e: React.MouseEvent, panel: 'left' | 'right') => {
@@ -646,11 +657,13 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
   const stationaryPeriods = useMemo(() => detectStationaryPeriods(uaFilteredPoints), [uaFilteredPoints]);
 
   // Calculate driving segments for timeline visualization
+  // Merge segments that are less than 10 minutes apart (traffic lights, short stops)
+  // Only count as driving if user moved at least 50m from start point during the segment
   const drivingSegments = useMemo(() => {
-    const segments: { start: number; end: number }[] = [];
-    if (uaFilteredPoints.length < 2) return segments;
+    const rawSegments: { start: number; end: number; startPointIndex: number }[] = [];
+    if (uaFilteredPoints.length < 2) return [];
 
-    let currentSegment: { start: number; end: number } | null = null;
+    let currentSegment: { start: number; end: number; startPointIndex: number } | null = null;
 
     for (let i = 0; i < uaFilteredPoints.length - 1; i++) {
       const p1 = uaFilteredPoints[i];
@@ -662,19 +675,69 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
         if (currentSegment) {
           currentSegment.end = p2.timestamp;
         } else {
-          currentSegment = { start: p1.timestamp, end: p2.timestamp };
+          currentSegment = { start: p1.timestamp, end: p2.timestamp, startPointIndex: i };
         }
       } else {
         if (currentSegment) {
-          segments.push(currentSegment);
+          rawSegments.push(currentSegment);
           currentSegment = null;
         }
       }
     }
     if (currentSegment) {
-      segments.push(currentSegment);
+      rawSegments.push(currentSegment);
     }
-    return segments;
+
+    // Merge segments that are less than 10 minutes apart
+    // This handles traffic lights, short stops, etc.
+    const TEN_MINUTES_MS = 10 * 60 * 1000;
+    const mergedSegments: { start: number; end: number; startPointIndex: number }[] = [];
+    
+    for (const segment of rawSegments) {
+      if (mergedSegments.length === 0) {
+        mergedSegments.push({ ...segment });
+      } else {
+        const lastSegment = mergedSegments[mergedSegments.length - 1];
+        const gapBetween = segment.start - lastSegment.end;
+        
+        if (gapBetween < TEN_MINUTES_MS) {
+          // Merge: extend the last segment to include this one (keep original startPointIndex)
+          lastSegment.end = segment.end;
+        } else {
+          // Gap is too large, start a new segment
+          mergedSegments.push({ ...segment });
+        }
+      }
+    }
+    
+    // Filter out segments where user never moved 50m from start point
+    // This eliminates GPS jitter being detected as driving
+    const MIN_DISTANCE_M = 50;
+    const validSegments: { start: number; end: number }[] = [];
+    
+    for (const segment of mergedSegments) {
+      const startPoint = uaFilteredPoints[segment.startPointIndex];
+      if (!startPoint) continue;
+      
+      // Check all points during this segment to see if any is 50m+ from start
+      let movedFarEnough = false;
+      for (let i = segment.startPointIndex; i < uaFilteredPoints.length; i++) {
+        const point = uaFilteredPoints[i];
+        if (point.timestamp > segment.end) break;
+        
+        const distance = calculateDistance(startPoint, point);
+        if (distance >= MIN_DISTANCE_M) {
+          movedFarEnough = true;
+          break;
+        }
+      }
+      
+      if (movedFarEnough) {
+        validSegments.push({ start: segment.start, end: segment.end });
+      }
+    }
+    
+    return validSegments;
   }, [uaFilteredPoints]);
 
   // Display points: Filter by Pause Mode
@@ -728,20 +791,24 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
     return basePoints.some(p => p.source === 'followmee' || p.source === 'external' || p.source === 'external_app');
   }, [basePoints]);
 
-  // Determine movement mode based on speed (walking < 8 km/h, driving >= 8 km/h)
+  // Determine movement mode based on driving segments (uses merged segments for consistency)
+  // This ensures that short stops (traffic lights, etc.) don't switch to walking mode
   const getMovementMode = (currentIndex: number): 'walking' | 'driving' => {
-    if (currentIndex <= 0 || currentIndex >= displayPoints.length - 1) return 'walking';
+    if (displayPoints.length === 0) return 'walking';
     
-    const prevPoint = displayPoints[currentIndex - 1];
-    const currentPoint = displayPoints[currentIndex];
-    const nextPoint = displayPoints[currentIndex + 1];
+    const currentPoint = displayPoints[Math.min(currentIndex, displayPoints.length - 1)];
+    if (!currentPoint) return 'walking';
     
-    // Calculate average speed from previous and next point
-    const speedPrev = calculateSpeed(prevPoint, currentPoint);
-    const speedNext = calculateSpeed(currentPoint, nextPoint);
-    const avgSpeed = (speedPrev + speedNext) / 2;
+    const currentTime = currentPoint.timestamp;
     
-    return avgSpeed >= 8 ? 'driving' : 'walking';
+    // Check if current time falls within any merged driving segment
+    for (const segment of drivingSegments) {
+      if (currentTime >= segment.start && currentTime <= segment.end) {
+        return 'driving';
+      }
+    }
+    
+    return 'walking';
   };
 
   const baseRouteSignature = useMemo(() => buildRouteSignature(basePoints), [basePoints]);
@@ -1268,13 +1335,17 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
 
   // Backward compatibility: Primary current position (for camera following etc.)
   const currentPosition = useMemo(() => {
-    // Return the first available position
+    // If source is 'all', use combined position
+    if (source === 'all' && currentPositions['combined']) {
+      return currentPositions['combined'];
+    }
+    // Return the first available position from active user agents
     const uas = Array.from(activeUserAgents);
     if (uas.length > 0 && currentPositions[uas[0]]) {
       return currentPositions[uas[0]];
     }
-    return currentPositions['external'] || null;
-  }, [currentPositions, activeUserAgents]);
+    return currentPositions['external'] || currentPositions['combined'] || null;
+  }, [currentPositions, activeUserAgents, source]);
 
   // Note: Animation is now time-based, not duration-based
   // The animation speed is controlled by secondsPerHour in real-time
@@ -1422,33 +1493,41 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
     });
   }, [activeContractFlash, contractPositions, mapsApiLoaded]);
 
-  // Check if current animation time should trigger a contract flash (with 1 sec pause)
+  // Track which contracts have already been triggered (to avoid re-triggering)
+  const triggeredContractsRef = useRef<Set<number>>(new Set());
+  
+  // Reset triggered contracts when contracts change or animation restarts
   useEffect(() => {
-    if (!isPlaying || displayPoints.length === 0) return;
+    triggeredContractsRef.current.clear();
+  }, [contracts, date]);
 
-    const currentPoint = displayPoints[currentIndex];
-    if (!currentPoint) return;
+  // Check if current animation time should trigger a contract flash (with 1 sec pause)
+  // This effect sets the contractPauseRef which the animation loop checks
+  useEffect(() => {
+    if (!isPlaying || displayPoints.length === 0 || currentTimestamp === 0) return;
+    // Don't trigger new contracts while already paused for a contract
+    if (contractPauseRef.current.paused) return;
 
-    // Check if any contract timestamp is close to current position (within 5 seconds)
-    const activeContract = contracts.find(timestamp => {
-      const diff = Math.abs(timestamp - currentPoint.timestamp);
-      return diff < 5000; // 5 seconds tolerance
+    // Check if any contract timestamp has been passed but not yet triggered
+    const activeContract = contracts.find(contractTs => {
+      // Contract must be before or at current animation time
+      if (contractTs > currentTimestamp) return false;
+      // Contract must not have been triggered already
+      if (triggeredContractsRef.current.has(contractTs)) return false;
+      // Contract must be within reasonable range (not too far in the past)
+      const timeSinceContract = currentTimestamp - contractTs;
+      return timeSinceContract < 30000; // Within 30 seconds after contract time
     });
 
-    if (activeContract && activeContractFlash !== activeContract) {
+    if (activeContract) {
+      console.log(`[Contract Check] 🎯 CONTRACT TRIGGERED! Animation time: ${new Date(currentTimestamp).toLocaleTimeString()}, Contract: ${new Date(activeContract).toLocaleTimeString()}`);
+      triggeredContractsRef.current.add(activeContract);
       setActiveContractFlash(activeContract);
       
-      // Pause animation for 1 second when contract is reached
-      setIsPlaying(false);
-      setTimeout(() => {
-        setIsPlaying(true);
-        // Remove flash after animation resumes (total 1.5 sec visible)
-        setTimeout(() => {
-          setActiveContractFlash(null);
-        }, 500);
-      }, 1000);
+      // Set contract pause - animation loop will check this and stop (1 second pause)
+      contractPauseRef.current = { paused: true, resumeAt: Date.now() + 1000 };
     }
-  }, [currentIndex, isPlaying, contracts, displayPoints, activeContractFlash]);
+  }, [currentTimestamp, isPlaying, contracts, displayPoints]);
 
   // Calculate time span
   const timeSpan = displayPoints.length > 0
@@ -2475,12 +2554,31 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
     startTimeRef.current = Date.now();
 
     // Current GPS timestamp (where we're resuming from)
-    const startGPSTimestamp = currentTimestamp;
+    // Store GPS start timestamp in ref so it can be updated after contract pause
+    animationGPSStartRef.current = currentTimestamp;
 
     const animate = () => {
       if (!startTimeRef.current) {
         console.log('[RouteReplay] animate() aborted: no startTimeRef');
         return;
+      }
+
+      // Check if we're paused for a contract
+      if (contractPauseRef.current.paused) {
+        const now = Date.now();
+        if (contractPauseRef.current.resumeAt && now >= contractPauseRef.current.resumeAt) {
+          // Resume animation after contract pause
+          console.log('[RouteReplay] 📝 Contract pause ended, resuming from GPS time:', new Date(currentTimestampRef.current).toLocaleTimeString());
+          contractPauseRef.current = { paused: false, resumeAt: null };
+          setActiveContractFlash(null);
+          // CRITICAL: Update GPS start to current position, reset real time start
+          animationGPSStartRef.current = currentTimestampRef.current;
+          startTimeRef.current = Date.now();
+        } else {
+          // Still paused, continue waiting
+          animationRef.current = requestAnimationFrame(animate);
+          return;
+        }
       }
 
       // Elapsed real time since animation started
@@ -2491,17 +2589,17 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
       const gpsTimePerRealTime = (60 * 60 * 1000) / realTimePerGPSHour; // GPS ms per real ms
       const elapsedGPSTime = elapsedRealTime * gpsTimePerRealTime;
 
-      // Current GPS timestamp in the animation
-      const targetGPSTimestamp = startGPSTimestamp + elapsedGPSTime;
+      // Current GPS timestamp in the animation (use ref instead of closure variable)
+      const targetGPSTimestamp = animationGPSStartRef.current + elapsedGPSTime;
 
-      if (elapsedRealTime % 1000 < 16) { // Log ungefähr jede Sekunde
+      if (import.meta.env.VITE_DEBUG_ROUTE_REPLAY === 'true' && elapsedRealTime % 1000 < 16) { // Log ungefähr jede Sekunde
         console.log('[RouteReplay] animate()', {
           elapsedRealTime,
           elapsedGPSTime,
           targetGPSTimestamp,
-          startGPSTimestamp,
+          startGPSTimestamp: animationGPSStartRef.current,
           endTime,
-          progress: ((targetGPSTimestamp - startGPSTimestamp) / (endTime - startGPSTimestamp) * 100).toFixed(1) + '%'
+          progress: ((targetGPSTimestamp - animationGPSStartRef.current) / (endTime - animationGPSStartRef.current) * 100).toFixed(1) + '%'
         });
       }
 
@@ -2612,11 +2710,36 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
 
   // Center map on current position
   const centerOnCurrentPosition = () => {
-    if (mapRef.current && currentPosition) {
-      mapRef.current.panTo({
-        lat: currentPosition.latitude,
-        lng: currentPosition.longitude
-      });
+    const map = mapRef.current;
+    if (!map) return;
+    
+    // Try multiple sources for current position
+    let targetPos: { lat: number; lng: number } | null = null;
+    
+    // 1. Use currentPosition if available
+    if (currentPosition) {
+      targetPos = { lat: currentPosition.latitude, lng: currentPosition.longitude };
+    }
+    // 2. Fallback: Use 'combined' position (for source='all')
+    else if (currentPositions['combined']) {
+      targetPos = { lat: currentPositions['combined'].latitude, lng: currentPositions['combined'].longitude };
+    }
+    // 3. Fallback: Use current index point
+    else if (displayPoints[currentIndex]) {
+      targetPos = { lat: displayPoints[currentIndex].latitude, lng: displayPoints[currentIndex].longitude };
+    }
+    // 4. Last fallback: Center on all points
+    else if (displayPoints.length > 0) {
+      const bounds = new google.maps.LatLngBounds();
+      displayPoints.forEach(p => bounds.extend({ lat: p.latitude, lng: p.longitude }));
+      map.fitBounds(bounds);
+      return;
+    }
+    
+    if (targetPos) {
+      map.panTo(targetPos);
+      map.setZoom(17); // Zoom in when centering
+      console.log('[RouteReplay] Centered on position:', targetPos);
     }
   };
 
@@ -2781,6 +2904,29 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
                   />
                 ))}
               </div>
+
+              {/* Contract markers (📝) on timeline */}
+              {contracts.length > 0 && displayPoints.length > 0 && (
+                <div className="absolute w-full h-5 -top-1 pointer-events-none z-20">
+                  {contracts.map((contractTs, idx) => {
+                    const totalDuration = endTime - startTime;
+                    if (totalDuration <= 0) return null;
+                    // Only show if contract is within timeline range
+                    if (contractTs < startTime || contractTs > endTime) return null;
+                    const position = ((contractTs - startTime) / totalDuration) * 100;
+                    return (
+                      <div
+                        key={`contract-${idx}`}
+                        className="absolute flex items-center justify-center"
+                        style={{ left: `${position}%`, transform: 'translateX(-50%)' }}
+                        title={`Vertrag: ${format(new Date(contractTs), 'HH:mm:ss', { locale: de })}`}
+                      >
+                        <span className="text-sm drop-shadow-md">📝</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               <input
                 type="range"

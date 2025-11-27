@@ -15,6 +15,7 @@ import { getCETDate } from '../services/sqliteLogService';
 import { getBerlinDate, getBerlinHour, getBerlinTimestamp } from '../utils/timezone';
 import { pauseLocationCache } from '../services/pauseLocationCache';
 import { egonOrdersDB } from '../services/egonScraperService';
+import { DateTime } from 'luxon';
 import fs from 'fs';
 import path from 'path';
 import type { DailyUserData, DashboardLiveData, TrackingData, ActionLog } from '../../shared/trackingTypes';
@@ -155,7 +156,6 @@ function parseEgonTimestamp(egonTimestamp: string): number | null {
     
     // Use Luxon to correctly interpret the time as Berlin timezone
     // This ensures the UTC timestamp is correct regardless of server timezone
-    const { DateTime } = require('luxon');
     const berlinDateTime = DateTime.fromObject(
       {
         year: parseInt(year),
@@ -170,7 +170,8 @@ function parseEgonTimestamp(egonTimestamp: string): number | null {
     
     if (!berlinDateTime.isValid) return null;
     return berlinDateTime.toMillis();
-  } catch {
+  } catch (err) {
+    console.error(`[parseEgonTimestamp] Error parsing "${egonTimestamp}":`, err);
     return null;
   }
 }
@@ -564,6 +565,9 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
       // Get EGON contract count for this user
       const egonContracts = userIdToContractCount.get(userData.userId) || 0;
 
+      // Debug: Log status changes for this user
+      console.log(`[Admin API LIVE] 📊 User ${userData.username} statusChanges:`, JSON.stringify(statusChangesObj));
+
       return {
         userId: userData.userId,
         username: userData.username,
@@ -832,10 +836,14 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
         
         // Convert EGON timestamps to Unix milliseconds
         contractTimestamps = egonOrders
-          .map(order => parseEgonTimestamp(order.timestamp))
+          .map(order => {
+            const ts = parseEgonTimestamp(order.timestamp);
+            console.log(`[Admin API Route] 📝 EGON timestamp "${order.timestamp}" → ${ts} (${ts ? new Date(ts).toISOString() : 'null'})`);
+            return ts;
+          })
           .filter((ts): ts is number => ts !== null);
         
-        console.log(`[Admin API Route] 📝 EGON Orders: ${contractCount} contracts for ${user.resellerName} on ${egonDateStr}`);
+        console.log(`[Admin API Route] 📝 EGON Orders: ${contractCount} contracts for ${user.resellerName} on ${egonDateStr}, timestamps: [${contractTimestamps.join(', ')}]`);
       } else {
         console.log(`[Admin API Route] ⚠️ No EGON reseller name for user ${username}`);
       }
