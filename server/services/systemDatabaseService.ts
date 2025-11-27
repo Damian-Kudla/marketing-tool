@@ -42,7 +42,8 @@ const DB_FILES = {
   appointments: 'appointments.db',
   pauseLocations: 'pause-locations.db',
   authLogs: 'auth-logs.db',
-  categoryChanges: 'category-changes.db'
+  categoryChanges: 'category-changes.db',
+  addressDatasets: 'address-datasets.db'
 } as const;
 
 type DBName = keyof typeof DB_FILES;
@@ -194,6 +195,28 @@ function createSchema(db: Database.Database, name: DBName): void {
         );
         CREATE INDEX IF NOT EXISTS idx_category_timestamp ON category_changes(timestamp);
         CREATE INDEX IF NOT EXISTS idx_category_dataset ON category_changes(dataset_id);
+      `);
+      break;
+
+    case 'addressDatasets':
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS address_datasets (
+          id TEXT PRIMARY KEY,
+          normalized_address TEXT NOT NULL,
+          street TEXT NOT NULL,
+          house_number TEXT NOT NULL,
+          city TEXT,
+          postal_code TEXT NOT NULL,
+          created_by TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          raw_resident_data TEXT NOT NULL,
+          editable_residents TEXT NOT NULL,
+          fixed_customers TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_datasets_created_by ON address_datasets(created_by);
+        CREATE INDEX IF NOT EXISTS idx_datasets_created_at ON address_datasets(created_at);
+        CREATE INDEX IF NOT EXISTS idx_datasets_normalized_address ON address_datasets(normalized_address);
+        CREATE INDEX IF NOT EXISTS idx_datasets_street_postal ON address_datasets(street, postal_code);
       `);
       break;
   }
@@ -744,6 +767,149 @@ export const categoryChangesDB = {
 };
 
 // ============================================
+// ADDRESS DATASETS DATABASE OPERATIONS
+// ============================================
+
+export interface AddressDatasetRecord {
+  id: string;
+  normalizedAddress: string;
+  street: string;
+  houseNumber: string;
+  city?: string;
+  postalCode: string;
+  createdBy: string;
+  createdAt: string; // ISO timestamp
+  rawResidentData: string; // JSON array
+  editableResidents: string; // JSON array
+  fixedCustomers: string; // JSON array
+}
+
+export const addressDatasetsDB = {
+  getAll(): AddressDatasetRecord[] {
+    const db = initDB('addressDatasets');
+    const rows = db.prepare('SELECT * FROM address_datasets ORDER BY created_at DESC').all() as any[];
+    return rows.map(row => ({
+      id: row.id,
+      normalizedAddress: row.normalized_address,
+      street: row.street,
+      houseNumber: row.house_number,
+      city: row.city,
+      postalCode: row.postal_code,
+      createdBy: row.created_by,
+      createdAt: row.created_at,
+      rawResidentData: row.raw_resident_data,
+      editableResidents: row.editable_residents,
+      fixedCustomers: row.fixed_customers
+    }));
+  },
+
+  getById(id: string): AddressDatasetRecord | null {
+    const db = initDB('addressDatasets');
+    const row = db.prepare('SELECT * FROM address_datasets WHERE id = ?').get(id) as any;
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      normalizedAddress: row.normalized_address,
+      street: row.street,
+      houseNumber: row.house_number,
+      city: row.city,
+      postalCode: row.postal_code,
+      createdBy: row.created_by,
+      createdAt: row.created_at,
+      rawResidentData: row.raw_resident_data,
+      editableResidents: row.editable_residents,
+      fixedCustomers: row.fixed_customers
+    };
+  },
+
+  getByCreator(username: string): AddressDatasetRecord[] {
+    const db = initDB('addressDatasets');
+    const rows = db.prepare('SELECT * FROM address_datasets WHERE created_by = ? ORDER BY created_at DESC').all(username) as any[];
+    return rows.map(row => ({
+      id: row.id,
+      normalizedAddress: row.normalized_address,
+      street: row.street,
+      houseNumber: row.house_number,
+      city: row.city,
+      postalCode: row.postal_code,
+      createdBy: row.created_by,
+      createdAt: row.created_at,
+      rawResidentData: row.raw_resident_data,
+      editableResidents: row.editable_residents,
+      fixedCustomers: row.fixed_customers
+    }));
+  },
+
+  upsert(dataset: AddressDatasetRecord): void {
+    const db = initDB('addressDatasets');
+    db.prepare(`
+      INSERT OR REPLACE INTO address_datasets
+      (id, normalized_address, street, house_number, city, postal_code, created_by, created_at, raw_resident_data, editable_residents, fixed_customers)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      dataset.id,
+      dataset.normalizedAddress,
+      dataset.street,
+      dataset.houseNumber,
+      dataset.city || null,
+      dataset.postalCode,
+      dataset.createdBy,
+      dataset.createdAt,
+      dataset.rawResidentData,
+      dataset.editableResidents,
+      dataset.fixedCustomers
+    );
+  },
+
+  upsertBatch(datasets: AddressDatasetRecord[]): number {
+    if (datasets.length === 0) return 0;
+
+    const db = initDB('addressDatasets');
+    const stmt = db.prepare(`
+      INSERT OR REPLACE INTO address_datasets
+      (id, normalized_address, street, house_number, city, postal_code, created_by, created_at, raw_resident_data, editable_residents, fixed_customers)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const insertMany = db.transaction((entries: AddressDatasetRecord[]) => {
+      let count = 0;
+      for (const dataset of entries) {
+        stmt.run(
+          dataset.id,
+          dataset.normalizedAddress,
+          dataset.street,
+          dataset.houseNumber,
+          dataset.city || null,
+          dataset.postalCode,
+          dataset.createdBy,
+          dataset.createdAt,
+          dataset.rawResidentData,
+          dataset.editableResidents,
+          dataset.fixedCustomers
+        );
+        count++;
+      }
+      return count;
+    });
+
+    const inserted = insertMany(datasets);
+    return inserted;
+  },
+
+  delete(id: string): void {
+    const db = initDB('addressDatasets');
+    db.prepare('DELETE FROM address_datasets WHERE id = ?').run(id);
+  },
+
+  count(): number {
+    const db = initDB('addressDatasets');
+    const row = db.prepare('SELECT COUNT(*) as count FROM address_datasets').get() as any;
+    return row.count;
+  }
+};
+
+// ============================================
 // GOOGLE DRIVE BACKUP OPERATIONS
 // ============================================
 
@@ -928,7 +1094,8 @@ const SHEET_NAMES = {
   appointments: 'Termine',
   pauseLocations: 'PauseLocations',
   authLogs: 'AuthLogs',
-  categoryChanges: 'CategoryChanges'
+  categoryChanges: 'CategoryChanges',
+  addressDatasets: 'Adressen'
 } as const;
 
 export const systemSheetsSync = {
@@ -1321,6 +1488,119 @@ export const systemSheetsSync = {
   },
 
   /**
+   * Sync Address Datasets: Local ↔ Sheets (with bidirectional sync)
+   */
+  async syncAddressDatasets(): Promise<{ synced: number; direction: string }> {
+    try {
+      const auth = await getGoogleAuth();
+      const sheets = google.sheets({ version: 'v4', auth });
+
+      // Get all datasets from Sheets
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId: SYSTEM_SHEET_ID,
+        range: `${SHEET_NAMES.addressDatasets}!A2:K`
+      });
+
+      const sheetRows = response.data.values || [];
+      const localDatasets = addressDatasetsDB.getAll();
+
+      // Build maps for intelligent merging (by ID)
+      const sheetDatasetsMap = new Map<string, any>();
+      for (const row of sheetRows) {
+        if (row.length >= 11) {
+          sheetDatasetsMap.set(row[0], {
+            id: row[0],
+            normalizedAddress: row[1],
+            street: row[2],
+            houseNumber: row[3],
+            city: row[4] || undefined,
+            postalCode: row[5],
+            createdBy: row[6],
+            createdAt: row[7],
+            rawResidentData: row[8],
+            editableResidents: row[9],
+            fixedCustomers: row[10]
+          });
+        }
+      }
+
+      const localDatasetsMap = new Map<string, any>();
+      for (const dataset of localDatasets) {
+        localDatasetsMap.set(dataset.id, dataset);
+      }
+
+      let synced = 0;
+      let direction = 'none';
+
+      // Sheets → Local (only if newer or missing)
+      sheetDatasetsMap.forEach((sheetDataset, id) => {
+        const localDataset = localDatasetsMap.get(id);
+
+        if (!localDataset) {
+          // Not in local → add from Sheets
+          addressDatasetsDB.upsert(sheetDataset);
+          synced++;
+          direction = 'sheets→local';
+        } else {
+          // Exists in both → use newer based on createdAt timestamp
+          if (sheetDataset.createdAt > localDataset.createdAt) {
+            addressDatasetsDB.upsert(sheetDataset);
+            synced++;
+            direction = direction === 'local→sheets' ? 'bidirectional' : 'sheets→local';
+          }
+        }
+      });
+
+      // Local → Sheets (only if newer or missing)
+      const sheetsNeedsUpdate: any[] = [];
+      localDatasetsMap.forEach((localDataset, id) => {
+        const sheetDataset = sheetDatasetsMap.get(id);
+
+        if (!sheetDataset) {
+          // Not in Sheets → add from local
+          sheetsNeedsUpdate.push(localDataset);
+        } else {
+          // Exists in both → use newer based on createdAt timestamp
+          if (localDataset.createdAt > sheetDataset.createdAt) {
+            sheetsNeedsUpdate.push(localDataset);
+          }
+        }
+      });
+
+      if (sheetsNeedsUpdate.length > 0) {
+        const newRows = sheetsNeedsUpdate.map(d => [
+          d.id,
+          d.normalizedAddress,
+          d.street,
+          d.houseNumber,
+          d.city || '',
+          d.postalCode,
+          d.createdBy,
+          d.createdAt,
+          d.rawResidentData,
+          d.editableResidents,
+          d.fixedCustomers
+        ]);
+
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SYSTEM_SHEET_ID,
+          range: `${SHEET_NAMES.addressDatasets}!A:K`,
+          valueInputOption: 'RAW',
+          requestBody: { values: newRows }
+        });
+
+        synced += sheetsNeedsUpdate.length;
+        direction = direction === 'sheets→local' ? 'bidirectional' : 'local→sheets';
+      }
+
+      return { synced, direction };
+    } catch (error) {
+      console.error('[SystemSync] Error syncing address datasets:', error);
+      return { synced: 0, direction: 'error' };
+    }
+  },
+
+  /**
    * Full sync all system databases (with rate limit protection)
    */
   async syncAll(): Promise<Record<string, { synced: number; direction: string }>> {
@@ -1372,6 +1652,14 @@ export const systemSheetsSync = {
       }
 
       results.categoryChanges = await this.syncCategoryChanges();
+      await new Promise(r => setTimeout(r, 1000));
+
+      if (googleSheetsRateLimitManager.isRateLimited()) {
+        console.warn('[SystemSync] Rate limit hit after categoryChanges sync, aborting remaining syncs');
+        return results;
+      }
+
+      results.addressDatasets = await this.syncAddressDatasets();
 
       console.log('[SystemSync] Sync complete:', results);
       return results;

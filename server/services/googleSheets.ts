@@ -226,18 +226,63 @@ class DatasetCache {
     return false;
   }
   
-  // Load all datasets from Google Sheets into RAM
+  // Load all datasets: First from SQLite (PRIMARY), then merge from Sheets (BACKUP)
   async initialize(sheetsService: AddressDatasetService) {
     this.sheetsService = sheetsService;
-    console.log('[DatasetCache] Loading all datasets from Google Sheets into RAM...');
-    
+    console.log('[DatasetCache] === INITIALIZING CACHE (SQLite + Sheets) ===');
+
     try {
-      const allDatasets = await sheetsService.loadAllDatasetsFromSheets();
-      for (const dataset of allDatasets) {
-        this.cache.set(dataset.id, dataset);
+      // Step 1: Load from SQLite (PRIMARY SOURCE)
+      try {
+        const { addressDatasetsDB } = await import('./systemDatabaseService');
+        const sqliteDatasets = addressDatasetsDB.getAll();
+
+        for (const record of sqliteDatasets) {
+          // Convert SQLite record to AddressDataset format
+          const dataset = {
+            id: record.id,
+            normalizedAddress: record.normalizedAddress,
+            street: record.street,
+            houseNumber: record.houseNumber,
+            city: record.city,
+            postalCode: record.postalCode,
+            createdBy: record.createdBy,
+            createdAt: new Date(record.createdAt),
+            rawResidentData: JSON.parse(record.rawResidentData),
+            editableResidents: JSON.parse(record.editableResidents),
+            fixedCustomers: JSON.parse(record.fixedCustomers)
+          };
+          this.cache.set(dataset.id, dataset);
+        }
+
+        console.log(`[DatasetCache] ✓ Loaded ${this.cache.size} datasets from SQLite`);
+      } catch (error) {
+        console.error('[DatasetCache] Error loading from SQLite:', error);
       }
-      console.log(`[DatasetCache] Loaded ${this.cache.size} datasets into RAM cache`);
-      
+
+      // Step 2: Merge from Sheets (BACKUP - may have datasets not yet synced to SQLite)
+      try {
+        const sheetsDatasets = await sheetsService.loadAllDatasetsFromSheets();
+        let mergedFromSheets = 0;
+
+        for (const dataset of sheetsDatasets) {
+          if (!this.cache.has(dataset.id)) {
+            // Dataset in Sheets but not in SQLite → add to cache
+            this.cache.set(dataset.id, dataset);
+            mergedFromSheets++;
+          }
+        }
+
+        if (mergedFromSheets > 0) {
+          console.log(`[DatasetCache] ✓ Merged ${mergedFromSheets} additional datasets from Sheets`);
+        }
+      } catch (error) {
+        console.warn('[DatasetCache] Could not load from Sheets, using SQLite data only:', error);
+      }
+
+      console.log(`[DatasetCache] Total: ${this.cache.size} datasets in RAM cache`);
+      console.log(`[DatasetCache] === INITIALIZATION COMPLETE ===`);
+
       // Start background sync every 60 seconds
       this.startBackgroundSync();
     } catch (error) {
@@ -920,8 +965,6 @@ class AddressDatasetService implements AddressSheetsService {
   }
 
   async createAddressDataset(dataset: Omit<AddressDataset, 'id' | 'createdAt'>): Promise<AddressDataset> {
-    await this.ensureAddressesSheetExists();
-
     const id = this.generateDatasetId();
     const createdAt = getBerlinTime(); // Use Berlin timezone
     const fullDataset: AddressDataset = {
@@ -930,23 +973,48 @@ class AddressDatasetService implements AddressSheetsService {
       createdAt,
     };
 
-    const rowData = [
-      id,
-      dataset.normalizedAddress,
-      dataset.street,
-      dataset.houseNumber,
-      dataset.city || '',
-      dataset.postalCode,
-      dataset.createdBy,
-      formatBerlinTimeISO(createdAt), // Format in Berlin timezone
-      JSON.stringify(dataset.rawResidentData),
-      this.serializeResidents([...dataset.editableResidents, ...dataset.fixedCustomers])
-    ];
-
+    // Step 1: Save to SQLite (PRIMARY - CRITICAL!)
     try {
-      // Write to Google Sheets immediately (new dataset)
-      console.log(`[createAddressDataset] Writing dataset ${id} to sheets...`);
-      
+      const { addressDatasetsDB } = await import('./systemDatabaseService');
+      addressDatasetsDB.upsert({
+        id,
+        normalizedAddress: dataset.normalizedAddress,
+        street: dataset.street,
+        houseNumber: dataset.houseNumber,
+        city: dataset.city,
+        postalCode: dataset.postalCode,
+        createdBy: dataset.createdBy,
+        createdAt: formatBerlinTimeISO(createdAt),
+        rawResidentData: JSON.stringify(dataset.rawResidentData),
+        editableResidents: this.serializeResidents(dataset.editableResidents),
+        fixedCustomers: this.serializeResidents(dataset.fixedCustomers)
+      });
+      console.log(`[createAddressDataset] ✅ Saved to SQLite: ${id}`);
+    } catch (error) {
+      console.error(`[createAddressDataset] ❌ CRITICAL: Failed to save to SQLite, aborting:`, error);
+      throw new Error(`Failed to persist dataset: ${error}`);
+    }
+
+    // Step 2: Add to RAM cache (for fast access)
+    datasetCache.addNew(fullDataset);
+
+    // Step 3: Save to Sheets (BACKUP - non-blocking)
+    try {
+      await this.ensureAddressesSheetExists();
+
+      const rowData = [
+        id,
+        dataset.normalizedAddress,
+        dataset.street,
+        dataset.houseNumber,
+        dataset.city || '',
+        dataset.postalCode,
+        dataset.createdBy,
+        formatBerlinTimeISO(createdAt),
+        JSON.stringify(dataset.rawResidentData),
+        this.serializeResidents([...dataset.editableResidents, ...dataset.fixedCustomers])
+      ];
+
       await sheetsClient.spreadsheets.values.append({
         spreadsheetId: this.ADDRESSES_SHEET_ID,
         range: `${this.ADDRESSES_WORKSHEET_NAME}!A:J`,
@@ -956,24 +1024,15 @@ class AddressDatasetService implements AddressSheetsService {
         }
       });
 
-      console.log(`[createAddressDataset] ✅ Successfully written dataset ${id} to sheets`);
-
-      // Add to cache WITHOUT marking dirty (already written to sheets)
-      datasetCache.addNew(fullDataset);
-
-      console.log(`Created address dataset ${id} for ${dataset.normalizedAddress}`);
-      return fullDataset;
+      console.log(`[createAddressDataset] ✅ Backed up to Sheets: ${id}`);
     } catch (error) {
-      console.error('[createAddressDataset] ❌ ERROR writing to sheets:', error);
-      
-      // FALLBACK: Add to cache and mark as dirty to retry later
-      console.log('[createAddressDataset] Adding to cache as dirty for retry...');
-      datasetCache.set(fullDataset, true); // Mark as dirty!
-      
-      // Still return the dataset (it's in cache)
-      console.log(`Created address dataset ${id} for ${dataset.normalizedAddress} (in cache, will retry write)`);
-      return fullDataset;
+      console.warn(`[createAddressDataset] ⚠️ Failed to backup to Sheets (SQLite backup exists):`, error);
+      // Mark as dirty for background sync to retry
+      datasetCache.set(fullDataset, true);
     }
+
+    console.log(`[createAddressDataset] Created dataset ${id} for ${dataset.normalizedAddress}`);
+    return fullDataset;
   }
 
   async getAddressDatasets(normalizedAddress: string, limit: number = 5, houseNumber?: string): Promise<AddressDataset[]> {
@@ -1022,7 +1081,28 @@ class AddressDatasetService implements AddressSheetsService {
       console.log(`[updateResidentInDataset] Added new resident to dataset ${datasetId}`);
     }
 
-    // Update cache and mark as dirty (will sync to sheets in background)
+    // Step 1: Save to SQLite (PRIMARY)
+    try {
+      const { addressDatasetsDB } = await import('./systemDatabaseService');
+      addressDatasetsDB.upsert({
+        id: dataset.id,
+        normalizedAddress: dataset.normalizedAddress,
+        street: dataset.street,
+        houseNumber: dataset.houseNumber,
+        city: dataset.city,
+        postalCode: dataset.postalCode,
+        createdBy: dataset.createdBy,
+        createdAt: formatBerlinTimeISO(dataset.createdAt),
+        rawResidentData: JSON.stringify(dataset.rawResidentData),
+        editableResidents: this.serializeResidents(dataset.editableResidents),
+        fixedCustomers: this.serializeResidents(dataset.fixedCustomers)
+      });
+      console.log(`[updateResidentInDataset] ✅ Updated in SQLite: ${datasetId}`);
+    } catch (error) {
+      console.error(`[updateResidentInDataset] ❌ Failed to update SQLite:`, error);
+    }
+
+    // Step 2: Update cache and mark as dirty (will sync to sheets in background)
     datasetCache.set(dataset);
     console.log(`[updateResidentInDataset] Cache updated for dataset ${datasetId} (will sync to sheets in next batch)`);
   }
@@ -1047,7 +1127,28 @@ class AddressDatasetService implements AddressSheetsService {
     // Update residents in cache
     dataset.editableResidents = editableResidents;
 
-    // Update cache and mark as dirty (will sync to sheets in background)
+    // Step 1: Save to SQLite (PRIMARY)
+    try {
+      const { addressDatasetsDB } = await import('./systemDatabaseService');
+      addressDatasetsDB.upsert({
+        id: dataset.id,
+        normalizedAddress: dataset.normalizedAddress,
+        street: dataset.street,
+        houseNumber: dataset.houseNumber,
+        city: dataset.city,
+        postalCode: dataset.postalCode,
+        createdBy: dataset.createdBy,
+        createdAt: formatBerlinTimeISO(dataset.createdAt),
+        rawResidentData: JSON.stringify(dataset.rawResidentData),
+        editableResidents: this.serializeResidents(dataset.editableResidents),
+        fixedCustomers: this.serializeResidents(dataset.fixedCustomers)
+      });
+      console.log(`[bulkUpdateResidentsInDataset] ✅ Updated in SQLite: ${datasetId}`);
+    } catch (error) {
+      console.error(`[bulkUpdateResidentsInDataset] ❌ Failed to update SQLite:`, error);
+    }
+
+    // Step 2: Update cache and mark as dirty (will sync to sheets in background)
     datasetCache.set(dataset);
 
     // Verify the update
