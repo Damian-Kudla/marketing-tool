@@ -415,8 +415,8 @@ export default function AdminDashboard() {
         bValue = Object.values(b.todayStats.statusChanges || {}).reduce((sum: number, count) => sum + (count as number), 0);
         break;
       case 'written':
-        aValue = a.todayStats.finalStatuses?.['written'] || 0;
-        bValue = b.todayStats.finalStatuses?.['written'] || 0;
+        aValue = a.todayStats.egonContracts || 0;
+        bValue = b.todayStats.egonContracts || 0;
         break;
       default:
         return 0;
@@ -927,7 +927,7 @@ export default function AdminDashboard() {
                           <td className="p-2 font-medium">{user.username}</td>
                           <td className="p-2 text-right">
                             <span className="font-bold text-green-600">
-                              {user.todayStats.finalStatuses?.['written'] || 0}
+                              {user.todayStats.egonContracts || 0}
                             </span>
                           </td>
                           <td className="p-2 text-right">{user.todayStats.totalActions}</td>

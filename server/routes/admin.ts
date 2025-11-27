@@ -470,15 +470,26 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
     const resellerNames = allUsers.filter(u => u.resellerName).map(u => u.resellerName!);
     const egonContractCounts = egonOrdersDB.getCountsByResellersAndDate(resellerNames, todayEgonFormat);
     
+    // Debug: Log all users with resellerNames
+    console.log(`[Admin API LIVE] 📝 Users with resellerNames:`);
+    allUsers.filter(u => u.resellerName).forEach(u => {
+      console.log(`  - ${u.username} (userId: ${u.userId}) → resellerName: "${u.resellerName}"`);
+    });
+    console.log(`[Admin API LIVE] 📝 EGON contract counts from DB:`);
+    egonContractCounts.forEach((count, name) => {
+      console.log(`  - "${name}": ${count} contracts`);
+    });
+    
     // Create userId -> contract count mapping
     const userIdToContractCount = new Map<string, number>();
     allUsers.forEach(user => {
       if (user.resellerName && egonContractCounts.has(user.resellerName)) {
         userIdToContractCount.set(user.userId, egonContractCounts.get(user.resellerName)!);
+        console.log(`[Admin API LIVE] ✅ Mapped ${user.username} → ${egonContractCounts.get(user.resellerName)} contracts`);
       }
     });
 
-    console.log(`[Admin API LIVE] 📝 EGON contracts loaded: ${egonContractCounts.size} resellers, ${todayEgonFormat}`);
+    console.log(`[Admin API LIVE] 📝 EGON contracts loaded: ${egonContractCounts.size} resellers with contracts, ${todayEgonFormat}`);
 
     // Konvertiere Map zu Array und sortiere nach totalActions
     const usersArray = Array.from(allUserData.values()).sort((a, b) => {
