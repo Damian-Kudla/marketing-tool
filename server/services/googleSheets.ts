@@ -545,7 +545,6 @@ try {
         email: credentials.client_email,
         key: credentials.private_key,
         scopes: [
-          'https://www.googleapis.com/auth/spreadsheets.readonly',
           'https://www.googleapis.com/auth/spreadsheets'
         ],
       });
@@ -849,7 +848,8 @@ class GoogleSheetsService implements SheetsService {
 }
 
 class AddressDatasetService implements AddressSheetsService {
-  private readonly ADDRESSES_SHEET_ID = process.env.GOOGLE_LOGS_SHEET_ID || '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+  // IMPORTANT: Use SYSTEM_SHEET for Adressen (separate from user logs to avoid 10M limit)
+  private readonly ADDRESSES_SHEET_ID = process.env.GOOGLE_SYSTEM_SHEET_ID || '1OsXBfxE2Pe7cPBGjPD9C2-03gm8cNfMdR9_EfZicMyw';
   private readonly ADDRESSES_WORKSHEET_NAME = 'Adressen';
 
   private async ensureAddressesSheetExists(): Promise<void> {

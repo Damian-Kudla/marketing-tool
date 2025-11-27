@@ -52,7 +52,8 @@ class CookieStorageService {
 
   // Google Sheets configuration
   private sheetsClient: any = null;
-  private spreadsheetId = '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+  // IMPORTANT: Use SYSTEM_SHEET for Cookies (separate from user logs to avoid 10M limit)
+  private spreadsheetId = process.env.GOOGLE_SYSTEM_SHEET_ID || '1OsXBfxE2Pe7cPBGjPD9C2-03gm8cNfMdR9_EfZicMyw';
   private sheetName = 'Cookies';
 
   // Sync configuration
