@@ -402,17 +402,19 @@ class SQLiteStartupSyncService {
             }
 
             // SYNC 2: SQLite → Sheets (Logs nur in SQLite)
-            // Nur für Daten von gestern oder früher (nicht heute)
-            if (onlyInSQLite.length > 0 && date < today) {
+            // NUR für die letzten 2 Tage (heute + gestern) - ältere Logs bleiben nur in SQLite
+            if (onlyInSQLite.length > 0 && (date === today || date === yesterday)) {
               try {
-                const logsToWrite = onlyInSQLite.map(log => this.convertSQLiteLogToSheetRow(log));
+                // Sort logs by timestamp ASCENDING (oldest first) before writing
+                const sortedLogs = [...onlyInSQLite].sort((a, b) => a.timestamp - b.timestamp);
+                const logsToWrite = sortedLogs.map(log => this.convertSQLiteLogToSheetRow(log));
                 
                 // Write to Sheets (with rate limit check)
                 const written = await this.writeLogsToSheet(worksheetName, logsToWrite);
                 stats.logsWrittenToSheets += written;
                 
                 if (written > 0) {
-                  console.log(`[Phase 4]     ✅ SQLite→Sheets: Wrote ${written} logs`);
+                  console.log(`[Phase 4]     ✅ SQLite→Sheets: Wrote ${written} logs (sorted ascending)`);
                 } else if (written === -1) {
                   console.log(`[Phase 4]     ⚠️  SQLite→Sheets: Skipped (Sheets full or rate limited)`);
                 }
@@ -422,7 +424,7 @@ class SQLiteStartupSyncService {
               }
             }
 
-            // Track sheets with old logs for cleanup
+            // Track sheets with old logs for cleanup (logs older than yesterday)
             if (date < yesterday && sheetsLogsForDate.length > 0) {
               if (!sheetsWithOldLogs.includes(worksheetName)) {
                 sheetsWithOldLogs.push(worksheetName);
@@ -431,10 +433,10 @@ class SQLiteStartupSyncService {
           }
 
           // Also check SQLite for dates NOT in Sheets (completely missing from Sheets)
-          const last7Days = this.getLast7Days(today);
-          for (const date of last7Days) {
+          // NUR für die letzten 2 Tage (heute + gestern)
+          const last2Days = [today, yesterday];
+          for (const date of last2Days) {
             if (sheetsLogsByDate.has(date)) continue; // Already processed
-            if (date === today) continue; // Skip today
 
             const sqliteLogs = getAllLogsForDate(date).filter(l => l.userId === sheetUserId);
             if (sqliteLogs.length === 0) continue;
@@ -442,12 +444,14 @@ class SQLiteStartupSyncService {
             console.log(`[Phase 4]   ${date}: SQLite has ${sqliteLogs.length} logs, Sheets has 0`);
             
             try {
-              const logsToWrite = sqliteLogs.map(log => this.convertSQLiteLogToSheetRow(log));
+              // Sort logs by timestamp ASCENDING (oldest first)
+              const sortedLogs = [...sqliteLogs].sort((a, b) => a.timestamp - b.timestamp);
+              const logsToWrite = sortedLogs.map(log => this.convertSQLiteLogToSheetRow(log));
               const written = await this.writeLogsToSheet(worksheetName, logsToWrite);
               stats.logsWrittenToSheets += written;
               
               if (written > 0) {
-                console.log(`[Phase 4]     ✅ SQLite→Sheets: Wrote ${written} missing logs`);
+                console.log(`[Phase 4]     ✅ SQLite→Sheets: Wrote ${written} missing logs (sorted ascending)`);
               } else if (written === -1) {
                 console.log(`[Phase 4]     ⚠️  Sheets full or rate limited, skipping`);
               }
@@ -467,7 +471,7 @@ class SQLiteStartupSyncService {
 
       console.log(`\n[Phase 4] ✅ Bidirectional sync complete:`);
       console.log(`   → Sheets→SQLite: ${stats.logsMerged} logs merged`);
-      console.log(`   → SQLite→Sheets: ${stats.logsWrittenToSheets} logs written`);
+      console.log(`   → SQLite→Sheets: ${stats.logsWrittenToSheets} logs written (last 2 days only)`);
 
       // Store for next phases
       (stats as any)._datesNeedingUpload = [...new Set(datesNeedingUpload)];

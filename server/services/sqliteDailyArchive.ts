@@ -242,23 +242,40 @@ class SQLiteDailyArchiveService {
   }
 
   /**
-   * STEP 4: Merge alte Logs aus Sheets und dann cleanup
+   * STEP 4: Bidirektionaler Sync zwischen Sheets ↔ SQLite, dann cleanup
+   * 
+   * 1. Sheets → SQLite: Logs nur in Sheets werden in SQLite eingefügt
+   * 2. SQLite → Sheets: Logs nur in SQLite werden in Sheets geschrieben (nur letzte 2 Tage)
+   * 3. Cleanup: Alte Logs (>2 Tage) aus Sheets löschen
    */
   private async stepCleanupSheets(today: string): Promise<void> {
-    console.log('[Step 4] Merging old logs from Sheets before cleanup...');
+    console.log('[Step 4] 🔄 BIDIRECTIONAL SYNC: Sheets ↔ SQLite...');
 
     try {
-      // ERST: Merge alte Logs in SQLite (verhindert Datenverlust bei manuell nachgetragenen Daten)
+      const yesterday = this.getYesterday(today);
+      
+      // PHASE 1: Sheets → SQLite (alle alten Logs sichern)
+      console.log('[Step 4] Phase 1: Sheets → SQLite (merge old logs)...');
       const logsMerged = await this.mergeOldLogsFromSheets(today);
       
       if (logsMerged > 0) {
-        console.log(`[Step 4] ✅ Merged ${logsMerged} old logs into SQLite databases`);
+        console.log(`[Step 4] ✅ Sheets→SQLite: Merged ${logsMerged} logs`);
       } else {
-        console.log('[Step 4] No old logs to merge');
+        console.log('[Step 4] Sheets→SQLite: No old logs to merge');
       }
 
-      // DANN: Cleanup - lösche alte Logs aus Sheets (sind jetzt in SQLite)
-      console.log('[Step 4] Cleaning up old logs from Sheets...');
+      // PHASE 2: SQLite → Sheets (fehlende Logs der letzten 2 Tage zurückschreiben)
+      console.log('[Step 4] Phase 2: SQLite → Sheets (sync last 2 days)...');
+      const logsWritten = await this.syncSQLiteToSheets(today, yesterday);
+      
+      if (logsWritten > 0) {
+        console.log(`[Step 4] ✅ SQLite→Sheets: Wrote ${logsWritten} logs`);
+      } else {
+        console.log('[Step 4] SQLite→Sheets: No missing logs to write');
+      }
+
+      // PHASE 3: Cleanup - lösche alte Logs aus Sheets (sind jetzt in SQLite)
+      console.log('[Step 4] Phase 3: Cleanup old logs from Sheets...');
 
       // Import Google Sheets service
       const { googleSheetsService } = await import('./googleSheets');
@@ -433,6 +450,164 @@ class SQLiteDailyArchiveService {
     } catch (error) {
       console.error('[Step 4] Error merging old logs:', error);
       return 0;
+    }
+  }
+
+  /**
+   * Helper: Sync SQLite logs to Sheets (nur letzte 2 Tage: heute + gestern)
+   * Schreibt fehlende Logs chronologisch sortiert (älteste oben)
+   */
+  private async syncSQLiteToSheets(today: string, yesterday: string): Promise<number> {
+    try {
+      const { getAllLogsForDate, getCETDate } = await import('./sqliteLogService');
+      const { googleSheetsService } = await import('./googleSheets');
+      
+      // Get all users
+      const allUsers = await googleSheetsService.getAllUsers();
+      if (allUsers.length === 0) {
+        console.log('[Step 4]   No users found');
+        return 0;
+      }
+
+      // Get all worksheets
+      const allWorksheets = await this.getAllUserWorksheets();
+      const worksheetMap = new Map(allWorksheets.map(w => [w.title, w.sheetId]));
+
+      let totalWritten = 0;
+      const datesToSync = [yesterday, today]; // Nur letzte 2 Tage
+
+      for (const user of allUsers) {
+        const worksheetName = `${user.username}_${user.userId}`;
+        
+        // Check if worksheet exists
+        if (!worksheetMap.has(worksheetName)) {
+          continue; // Skip users without worksheet
+        }
+
+        try {
+          // Get all Sheets logs for this user (with timestamps)
+          const sheetsLogs = await this.getAllLogsFromSheet(worksheetName);
+          const sheetsTimestamps = new Set<number>();
+          
+          for (const log of sheetsLogs) {
+            try {
+              if (log.timestamp) {
+                const ts = new Date(log.timestamp).getTime();
+                if (!isNaN(ts)) sheetsTimestamps.add(ts);
+              }
+            } catch { /* ignore */ }
+          }
+
+          // Collect missing logs from SQLite for the last 2 days
+          const missingLogs: any[] = [];
+
+          for (const date of datesToSync) {
+            const sqliteLogs = getAllLogsForDate(date).filter(l => l.userId === user.odooId);
+            
+            for (const log of sqliteLogs) {
+              if (!sheetsTimestamps.has(log.timestamp)) {
+                missingLogs.push(log);
+              }
+            }
+          }
+
+          if (missingLogs.length === 0) continue;
+
+          // Sort by timestamp ASCENDING (oldest first)
+          missingLogs.sort((a, b) => a.timestamp - b.timestamp);
+
+          // Convert to Sheets row format
+          const rows = missingLogs.map(log => this.convertLogToSheetRow(log));
+
+          // Write to Sheets
+          const written = await this.appendLogsToSheet(worksheetName, rows);
+          totalWritten += written;
+
+          if (written > 0) {
+            console.log(`[Step 4]   ${worksheetName}: wrote ${written} missing logs`);
+          }
+        } catch (error) {
+          console.error(`[Step 4]   Error syncing ${worksheetName}:`, error);
+        }
+
+        await this.sleep(500);
+      }
+
+      return totalWritten;
+    } catch (error) {
+      console.error('[Step 4] Error in SQLite→Sheets sync:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Helper: Convert SQLite log to Sheets row format
+   */
+  private convertLogToSheetRow(log: any): any[] {
+    const timestamp = new Date(log.timestamp).toISOString();
+    
+    const ensureString = (value: any): string => {
+      if (value === null || value === undefined) return '';
+      if (typeof value === 'string') return value;
+      if (typeof value === 'object') {
+        try { return JSON.stringify(value); } catch { return String(value); }
+      }
+      return String(value);
+    };
+    
+    let parsedData = log.data;
+    if (typeof log.data === 'string') {
+      try { parsedData = JSON.parse(log.data); } catch { parsedData = {}; }
+    }
+    
+    return [
+      timestamp,                              // A: Timestamp
+      ensureString(log.userId),               // B: User ID
+      ensureString(log.username),             // C: Username
+      ensureString(parsedData?.endpoint),     // D: Endpoint
+      ensureString(parsedData?.method),       // E: Method
+      ensureString(parsedData?.address),      // F: Address
+      '',                                     // G: New Prospects
+      '',                                     // H: Existing Customers
+      ensureString(parsedData?.userAgent),    // I: User Agent
+      typeof log.data === 'string' ? log.data : JSON.stringify(log.data) // J: Full Data JSON
+    ];
+  }
+
+  /**
+   * Helper: Append logs to a Sheets worksheet
+   */
+  private async appendLogsToSheet(worksheetName: string, rows: any[][]): Promise<number> {
+    if (rows.length === 0) return 0;
+
+    try {
+      const sheetsKey = process.env.GOOGLE_SHEETS_KEY || '{}';
+      const credentials = JSON.parse(sheetsKey);
+
+      const auth = new google.auth.JWT({
+        email: credentials.client_email,
+        key: credentials.private_key,
+        scopes: ['https://www.googleapis.com/auth/spreadsheets']
+      });
+
+      const sheets = google.sheets({ version: 'v4', auth });
+      const LOG_SHEET_ID = process.env.GOOGLE_LOGS_SHEET_ID || '1Gt1qF9ipcuABiHnzlKn2EqhUcF_OzzYLiAWN0lR1Dxw';
+
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: LOG_SHEET_ID,
+        range: `${worksheetName}!A:J`,
+        valueInputOption: 'RAW',
+        insertDataOption: 'INSERT_ROWS',
+        requestBody: { values: rows }
+      });
+
+      return rows.length;
+    } catch (error: any) {
+      if (error?.status === 429 || error?.message?.includes('Quota')) {
+        console.warn(`[appendLogsToSheet] Rate limited, skipping ${worksheetName}`);
+        return 0;
+      }
+      throw error;
     }
   }
 
