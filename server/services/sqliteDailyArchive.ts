@@ -412,7 +412,7 @@ class SQLiteDailyArchiveService {
       // Merge into DBs
       let totalMerged = 0;
 
-      for (const [date, logs] of logsByDate.entries()) {
+      for (const [date, logs] of Array.from(logsByDate.entries())) {
         try {
           // Check if DB exists locally or download from Drive
           if (!(await dbExists(date))) {
@@ -502,7 +502,7 @@ class SQLiteDailyArchiveService {
           const missingLogs: any[] = [];
 
           for (const date of datesToSync) {
-            const sqliteLogs = getAllLogsForDate(date).filter(l => l.userId === user.odooId);
+            const sqliteLogs = getAllLogsForDate(date).filter(l => l.userId === user.userId);
             
             for (const log of sqliteLogs) {
               if (!sheetsTimestamps.has(log.timestamp)) {

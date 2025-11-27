@@ -141,7 +141,8 @@ function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
 
 /**
  * Parse EGON timestamp format to Unix milliseconds
- * Format: "DD.MM.YYYY HH:MM:SS" (German format)
+ * Format: "DD.MM.YYYY HH:MM:SS" (German format, in MEZ/CEST timezone)
+ * The timestamp is already in Berlin timezone - we need to interpret it correctly
  * @returns Unix timestamp in milliseconds, or null if parsing fails
  */
 function parseEgonTimestamp(egonTimestamp: string): number | null {
@@ -151,16 +152,24 @@ function parseEgonTimestamp(egonTimestamp: string): number | null {
     if (!match) return null;
     
     const [, day, month, year, hour, minute, second] = match;
-    // Create Date in local time (Germany)
-    const date = new Date(
-      parseInt(year),
-      parseInt(month) - 1, // JS months are 0-indexed
-      parseInt(day),
-      parseInt(hour),
-      parseInt(minute),
-      parseInt(second)
+    
+    // Use Luxon to correctly interpret the time as Berlin timezone
+    // This ensures the UTC timestamp is correct regardless of server timezone
+    const { DateTime } = require('luxon');
+    const berlinDateTime = DateTime.fromObject(
+      {
+        year: parseInt(year),
+        month: parseInt(month),
+        day: parseInt(day),
+        hour: parseInt(hour),
+        minute: parseInt(minute),
+        second: parseInt(second)
+      },
+      { zone: 'Europe/Berlin' }
     );
-    return date.getTime();
+    
+    if (!berlinDateTime.isValid) return null;
+    return berlinDateTime.toMillis();
   } catch {
     return null;
   }

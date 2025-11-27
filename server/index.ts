@@ -147,7 +147,7 @@ app.use((req, res, next) => {
         // If we added current-day data, flush batchLogger and reload DailyStore
         if (stats.currentDataPoints > 0) {
           log('Flushing new GPS data to Google Sheets...');
-          await batchLogger.flushNow();
+          await batchLogger.forceFlushNow();
 
           log('Reloading DailyStore with updated tracking data...');
           await dailyDataStore.initializeFromLogs();

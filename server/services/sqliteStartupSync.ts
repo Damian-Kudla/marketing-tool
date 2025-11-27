@@ -474,7 +474,7 @@ class SQLiteStartupSyncService {
       console.log(`   → SQLite→Sheets: ${stats.logsWrittenToSheets} logs written (last 2 days only)`);
 
       // Store for next phases
-      (stats as any)._datesNeedingUpload = [...new Set(datesNeedingUpload)];
+      (stats as any)._datesNeedingUpload = Array.from(new Set(datesNeedingUpload));
       (stats as any)._sheetsWithOldLogs = sheetsWithOldLogs;
     } catch (error) {
       console.error('[Phase 4] Error in bidirectional sync:', error);
@@ -595,7 +595,7 @@ class SQLiteStartupSyncService {
     const phase4Dates = (stats as any)._datesNeedingUpload || [];
 
     // Merge and deduplicate
-    const allDates = [...new Set([...phase3Dates, ...phase4Dates])];
+    const allDates = Array.from(new Set([...phase3Dates, ...phase4Dates]));
 
     if (allDates.length === 0) {
       console.log('[Phase 5] No DBs need uploading');

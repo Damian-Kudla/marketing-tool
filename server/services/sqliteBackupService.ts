@@ -353,7 +353,7 @@ class SQLiteBackupService {
         const testDb = new Database(tempPath, { readonly: true });
         
         // Run comprehensive integrity check
-        const integrityResult = testDb.pragma('integrity_check');
+        const integrityResult = testDb.pragma('integrity_check') as Array<{ integrity_check: string }>;
         testDb.close();
 
         if (integrityResult.length !== 1 || integrityResult[0].integrity_check !== 'ok') {

@@ -149,15 +149,15 @@ export function checkDBIntegrity(date: string): boolean {
         // Non-lock errors: continue with integrity check anyway
       }
       
-      const result = db.pragma('integrity_check');
+      const result = db.pragma('integrity_check') as Array<{ integrity_check?: string } | string>;
       db.close();
       db = null;
 
       // Check multiple possible response formats from better-sqlite3
       const isValid = 
-        (result.length === 1 && result[0].integrity_check === 'ok') || // Format 1: { integrity_check: 'ok' }
+        (result.length === 1 && typeof result[0] === 'object' && result[0]?.integrity_check === 'ok') || // Format 1: { integrity_check: 'ok' }
         (result.length === 1 && result[0] === 'ok') ||                  // Format 2: ['ok']
-        (Array.isArray(result) && result[0]?.integrity_check === 'ok'); // Format 3: [{ integrity_check: 'ok' }]
+        (Array.isArray(result) && typeof result[0] === 'object' && result[0]?.integrity_check === 'ok'); // Format 3: [{ integrity_check: 'ok' }]
 
       // btreeInitPage errors are usually concurrent access issues, not real corruption
       if (!isValid) {
@@ -656,7 +656,7 @@ export function checkpointDB(date: string): void {
 export function closeAllDBs(): void {
   console.log(`[SQLite] Closing ${dbCache.size} cached DBs...`);
 
-  for (const [date, db] of dbCache.entries()) {
+  for (const [date, db] of Array.from(dbCache.entries())) {
     try {
       db.close();
     } catch (error) {
@@ -667,7 +667,7 @@ export function closeAllDBs(): void {
   dbCache.clear();
 
   // Close old DBs cache
-  for (const [date, cached] of oldDBCache.entries()) {
+  for (const [date, cached] of Array.from(oldDBCache.entries())) {
     try {
       cached.db.close();
     } catch (error) {

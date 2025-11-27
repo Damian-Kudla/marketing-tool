@@ -1,4 +1,4 @@
-import type { SessionData, ActionType } from '../../../shared/trackingTypes';
+import type { SessionData, ActionLog } from '../../../shared/trackingTypes';
 import { deviceFingerprintService } from './deviceFingerprint';
 
 class SessionTrackingService {
