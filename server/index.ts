@@ -160,6 +160,37 @@ app.use((req, res, next) => {
       log(`⚠️ External tracking reconciliation failed: ${error}`);
     }
 
+    // ============================================================
+    // TEMPORARY: Immediate Drive Backup of ALL SQLite DBs
+    // This runs BEFORE all sync phases to get the current state
+    // DELETE THIS BLOCK AFTER ONE SUCCESSFUL RUN!
+    // ============================================================
+    log('🚨 IMMEDIATE DRIVE BACKUP - Uploading ALL SQLite databases to Drive...');
+    try {
+      const { systemDriveBackup } = await import('./services/systemDatabaseService');
+      const { sqliteBackupService } = await import('./services/sqliteBackupService');
+      
+      // Backup System DBs (cookies, appointments, pauseLocations, authLogs, categoryChanges, addressDatasets)
+      log('  → Backing up System DBs to Drive...');
+      const systemBackupResult = await systemDriveBackup.backupAll();
+      log(`  ✅ System DBs backed up: ${systemBackupResult.successful.length} success, ${systemBackupResult.failed.length} failed`);
+      if (systemBackupResult.failed.length > 0) {
+        log(`  ⚠️ Failed: ${systemBackupResult.failed.join(', ')}`);
+      }
+      
+      // Backup User Activity Log DBs (logs-YYYY-MM-DD.db files)
+      log('  → Backing up User Activity Log DBs to Drive...');
+      const logBackupResult = await sqliteBackupService.backupAllToDrive();
+      log(`  ✅ User Log DBs backed up: ${logBackupResult.uploaded} uploaded, ${logBackupResult.skipped} skipped, ${logBackupResult.failed} failed`);
+      
+      log('🎉 IMMEDIATE DRIVE BACKUP COMPLETE - You can now download DBs from Drive!');
+    } catch (error) {
+      log(`❌ IMMEDIATE DRIVE BACKUP FAILED: ${error}`);
+    }
+    // ============================================================
+    // END TEMPORARY BLOCK
+    // ============================================================
+
     // Perform Startup Sync (check local DBs, download missing, merge Sheets)
     log('Starting SQLite Startup Sync (this may take a moment)...');
     await sqliteStartupSyncService.performStartupSync();
