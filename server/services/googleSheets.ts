@@ -616,6 +616,7 @@ export interface UserData {
   isAdmin: boolean;
   followMeeDeviceId?: string;
   trackingNames: string[]; // Column F: Tracking names from external API
+  resellerName?: string;    // Column G: EGON Reseller Name for contract tracking
 }
 
 export interface SheetsService {
@@ -844,7 +845,7 @@ class GoogleSheetsService implements SheetsService {
     try {
       const response = await sheetsClient.spreadsheets.values.get({
         spreadsheetId: this.SHEET_ID,
-        range: `${this.WORKSHEET_NAME}!A2:F`, // Extended to column F for tracking names
+        range: `${this.WORKSHEET_NAME}!A2:G`, // Extended to column G for EGON reseller name
       });
 
       const rows = response.data.values || [];
@@ -857,6 +858,7 @@ class GoogleSheetsService implements SheetsService {
         const adminRole = row[3]?.trim().toLowerCase();
         const followMeeDeviceId = row[4]?.trim();
         const trackingNamesString = row[5]?.trim(); // Column F: tracking names
+        const resellerName = row[6]?.trim();        // Column G: EGON reseller name
 
         if (password && username) {
           const postalCodes = postalCodesString
@@ -879,7 +881,8 @@ class GoogleSheetsService implements SheetsService {
             postalCodes,
             isAdmin: adminRole === 'admin',
             followMeeDeviceId: followMeeDeviceId || undefined,
-            trackingNames: trackingNames
+            trackingNames: trackingNames,
+            resellerName: resellerName || undefined
           });
         }
       }

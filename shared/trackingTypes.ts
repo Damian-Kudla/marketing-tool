@@ -184,6 +184,7 @@ export interface DashboardLiveData {
       distance: number;
       uniquePhotos: number; // Deduplizierte OCR-Anfragen
       peakTime?: string; // e.g., "13:00-15:00" - most active time period
+      egonContracts?: number; // Number of contracts from EGON database
       breaks?: Array<{ // Top 3 breaks (largest time gaps)
         start: number; // timestamp
         end: number; // timestamp
@@ -193,7 +194,10 @@ export interface DashboardLiveData {
           poi_type: string;
           address: string;
           place_id: string;
+          durationAtLocation?: number; // minutes spent at this specific location
         }>;
+        isCustomerConversation?: boolean; // True if contract was written during this break
+        contractsInBreak?: number[]; // Contract timestamps within this break
       }>;
     };
   }[];

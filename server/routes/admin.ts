@@ -14,6 +14,7 @@ import { scrapeDayDataFromSQLite as scrapeDayData, clearHistoricalCache, getCach
 import { getCETDate } from '../services/sqliteLogService';
 import { getBerlinDate, getBerlinHour, getBerlinTimestamp } from '../utils/timezone';
 import { pauseLocationCache } from '../services/pauseLocationCache';
+import { egonOrdersDB } from '../services/egonScraperService';
 import fs from 'fs';
 import path from 'path';
 import type { DailyUserData, DashboardLiveData, TrackingData, ActionLog } from '../../shared/trackingTypes';
@@ -139,6 +140,44 @@ function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
 }
 
 /**
+ * Parse EGON timestamp format to Unix milliseconds
+ * Format: "DD.MM.YYYY HH:MM:SS" (German format)
+ * @returns Unix timestamp in milliseconds, or null if parsing fails
+ */
+function parseEgonTimestamp(egonTimestamp: string): number | null {
+  try {
+    // Format: "DD.MM.YYYY HH:MM:SS"
+    const match = egonTimestamp.match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
+    if (!match) return null;
+    
+    const [, day, month, year, hour, minute, second] = match;
+    // Create Date in local time (Germany)
+    const date = new Date(
+      parseInt(year),
+      parseInt(month) - 1, // JS months are 0-indexed
+      parseInt(day),
+      parseInt(hour),
+      parseInt(minute),
+      parseInt(second)
+    );
+    return date.getTime();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check if a contract was written during a break period
+ * @param breakStart Break start timestamp (Unix ms)
+ * @param breakEnd Break end timestamp (Unix ms)
+ * @param contracts Array of contract timestamps (Unix ms)
+ * @returns Array of contract timestamps that fall within the break
+ */
+function getContractsInBreak(breakStart: number, breakEnd: number, contractTimestamps: number[]): number[] {
+  return contractTimestamps.filter(ts => ts >= breakStart && ts <= breakEnd);
+}
+
+/**
  * Calculate all breaks longer than 20 minutes (time gaps between GPS tracking)
  * 
  * POI lookup rules (to minimize API calls):
@@ -148,7 +187,7 @@ function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: numbe
  * 
  * Only when ALL conditions are met, a POI lookup is performed.
  */
-async function calculateBreaks(rawLogs: TrackingData[]): Promise<Array<{ 
+async function calculateBreaks(rawLogs: TrackingData[], contractTimestamps: number[] = []): Promise<Array<{ 
   start: number; 
   end: number; 
   duration: number;
@@ -160,6 +199,8 @@ async function calculateBreaks(rawLogs: TrackingData[]): Promise<Array<{
     place_id: string;
     durationAtLocation?: number;
   }>;
+  isCustomerConversation?: boolean; // True if contract was written during this break
+  contractsInBreak?: number[]; // Contract timestamps that fall within this break
 }>> {
   if (rawLogs.length < 2) {
     console.log('[calculateBreaks] ❌ Not enough logs:', rawLogs.length);
@@ -347,7 +388,23 @@ async function calculateBreaks(rawLogs: TrackingData[]): Promise<Array<{
     })
   );
 
-  return enrichedGaps;
+  // Enrich breaks with customer conversation detection (based on EGON contracts)
+  const breaksWithContracts = enrichedGaps.map(gap => {
+    const contractsInThisBreak = getContractsInBreak(gap.start, gap.end, contractTimestamps);
+    const isCustomerConversation = contractsInThisBreak.length > 0;
+    
+    if (isCustomerConversation) {
+      console.log(`[calculateBreaks] 📝 Kundengespräch detected: ${contractsInThisBreak.length} contract(s) during break ${new Date(gap.start).toLocaleTimeString()} - ${new Date(gap.end).toLocaleTimeString()}`);
+    }
+    
+    return {
+      ...gap,
+      isCustomerConversation,
+      contractsInBreak: contractsInThisBreak.length > 0 ? contractsInThisBreak : undefined
+    };
+  });
+
+  return breaksWithContracts;
 }
 
 /**
@@ -371,7 +428,7 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
     console.log('[Admin API] Fetching live dashboard data');
 
     // Import addressDatasetService for final status calculation
-    const { addressDatasetService } = await import('../services/googleSheets');
+    const { addressDatasetService, googleSheetsService } = await import('../services/googleSheets');
 
     const allUserData = dailyDataStore.getAllUserData();
 
@@ -385,6 +442,33 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
         )
       )
     );
+
+    // Get today's date in EGON format (DD.MM.YYYY)
+    const today = new Date();
+    const todayEgonFormat = `${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}.${today.getFullYear()}`;
+    
+    // Load all users to get resellerName mapping
+    const allUsers = await googleSheetsService.getAllUsers();
+    const userIdToResellerName = new Map<string, string>();
+    allUsers.forEach(user => {
+      if (user.resellerName) {
+        userIdToResellerName.set(user.userId, user.resellerName);
+      }
+    });
+
+    // Get EGON contract counts for users with resellerNames
+    const resellerNames = allUsers.filter(u => u.resellerName).map(u => u.resellerName!);
+    const egonContractCounts = egonOrdersDB.getCountsByResellersAndDate(resellerNames, todayEgonFormat);
+    
+    // Create userId -> contract count mapping
+    const userIdToContractCount = new Map<string, number>();
+    allUsers.forEach(user => {
+      if (user.resellerName && egonContractCounts.has(user.resellerName)) {
+        userIdToContractCount.set(user.userId, egonContractCounts.get(user.resellerName)!);
+      }
+    });
+
+    console.log(`[Admin API LIVE] 📝 EGON contracts loaded: ${egonContractCounts.size} resellers, ${todayEgonFormat}`);
 
     // Konvertiere Map zu Array und sortiere nach totalActions
     const usersArray = Array.from(allUserData.values()).sort((a, b) => {
@@ -456,6 +540,9 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
         : 0;
       const isCurrentlyActive = userData.activeTime > 0 && (Date.now() - lastActivityTime) < 15 * 60 * 1000; // 15 minutes
 
+      // Get EGON contract count for this user
+      const egonContracts = userIdToContractCount.get(userData.userId) || 0;
+
       return {
         userId: userData.userId,
         username: userData.username,
@@ -475,6 +562,7 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
           uniquePhotos: dailyDataStore.getUniquePhotoCount(userData.userId),
           peakTime,
           breaks,
+          egonContracts, // EGON contract count from egon_orders.db
         },
       };
     }));
@@ -701,6 +789,8 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
     let gpsPoints: any[] = [];
     let photoTimestamps: number[] = [];
     let username = '';
+    let contractTimestamps: number[] = [];
+    let contractCount = 0;
 
     // Finde Username für userId (wird immer benötigt)
     const { googleSheetsService } = await import('../services/googleSheets');
@@ -709,6 +799,21 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
 
     if (user) {
       username = user.username;
+      
+      // Load EGON contracts for this user (if they have a resellerName)
+      if (user.resellerName) {
+        const egonOrders = egonOrdersDB.getByResellerAndDate(user.resellerName, dateStr);
+        contractCount = egonOrders.length;
+        
+        // Convert EGON timestamps to Unix milliseconds
+        contractTimestamps = egonOrders
+          .map(order => parseEgonTimestamp(order.timestamp))
+          .filter((ts): ts is number => ts !== null);
+        
+        console.log(`[Admin API Route] 📝 EGON Orders: ${contractCount} contracts for ${user.resellerName} on ${dateStr}`);
+      } else {
+        console.log(`[Admin API Route] ⚠️ No EGON reseller name for user ${username}`);
+      }
     }
 
     // Lade Daten (native/followmee/external_app aus Logs/SQLite)
@@ -787,6 +892,8 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
         place_id: string;
         durationAtLocation?: number;
       }>;
+      isCustomerConversation?: boolean;
+      contractsInBreak?: number[];
     }> = [];
 
     // Fetch raw logs for break calculation (aus SQLite, nicht RAM)
@@ -803,8 +910,9 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
         return logDate === dateStr;
       });
 
-      breaks = await calculateBreaks(rawLogs);
-      console.log(`[Admin API] Calculated ${breaks.length} breaks for route`);
+      // Pass contract timestamps to calculateBreaks for customer conversation detection
+      breaks = await calculateBreaks(rawLogs, contractTimestamps);
+      console.log(`[Admin API] Calculated ${breaks.length} breaks for route (with ${contractTimestamps.length} contract timestamps)`);
     }
 
     // PERFORMANCE: Downsample GPS points if too many (>5000 causes browser lag)
@@ -865,13 +973,15 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
     res.json({
       gpsPoints: sanitizedGpsPoints || [],
       photoTimestamps: photoTimestamps || [],
+      contracts: contractTimestamps || [], // EGON contract timestamps (Unix ms)
       breaks: breaks || [],
       username: username || 'Unknown',
       date: dateStr,
       source: sourceFilter || 'all',
       totalPoints: sanitizedGpsPoints.length,
       originalPointCount: originalPointCount, // Send original count for info
-      totalPhotos: photoTimestamps.length
+      totalPhotos: photoTimestamps.length,
+      totalContracts: contractCount // Number of contracts written by this user on this day
     });
 
     // Cache nach Verwendung löschen bei historischen Daten (15 Minuten statt 5 Sekunden)

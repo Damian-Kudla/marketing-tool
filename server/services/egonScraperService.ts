@@ -135,6 +135,81 @@ export const egonOrdersDB = {
     return result.count;
   },
 
+  /**
+   * Get orders by reseller name and date
+   * @param resellerName - The reseller name to filter by
+   * @param dateStr - Date in format "DD.MM.YYYY" (German format matching timestamp prefix)
+   * @returns Array of orders for that reseller on that date
+   */
+  getByResellerAndDate: (resellerName: string, dateStr: string) => {
+    // Timestamp format in DB: "DD.MM.YYYY HH:MM:SS"
+    // We match by LIKE 'DD.MM.YYYY %' to get all timestamps on that date
+    const result = db.prepare(`
+      SELECT * FROM egon_orders 
+      WHERE reseller_name = ? AND timestamp LIKE ?
+      ORDER BY timestamp ASC
+    `).all(resellerName, `${dateStr} %`) as Array<{
+      id: number;
+      reseller_name: string;
+      timestamp: string;
+      order_no: string | null;
+      contract_date: string | null;
+      created_at: string;
+      synced_to_sheets: number;
+    }>;
+    return result;
+  },
+
+  /**
+   * Get orders for multiple reseller names on a specific date
+   * @param resellerNames - Array of reseller names to filter by
+   * @param dateStr - Date in format "DD.MM.YYYY" (German format matching timestamp prefix)
+   * @returns Array of orders for those resellers on that date
+   */
+  getByResellersAndDate: (resellerNames: string[], dateStr: string) => {
+    if (resellerNames.length === 0) return [];
+    
+    const placeholders = resellerNames.map(() => '?').join(',');
+    const result = db.prepare(`
+      SELECT * FROM egon_orders 
+      WHERE reseller_name IN (${placeholders}) AND timestamp LIKE ?
+      ORDER BY timestamp ASC
+    `).all(...resellerNames, `${dateStr} %`) as Array<{
+      id: number;
+      reseller_name: string;
+      timestamp: string;
+      order_no: string | null;
+      contract_date: string | null;
+      created_at: string;
+      synced_to_sheets: number;
+    }>;
+    return result;
+  },
+
+  /**
+   * Get count of orders per reseller for a specific date
+   * @param resellerNames - Array of reseller names to filter by
+   * @param dateStr - Date in format "DD.MM.YYYY"
+   * @returns Map of reseller name to order count
+   */
+  getCountsByResellersAndDate: (resellerNames: string[], dateStr: string): Map<string, number> => {
+    if (resellerNames.length === 0) return new Map();
+    
+    const placeholders = resellerNames.map(() => '?').join(',');
+    const result = db.prepare(`
+      SELECT reseller_name, COUNT(*) as count 
+      FROM egon_orders 
+      WHERE reseller_name IN (${placeholders}) AND timestamp LIKE ?
+      GROUP BY reseller_name
+    `).all(...resellerNames, `${dateStr} %`) as Array<{ reseller_name: string; count: number }>;
+    
+    const countMap = new Map<string, number>();
+    for (const row of result) {
+      countMap.set(row.reseller_name, row.count);
+    }
+    return countMap;
+  },
+
   checkpoint: () => {
     db.pragma('wal_checkpoint(TRUNCATE)');
   },

@@ -91,6 +91,7 @@ interface DashboardUser {
     distance: number;
     uniquePhotos: number; // Deduplicated photo count
     peakTime?: string; // e.g., "13:00-15:00"
+    egonContracts?: number; // Number of contracts from EGON database
     breaks?: Array<{
       start: number;
       end: number;
@@ -100,7 +101,10 @@ interface DashboardUser {
         poi_type: string;
         address: string;
         place_id: string;
+        durationAtLocation?: number;
       }>;
+      isCustomerConversation?: boolean;
+      contractsInBreak?: number[];
     }>;
   };
 }
@@ -422,6 +426,7 @@ export default function AdminDashboard() {
   }) : [];
 
   // Prepare chart data for status changes
+  // Note: 'geschrieben' comes from EGON contracts, not from status changes
   const chartData = sortedUsers.map(user => {
     const statusChanges = user.todayStats.statusChanges || {};
     
@@ -431,11 +436,12 @@ export default function AdminDashboard() {
       nicht_interessiert: (statusChanges['nicht_interessiert'] || 0) + (statusChanges['no_interest'] || 0),
       nicht_angetroffen: (statusChanges['nicht_angetroffen'] || 0) + (statusChanges['not_reached'] || 0),
       termin_vereinbart: (statusChanges['termin_vereinbart'] || 0) + (statusChanges['appointment'] || 0),
-      geschrieben: statusChanges['written'] || 0,
+      geschrieben: user.todayStats.egonContracts || 0, // From EGON database
     };
   });
 
   // Prepare chart data for final statuses (status assignments that remain at end of day)
+  // Note: 'geschrieben' comes from EGON contracts, not from final statuses
   const finalStatusChartData = sortedUsers.map(user => {
     const finalStatuses = user.todayStats.finalStatuses || {};
     
@@ -445,7 +451,7 @@ export default function AdminDashboard() {
       nicht_interessiert: (finalStatuses['nicht_interessiert'] || 0) + (finalStatuses['no_interest'] || 0),
       nicht_angetroffen: (finalStatuses['nicht_angetroffen'] || 0) + (finalStatuses['not_reached'] || 0),
       termin_vereinbart: (finalStatuses['termin_vereinbart'] || 0) + (finalStatuses['appointment'] || 0),
-      geschrieben: finalStatuses['written'] || 0,
+      geschrieben: user.todayStats.egonContracts || 0, // From EGON database
     };
   });
 
@@ -1100,10 +1106,10 @@ export default function AdminDashboard() {
                                         <span className="font-medium">{statusChanges['termin_vereinbart']}</span>
                                       </div>
                                     )}
-                                    {statusChanges['written'] && (
+                                    {(user.todayStats.egonContracts ?? 0) > 0 && (
                                       <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Geschrieben:</span>
-                                        <span className="font-medium text-green-600">{statusChanges['written']}</span>
+                                        <span className="text-muted-foreground">📝 Geschrieben (EGON):</span>
+                                        <span className="font-medium text-green-600">{user.todayStats.egonContracts}</span>
                                       </div>
                                     )}
                                     {statusChanges['nicht_interessiert'] && (
@@ -1451,6 +1457,7 @@ export default function AdminDashboard() {
                   userId={selectedUserId || ''}
                   gpsPoints={routeData.gpsPoints}
                   photoTimestamps={routeData.photoTimestamps || []}
+                  contracts={routeData.contracts || []}
                   source={routeData.source || gpsSource}
                   date={mode === 'live' ? new Date().toISOString().split('T')[0] : selectedDate}
                   breaks={routeData.breaks || []}

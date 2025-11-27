@@ -59,6 +59,7 @@ interface RouteReplayMapProps {
   username: string;
   gpsPoints: GPSPoint[];
   photoTimestamps?: number[];
+  contracts?: number[]; // EGON contract timestamps (Unix ms)
   date: string;
   userId?: string;
   source?: 'all' | 'native' | 'followmee' | 'external' | 'external_app';
@@ -74,6 +75,8 @@ interface RouteReplayMapProps {
       place_id: string;
       durationAtLocation?: number;
     }>;
+    isCustomerConversation?: boolean; // True if contract was written during this break
+    contractsInBreak?: number[]; // Contract timestamps that fall within this break
   }>;
 }
 
@@ -182,6 +185,7 @@ interface MapOverlays {
   currentMarker: google.maps.Marker | null;
   userMarkers: Map<string, google.maps.Marker>; // Markers for each active User-Agent
   photoMarker: google.maps.Marker | null;
+  contractMarker: google.maps.Marker | null; // EGON contract marker
   poiMarker: any | null; // Custom HTML overlay marker for POI
   gpsMarkers: google.maps.Marker[];
 }
@@ -348,7 +352,7 @@ function calculateZoomForBounds(bounds: { minLat: number; maxLat: number; minLng
 
 // calculateOptimalZoom function removed - auto-zoom disabled to prevent rendering conflicts
 
-export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, photoTimestamps = [], date, userId, source = 'all', breaks = [] }: RouteReplayMapProps) {
+export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, photoTimestamps = [], contracts = [], date, userId, source = 'all', breaks = [] }: RouteReplayMapProps) {
   // CRITICAL: Filter out corrupted GPS coordinates BEFORE any processing
   // This is a safety net in case backend filter didn't catch them
   const gpsPoints = rawGpsPoints.filter(p => {
@@ -364,15 +368,19 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
     console.warn(`[RouteReplay] ⚠️ Filtered ${filteredCount} corrupted GPS points (lat≈0 or lng≈0)`);
   }
   
-  console.log(`[RouteReplay] Initialized for ${username}:`, { gpsPoints: gpsPoints.length, breaks: breaks.length, source });
+  console.log(`[RouteReplay] Initialized for ${username}:`, { gpsPoints: gpsPoints.length, breaks: breaks.length, contracts: contracts.length, source });
   
   if (breaks.length > 0) {
     console.log('[RouteReplay] Breaks data:', breaks);
+  }
+  if (contracts.length > 0) {
+    console.log('[RouteReplay] Contracts:', contracts.map(ts => new Date(ts).toLocaleTimeString()));
   }
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentTimestamp, setCurrentTimestamp] = useState(0); // Current GPS timestamp for smooth interpolation
   const [activePhotoFlash, setActivePhotoFlash] = useState<number | null>(null);
+  const [activeContractFlash, setActiveContractFlash] = useState<number | null>(null); // EGON contract flash
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [snapToRoadsEnabled, setSnapToRoadsEnabled] = useState(false); // Snap-to-roads toggle
@@ -433,6 +441,7 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
     currentMarker: null,
     userMarkers: new Map(),
     photoMarker: null,
+    contractMarker: null,
     poiMarker: null,
     gpsMarkers: [],
   });
@@ -1371,6 +1380,75 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
       }, 1000);
     }
   }, [currentIndex, isPlaying, photoTimestamps, displayPoints, activePhotoFlash]);
+
+  // Contract markers with calculated positions (same logic as photos)
+  const contractPositions = contracts
+    .map(timestamp => ({
+      timestamp,
+      position: calculatePhotoPosition(timestamp) // Reuse same interpolation logic
+    }))
+    .filter(p => p.position !== null) as Array<{ timestamp: number; position: [number, number] }>;
+
+  // Contract marker effect (green marker with 📝 emoji)
+  useEffect(() => {
+    const map = mapRef.current;
+    const googleMaps = window.google?.maps;
+    if (!map || !googleMaps) return;
+
+    const overlays = mapOverlaysRef.current;
+    overlays.contractMarker = removeMarker(overlays.contractMarker);
+
+    if (activeContractFlash === null) return;
+
+    const flash = contractPositions.find(contract => contract.timestamp === activeContractFlash);
+    if (!flash) return;
+
+    overlays.contractMarker = new googleMaps.Marker({
+      map,
+      position: { lat: flash.position[0], lng: flash.position[1] },
+      icon: {
+        path: googleMaps.SymbolPath.CIRCLE,
+        fillColor: '#22c55e', // Green for contracts
+        fillOpacity: 1,
+        strokeColor: '#ffffff',
+        strokeWeight: 2,
+        scale: 10,
+      },
+      label: {
+        text: '📝',
+        fontSize: '22px',
+      },
+      zIndex: 650, // Above photo markers
+    });
+  }, [activeContractFlash, contractPositions, mapsApiLoaded]);
+
+  // Check if current animation time should trigger a contract flash (with 1 sec pause)
+  useEffect(() => {
+    if (!isPlaying || displayPoints.length === 0) return;
+
+    const currentPoint = displayPoints[currentIndex];
+    if (!currentPoint) return;
+
+    // Check if any contract timestamp is close to current position (within 5 seconds)
+    const activeContract = contracts.find(timestamp => {
+      const diff = Math.abs(timestamp - currentPoint.timestamp);
+      return diff < 5000; // 5 seconds tolerance
+    });
+
+    if (activeContract && activeContractFlash !== activeContract) {
+      setActiveContractFlash(activeContract);
+      
+      // Pause animation for 1 second when contract is reached
+      setIsPlaying(false);
+      setTimeout(() => {
+        setIsPlaying(true);
+        // Remove flash after animation resumes (total 1.5 sec visible)
+        setTimeout(() => {
+          setActiveContractFlash(null);
+        }, 500);
+      }, 1000);
+    }
+  }, [currentIndex, isPlaying, contracts, displayPoints, activeContractFlash]);
 
   // Calculate time span
   const timeSpan = displayPoints.length > 0
@@ -2630,23 +2708,50 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
                 </div>
               )}
 
-              {/* Stationary period backgrounds */}
+              {/* Stationary period backgrounds - use backend breaks if available, otherwise local calculation */}
               <div className="absolute w-full h-3 pointer-events-none">
-                {displayPoints.length > 0 && stationaryPeriods.map((period, idx) => {
-                  const totalDuration = endTime - startTime;
-                  if (totalDuration <= 0) return null;
-                  const startPos = ((period.startTime - startTime) / totalDuration) * 100;
-                  const endPos = ((period.endTime - startTime) / totalDuration) * 100;
-                  const width = endPos - startPos;
-                  return (
-                    <div
-                      key={`break-${idx}`}
-                      className="absolute h-full bg-orange-400 opacity-40 rounded"
-                      style={{ left: `${startPos}%`, width: `${width}%` }}
-                      title={`Pause: ${Math.round(period.durationMs / (60000))} Min`}
-                    />
-                  );
-                })}
+                {displayPoints.length > 0 && breaks && breaks.length > 0 ? (
+                  // Use backend breaks (with customer conversation info)
+                  breaks.map((breakItem, idx) => {
+                    const totalDuration = endTime - startTime;
+                    if (totalDuration <= 0) return null;
+                    const startPos = ((breakItem.start - startTime) / totalDuration) * 100;
+                    const endPos = ((breakItem.end - startTime) / totalDuration) * 100;
+                    const width = endPos - startPos;
+                    const isCustomerConversation = breakItem.isCustomerConversation === true;
+                    
+                    return (
+                      <div
+                        key={`break-${idx}`}
+                        className={`absolute h-full opacity-50 rounded ${
+                          isCustomerConversation ? 'bg-green-500' : 'bg-orange-400'
+                        }`}
+                        style={{ left: `${startPos}%`, width: `${width}%` }}
+                        title={isCustomerConversation 
+                          ? `Kundengespräch: ${Math.round(breakItem.duration / 60000)} Min`
+                          : `Pause: ${Math.round(breakItem.duration / 60000)} Min`
+                        }
+                      />
+                    );
+                  })
+                ) : (
+                  // Fallback to local stationaryPeriods
+                  stationaryPeriods.map((period, idx) => {
+                    const totalDuration = endTime - startTime;
+                    if (totalDuration <= 0) return null;
+                    const startPos = ((period.startTime - startTime) / totalDuration) * 100;
+                    const endPos = ((period.endTime - startTime) / totalDuration) * 100;
+                    const width = endPos - startPos;
+                    return (
+                      <div
+                        key={`break-${idx}`}
+                        className="absolute h-full bg-orange-400 opacity-40 rounded"
+                        style={{ left: `${startPos}%`, width: `${width}%` }}
+                        title={`Pause: ${Math.round(period.durationMs / (60000))} Min`}
+                      />
+                    );
+                  })
+                )}
                 {/* Driving segments */}
                 {displayPoints.length > 0 && drivingSegments.map((segment, idx) => {
                   const totalDuration = endTime - startTime;
@@ -2960,6 +3065,11 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
               <div className="pt-2 border-t">
                 <p className="text-xs font-medium text-muted-foreground mb-2">
                   Pausen (≥20 Min): {breaks.length}
+                  {breaks.some(b => b.isCustomerConversation) && (
+                    <span className="ml-2 text-green-600">
+                      ({breaks.filter(b => b.isCustomerConversation).length} Kundengespräch{breaks.filter(b => b.isCustomerConversation).length !== 1 ? 'e' : ''})
+                    </span>
+                  )}
                 </p>
                 <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
                   {breaks.map((breakItem, idx) => {
@@ -2968,6 +3078,7 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
                     const endTimeStr = format(new Date(breakItem.end), 'HH:mm', { locale: de });
                     const hasPOIData = breakItem.locations && breakItem.locations.length > 0;
                     const isActive = pauseMode.active && pauseMode.periodIndex === idx;
+                    const isCustomerConversation = breakItem.isCustomerConversation === true;
 
                     // Convert break to StationaryPeriod format for handlePauseClick
                     // Find indices in displayPoints array for this break
@@ -2984,23 +3095,29 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
                       centerLng: breakItem.location?.lng || 0
                     };
 
+                    // Color coding: green for customer conversation, orange for POI, gray for regular pause
+                    const buttonClass = isActive 
+                      ? 'bg-red-500 text-white border-red-600 shadow-lg ring-2 ring-red-400' 
+                      : isCustomerConversation
+                        ? 'bg-green-100 hover:bg-green-200 border-green-400 text-green-800'
+                        : hasPOIData
+                          ? 'bg-orange-100 hover:bg-orange-200 border-orange-300'
+                          : 'bg-gray-100 hover:bg-gray-200 border-gray-300';
+
+                    const titleText = isCustomerConversation
+                      ? `Kundengespräch (Vertrag geschrieben) ${startTimeStr} - ${endTimeStr}${isActive ? ' (aktiv)' : ''}`
+                      : hasPOIData 
+                        ? `Pause mit POI: ${breakItem.locations![0].poi_name} (${startTimeStr} - ${endTimeStr})${isActive ? ' (aktiv - klicken zum Deaktivieren)' : ''}` 
+                        : `Zu Pause springen: ${startTimeStr} - ${endTimeStr}`;
+
                     return (
                       <button
                         key={`break-${idx}`}
                         onClick={() => handlePauseClick(period, idx)}
-                        className={`px-2 py-1 text-xs rounded border transition-colors font-mono tabular-nums ${
-                          isActive 
-                            ? 'bg-red-500 text-white border-red-600 shadow-lg ring-2 ring-red-400' 
-                            : hasPOIData
-                              ? 'bg-orange-100 hover:bg-orange-200 border-orange-300'
-                              : 'bg-gray-100 hover:bg-gray-200 border-gray-300'
-                        }`}
-                        title={
-                          hasPOIData 
-                            ? `Pause mit POI: ${breakItem.locations![0].poi_name} (${startTimeStr} - ${endTimeStr})${isActive ? ' (aktiv - klicken zum Deaktivieren)' : ''}` 
-                            : `Zu Pause springen: ${startTimeStr} - ${endTimeStr}`
-                        }
+                        className={`px-2 py-1 text-xs rounded border transition-colors font-mono tabular-nums ${buttonClass}`}
+                        title={titleText}
                       >
+                        {isCustomerConversation && '📝 '}
                         {startTimeStr} ({durationMinutes} Min)
                       </button>
                     );
