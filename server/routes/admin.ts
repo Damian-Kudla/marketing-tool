@@ -452,9 +452,10 @@ router.get('/dashboard/live', requireAuth, requireAdmin, async (req: Authenticat
       )
     );
 
-    // Get today's date in EGON format (DD.MM.YYYY)
-    const today = new Date();
-    const todayEgonFormat = `${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}.${today.getFullYear()}`;
+    // Get today's date in EGON format (DD.MM.YYYY) - use Berlin timezone
+    const berlinTodayStr = getBerlinDate(); // Returns YYYY-MM-DD
+    const [yearB, monthB, dayB] = berlinTodayStr.split('-');
+    const todayEgonFormat = `${dayB}.${monthB}.${yearB}`;
     
     // Load all users to get resellerName mapping
     const allUsers = await googleSheetsService.getAllUsers();
@@ -811,7 +812,11 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
       
       // Load EGON contracts for this user (if they have a resellerName)
       if (user.resellerName) {
-        const egonOrders = egonOrdersDB.getByResellerAndDate(user.resellerName, dateStr);
+        // Convert dateStr from YYYY-MM-DD to DD.MM.YYYY for EGON database query
+        const [year, month, day] = dateStr.split('-');
+        const egonDateStr = `${day}.${month}.${year}`;
+        
+        const egonOrders = egonOrdersDB.getByResellerAndDate(user.resellerName, egonDateStr);
         contractCount = egonOrders.length;
         
         // Convert EGON timestamps to Unix milliseconds
@@ -819,7 +824,7 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
           .map(order => parseEgonTimestamp(order.timestamp))
           .filter((ts): ts is number => ts !== null);
         
-        console.log(`[Admin API Route] 📝 EGON Orders: ${contractCount} contracts for ${user.resellerName} on ${dateStr}`);
+        console.log(`[Admin API Route] 📝 EGON Orders: ${contractCount} contracts for ${user.resellerName} on ${egonDateStr}`);
       } else {
         console.log(`[Admin API Route] ⚠️ No EGON reseller name for user ${username}`);
       }
