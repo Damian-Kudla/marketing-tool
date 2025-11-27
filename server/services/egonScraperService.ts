@@ -451,11 +451,13 @@ class EgonScraper {
       }
     }
 
-    // Save to database
+    // Save to database (reverse order so oldest entries are first for chronological order)
     if (newResults.length > 0) {
       console.log(`[EgonScraper] Saving ${newResults.length} new orders to database...`);
-      const inserted = egonOrdersDB.insertBatch(newResults);
-      console.log(`[EgonScraper] Inserted ${inserted} orders`);
+      // Reverse the array so oldest entries come first (chronological order: oldest at top, newest at bottom)
+      const chronologicalResults = [...newResults].reverse();
+      const inserted = egonOrdersDB.insertBatch(chronologicalResults);
+      console.log(`[EgonScraper] Inserted ${inserted} orders (chronological order)`);
     } else {
       console.log('[EgonScraper] No new orders found');
     }
@@ -546,7 +548,23 @@ export async function syncToGoogleSheets(): Promise<number> {
 
     const sheetsClient = await getSheetsClient();
 
-    const rows = unsyncedOrders.map(order => [
+    // Sort by timestamp chronologically (oldest first) before syncing to Sheets
+    const sortedOrders = [...unsyncedOrders].sort((a, b) => {
+      // Parse timestamp "DD.MM.YYYY HH:MM:SS" for comparison
+      const parseTimestamp = (ts: string): number => {
+        try {
+          const [datePart, timePart] = ts.split(' ');
+          const [day, month, year] = datePart.split('.').map(Number);
+          const [hours, minutes, seconds] = (timePart || '00:00:00').split(':').map(Number);
+          return new Date(year, month - 1, day, hours, minutes, seconds).getTime();
+        } catch {
+          return 0;
+        }
+      };
+      return parseTimestamp(a.timestamp) - parseTimestamp(b.timestamp);
+    });
+
+    const rows = sortedOrders.map(order => [
       order.reseller_name,
       order.timestamp,
       order.order_no || '',
