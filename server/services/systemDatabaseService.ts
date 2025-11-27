@@ -1504,22 +1504,36 @@ export const systemSheetsSync = {
       const sheetRows = response.data.values || [];
       const localDatasets = addressDatasetsDB.getAll();
 
+      // Helper function to ensure value is a string (handles objects/JSON from bad data)
+      const ensureString = (value: any): string => {
+        if (value === null || value === undefined) return '';
+        if (typeof value === 'string') return value;
+        if (typeof value === 'object') {
+          try {
+            return JSON.stringify(value);
+          } catch {
+            return String(value);
+          }
+        }
+        return String(value);
+      };
+
       // Build maps for intelligent merging (by ID)
       const sheetDatasetsMap = new Map<string, any>();
       for (const row of sheetRows) {
         if (row.length >= 11) {
           sheetDatasetsMap.set(row[0], {
-            id: row[0],
-            normalizedAddress: row[1],
-            street: row[2],
-            houseNumber: row[3],
-            city: row[4] || undefined,
-            postalCode: row[5],
-            createdBy: row[6],
-            createdAt: row[7],
-            rawResidentData: row[8],
-            editableResidents: row[9],
-            fixedCustomers: row[10]
+            id: ensureString(row[0]),
+            normalizedAddress: ensureString(row[1]),
+            street: ensureString(row[2]),
+            houseNumber: ensureString(row[3]),
+            city: row[4] ? ensureString(row[4]) : undefined,
+            postalCode: ensureString(row[5]),
+            createdBy: ensureString(row[6]),
+            createdAt: ensureString(row[7]),
+            rawResidentData: ensureString(row[8]),
+            editableResidents: ensureString(row[9]),
+            fixedCustomers: ensureString(row[10])
           });
         }
       }
@@ -1569,17 +1583,17 @@ export const systemSheetsSync = {
 
       if (sheetsNeedsUpdate.length > 0) {
         const newRows = sheetsNeedsUpdate.map(d => [
-          d.id,
-          d.normalizedAddress,
-          d.street,
-          d.houseNumber,
-          d.city || '',
-          d.postalCode,
-          d.createdBy,
-          d.createdAt,
-          d.rawResidentData,
-          d.editableResidents,
-          d.fixedCustomers
+          ensureString(d.id),
+          ensureString(d.normalizedAddress),
+          ensureString(d.street),
+          ensureString(d.houseNumber),
+          ensureString(d.city),
+          ensureString(d.postalCode),
+          ensureString(d.createdBy),
+          ensureString(d.createdAt),
+          ensureString(d.rawResidentData),
+          ensureString(d.editableResidents),
+          ensureString(d.fixedCustomers)
         ]);
 
         await sheets.spreadsheets.values.append({
