@@ -548,6 +548,75 @@ class SQLiteBackupService {
     }
   }
 
+  /**
+   * Backup ALL local log DBs to Drive immediately
+   * Used for emergency backup at server startup
+   */
+  async backupAllToDrive(): Promise<{ uploaded: number; skipped: number; failed: number }> {
+    const result = { uploaded: 0, skipped: 0, failed: 0 };
+    
+    if (!this.isReady()) {
+      console.log('[SQLiteBackup] Not ready, attempting initialization...');
+      await this.initialize();
+      if (!this.isReady()) {
+        console.error('[SQLiteBackup] ❌ Failed to initialize for backupAllToDrive');
+        return result;
+      }
+    }
+
+    // Find all local log DBs
+    const logsDir = path.dirname(getDBPath(getCETDate()));
+    console.log(`[SQLiteBackup] Looking for DBs in: ${logsDir}`);
+    
+    if (!fs.existsSync(logsDir)) {
+      console.log('[SQLiteBackup] Logs directory does not exist');
+      return result;
+    }
+
+    const files = fs.readdirSync(logsDir);
+    const dbFiles = files.filter(f => f.match(/^logs-\d{4}-\d{2}-\d{2}\.db$/));
+    
+    console.log(`[SQLiteBackup] Found ${dbFiles.length} local log DBs to backup`);
+
+    for (const dbFile of dbFiles) {
+      const dateMatch = dbFile.match(/logs-(\d{4}-\d{2}-\d{2})\.db/);
+      if (!dateMatch) continue;
+      
+      const date = dateMatch[1];
+      
+      try {
+        // Check if already exists in Drive
+        const existingFile = await this.findFileInDrive(`logs-${date}.db.gz`);
+        
+        if (existingFile) {
+          // Check if local is newer (by comparing file sizes or just skip)
+          console.log(`[SQLiteBackup] ${date}: Already in Drive, skipping`);
+          result.skipped++;
+          continue;
+        }
+
+        // Upload the DB
+        const success = await this.uploadDB(date);
+        if (success) {
+          result.uploaded++;
+          console.log(`[SQLiteBackup] ${date}: ✅ Uploaded`);
+        } else {
+          result.failed++;
+          console.log(`[SQLiteBackup] ${date}: ❌ Upload failed`);
+        }
+
+        // Rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (error) {
+        console.error(`[SQLiteBackup] ${date}: Error:`, error);
+        result.failed++;
+      }
+    }
+
+    console.log(`[SQLiteBackup] ✅ backupAllToDrive complete: ${result.uploaded} uploaded, ${result.skipped} skipped, ${result.failed} failed`);
+    return result;
+  }
+
   isReady(): boolean {
     return this.initialized && !!this.driveClient;
   }

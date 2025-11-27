@@ -173,7 +173,7 @@ app.use((req, res, next) => {
       // Backup System DBs (cookies, appointments, pauseLocations, authLogs, categoryChanges, addressDatasets)
       log('  → Backing up System DBs to Drive...');
       const systemBackupResult = await systemDriveBackup.backupAll();
-      log(`  ✅ System DBs backed up: ${systemBackupResult.successful.length} success, ${systemBackupResult.failed.length} failed`);
+      log(`  ✅ System DBs backed up: ${systemBackupResult.success.length} success, ${systemBackupResult.failed.length} failed`);
       if (systemBackupResult.failed.length > 0) {
         log(`  ⚠️ Failed: ${systemBackupResult.failed.join(', ')}`);
       }
