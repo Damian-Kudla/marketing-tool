@@ -485,17 +485,41 @@ class SQLiteStartupSyncService {
     const data = typeof log.data === 'string' ? log.data : JSON.stringify(log.data);
     const timestamp = new Date(log.timestamp).toISOString();
     
+    // Helper to ensure value is a string (handles objects/nested data)
+    const ensureString = (value: any): string => {
+      if (value === null || value === undefined) return '';
+      if (typeof value === 'string') return value;
+      if (typeof value === 'object') {
+        try {
+          return JSON.stringify(value);
+        } catch {
+          return String(value);
+        }
+      }
+      return String(value);
+    };
+    
+    // Parse data if it's a string
+    let parsedData = log.data;
+    if (typeof log.data === 'string') {
+      try {
+        parsedData = JSON.parse(log.data);
+      } catch {
+        parsedData = {};
+      }
+    }
+    
     return [
-      timestamp,           // A: Timestamp
-      log.userId,          // B: User ID
-      log.username,        // C: Username
-      log.data?.endpoint || '',  // D: Endpoint
-      log.data?.method || '',    // E: Method
-      log.data?.address || '',   // F: Address
-      '',                  // G: New Prospects (reconstructed from data if needed)
-      '',                  // H: Existing Customers
-      log.data?.userAgent || '', // I: User Agent
-      data                 // J: Full Data JSON
+      timestamp,                              // A: Timestamp
+      ensureString(log.userId),               // B: User ID
+      ensureString(log.username),             // C: Username
+      ensureString(parsedData?.endpoint),     // D: Endpoint
+      ensureString(parsedData?.method),       // E: Method
+      ensureString(parsedData?.address),      // F: Address (could be object!)
+      '',                                     // G: New Prospects
+      '',                                     // H: Existing Customers
+      ensureString(parsedData?.userAgent),    // I: User Agent
+      data                                    // J: Full Data JSON
     ];
   }
 
