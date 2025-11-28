@@ -15,6 +15,7 @@ import { getCETDate } from '../services/sqliteLogService';
 import { getBerlinDate, getBerlinHour, getBerlinTimestamp } from '../utils/timezone';
 import { pauseLocationCache } from '../services/pauseLocationCache';
 import { egonOrdersDB } from '../services/egonScraperService';
+import { googleSheetsService } from '../services/googleSheets';
 import { DateTime } from 'luxon';
 import fs from 'fs';
 import path from 'path';
@@ -662,6 +663,43 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
     // Sortiere nach totalActions
     userData.sort((a, b) => b.totalActions - a.totalActions);
 
+    // Load EGON contracts for the requested historical date
+    // Convert date from YYYY-MM-DD to DD.MM.YYYY for EGON database query
+    const [year, month, day] = date.split('-');
+    const egonDateStr = `${day}.${month}.${year}`;
+    
+    // Load all users to get resellerName mapping
+    const allUsers = await googleSheetsService.loadAllUsersFromSheets();
+    const resellerNames = allUsers.filter(u => u.resellerName).map(u => u.resellerName!);
+    console.log(`[Admin API Historical] 📝 Looking up EGON contracts for date: ${egonDateStr}`);
+    console.log(`[Admin API Historical] 📝 Users with resellerNames: ${resellerNames.length}`);
+    resellerNames.forEach(name => console.log(`  - "${name}"`));
+    
+    const egonContractCounts = egonOrdersDB.getCountsByResellersAndDate(resellerNames, egonDateStr);
+    console.log(`[Admin API Historical] 📝 egonContractCounts result:`);
+    egonContractCounts.forEach((count, name) => {
+      console.log(`  - "${name}": ${count} contracts`);
+    });
+    
+    // Create userId -> contract count mapping
+    const userIdToContractCount = new Map<string, number>();
+    allUsers.forEach(user => {
+      if (user.resellerName && egonContractCounts.has(user.resellerName)) {
+        userIdToContractCount.set(user.userId, egonContractCounts.get(user.resellerName)!);
+      }
+    });
+    
+    console.log(`[Admin API Historical] 📝 EGON contracts for ${egonDateStr}: ${egonContractCounts.size} resellers with contracts`);
+    console.log(`[Admin API Historical] 📝 userIdToContractCount map size: ${userIdToContractCount.size}`);
+    if (userIdToContractCount.size > 0) {
+      console.log(`[Admin API Historical] 📝 userIdToContractCount entries:`);
+      userIdToContractCount.forEach((count, uid) => {
+        const user = allUsers.find(u => u.userId === uid);
+        console.log(`  - userId "${uid}" (${user?.username || 'unknown'}): ${count} contracts`);
+      });
+    }
+    console.log(`[Admin API Historical] 📝 userData userIds: ${userData.map(u => `${u.username}=${u.userId}`).join(', ')}`);
+
     // Transformiere zu DashboardLiveData Format (async)
     const dashboardUsers = await Promise.all(userData.map(async user => {
       // Find the last VALID GPS point (filter out corrupted coordinates like lat=0, lng=0)
@@ -715,6 +753,12 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
       // Historical data is never "active" since it's from a previous day
       const isActive = false;
 
+      // Get EGON contract count for this user
+      const egonContracts = userIdToContractCount.get(user.userId) || 0;
+      if (egonContracts > 0) {
+        console.log(`[Admin API Historical] ✅ User ${user.username} (${user.userId}): ${egonContracts} EGON contracts assigned`);
+      }
+
       return {
         userId: user.userId,
         username: user.username,
@@ -734,6 +778,7 @@ router.get('/dashboard/historical', requireAuth, requireAdmin, async (req: Authe
           uniquePhotos: user.uniquePhotos || 0, // Use actual value from historical data
           peakTime,
           breaks,
+          egonContracts, // EGON contract count from egon_orders.db
         },
       };
     }));
@@ -818,8 +863,10 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
     let contractCount = 0;
 
     // Finde Username für userId (wird immer benötigt)
+    // Use loadAllUsersFromSheets() directly to ensure we get fresh data with resellerName
     const { googleSheetsService } = await import('../services/googleSheets');
-    const allUsers = await googleSheetsService.getAllUsers();
+    const allUsers = await googleSheetsService.loadAllUsersFromSheets();
+    console.log(`[Admin API Route] 📋 Loaded ${allUsers.length} users from Sheets`);
     const user = allUsers.find(u => u.userId === userIdStr);
 
     if (user) {
@@ -831,8 +878,12 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
         const [year, month, day] = dateStr.split('-');
         const egonDateStr = `${day}.${month}.${year}`;
         
+        console.log(`[Admin API Route] 📝 Loading EGON contracts for "${user.resellerName}" on "${egonDateStr}"`);
+        
         const egonOrders = egonOrdersDB.getByResellerAndDate(user.resellerName, egonDateStr);
         contractCount = egonOrders.length;
+        
+        console.log(`[Admin API Route] 📝 Found ${contractCount} EGON orders`);
         
         // Convert EGON timestamps to Unix milliseconds
         contractTimestamps = egonOrders
@@ -845,8 +896,10 @@ router.get('/dashboard/route', requireAuth, requireAdmin, async (req: Authentica
         
         console.log(`[Admin API Route] 📝 EGON Orders: ${contractCount} contracts for ${user.resellerName} on ${egonDateStr}, timestamps: [${contractTimestamps.join(', ')}]`);
       } else {
-        console.log(`[Admin API Route] ⚠️ No EGON reseller name for user ${username}`);
+        console.log(`[Admin API Route] ⚠️ No EGON reseller name for user ${username} (userId: ${userIdStr})`);
       }
+    } else {
+      console.log(`[Admin API Route] ⚠️ User not found for userId: ${userIdStr}`);
     }
 
     // Lade Daten (native/followmee/external_app aus Logs/SQLite)

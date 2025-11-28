@@ -385,6 +385,9 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
       console.log(`[RouteReplay] GPS timestamp range: ${sorted[0].timestamp} - ${sorted[sorted.length - 1].timestamp}`);
     }
   }
+  
+  // ALWAYS log contracts for debugging (temporary)
+  console.log(`[RouteReplay] 📝 Contracts received: ${contracts.length}`, contracts.length > 0 ? contracts.map(ts => new Date(ts).toLocaleTimeString('de-DE')) : 'none');
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentTimestamp, setCurrentTimestamp] = useState(0); // Current GPS timestamp for smooth interpolation
@@ -746,18 +749,29 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
       return uaFilteredPoints;
     }
 
-    const period = stationaryPeriods[pauseMode.periodIndex];
+    // Use backend breaks if available, otherwise fall back to stationaryPeriods
+    let period: { startTime: number; endTime: number } | undefined;
+    
+    if (breaks && breaks.length > 0 && pauseMode.periodIndex < breaks.length) {
+      // Use backend breaks - they have 'start' and 'end' properties
+      const breakItem = breaks[pauseMode.periodIndex];
+      period = { startTime: breakItem.start, endTime: breakItem.end };
+    } else if (stationaryPeriods[pauseMode.periodIndex]) {
+      // Fallback to local stationaryPeriods
+      period = stationaryPeriods[pauseMode.periodIndex];
+    }
+    
     if (!period) {
       return uaFilteredPoints;
     }
 
     // Filter to only external GPS points within the pause period
     return uaFilteredPoints.filter(
-      p => p.timestamp >= period.startTime &&
-           p.timestamp <= period.endTime &&
+      p => p.timestamp >= period!.startTime &&
+           p.timestamp <= period!.endTime &&
            (p.source === 'followmee' || p.source === 'external' || p.source === 'external_app')
     );
-  }, [uaFilteredPoints, pauseMode, stationaryPeriods]);
+  }, [uaFilteredPoints, pauseMode, stationaryPeriods, breaks]);
 
   // Group display points by User-Agent for independent interpolation
   const pointsByUser = useMemo(() => {
@@ -1705,13 +1719,22 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
     // Only render pause route if pause mode is active
     if (!pauseMode.active || pauseMode.periodIndex === null) return;
 
-    const period = stationaryPeriods[pauseMode.periodIndex];
+    // Use backend breaks if available, otherwise fall back to stationaryPeriods
+    let period: { startTime: number; endTime: number } | undefined;
+    
+    if (breaks && breaks.length > 0 && pauseMode.periodIndex < breaks.length) {
+      const breakItem = breaks[pauseMode.periodIndex];
+      period = { startTime: breakItem.start, endTime: breakItem.end };
+    } else if (stationaryPeriods[pauseMode.periodIndex]) {
+      period = stationaryPeriods[pauseMode.periodIndex];
+    }
+    
     if (!period) return;
 
     // Get all external GPS points during the pause period
     const pausePoints = basePoints.filter(
-      p => p.timestamp >= period.startTime &&
-           p.timestamp <= period.endTime &&
+      p => p.timestamp >= period!.startTime &&
+           p.timestamp <= period!.endTime &&
            (p.source === 'followmee' || p.source === 'external' || p.source === 'external_app')
     );
 
@@ -1742,7 +1765,7 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
         zIndex: 300, // Higher than normal routes
       });
     });
-  }, [pauseMode.active, pauseMode.periodIndex, stationaryPeriods, basePoints, currentTimestamp, currentPosition, mapsApiLoaded]);
+  }, [pauseMode.active, pauseMode.periodIndex, stationaryPeriods, breaks, basePoints, currentTimestamp, currentPosition, mapsApiLoaded]);
 
   // POI Marker (Gartenschild) in Pause Mode
   useEffect(() => {
@@ -2832,65 +2855,85 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
               )}
 
               {/* Stationary period backgrounds - use backend breaks if available, otherwise local calculation */}
-              <div className="absolute w-full h-3 pointer-events-none">
+              <div className="absolute w-full h-3 pointer-events-none overflow-hidden">
                 {displayPoints.length > 0 && breaks && breaks.length > 0 ? (
                   // Use backend breaks (with customer conversation info)
-                  breaks.map((breakItem, idx) => {
-                    const totalDuration = endTime - startTime;
-                    if (totalDuration <= 0) return null;
-                    const startPos = ((breakItem.start - startTime) / totalDuration) * 100;
-                    const endPos = ((breakItem.end - startTime) / totalDuration) * 100;
-                    const width = endPos - startPos;
-                    const isCustomerConversation = breakItem.isCustomerConversation === true;
-                    
-                    return (
-                      <div
-                        key={`break-${idx}`}
-                        className={`absolute h-full opacity-50 rounded ${
-                          isCustomerConversation ? 'bg-green-500' : 'bg-orange-400'
-                        }`}
-                        style={{ left: `${startPos}%`, width: `${width}%` }}
-                        title={isCustomerConversation 
-                          ? `Kundengespräch: ${Math.round(breakItem.duration / 60000)} Min`
-                          : `Pause: ${Math.round(breakItem.duration / 60000)} Min`
-                        }
-                      />
-                    );
-                  })
+                  // Filter to only show breaks that overlap with current timeline range
+                  breaks
+                    .filter(breakItem => breakItem.end >= startTime && breakItem.start <= endTime)
+                    .map((breakItem, idx) => {
+                      const totalDuration = endTime - startTime;
+                      if (totalDuration <= 0) return null;
+                      // Clamp break times to visible timeline range
+                      const clampedStart = Math.max(breakItem.start, startTime);
+                      const clampedEnd = Math.min(breakItem.end, endTime);
+                      const startPos = ((clampedStart - startTime) / totalDuration) * 100;
+                      const endPos = ((clampedEnd - startTime) / totalDuration) * 100;
+                      const width = endPos - startPos;
+                      if (width <= 0) return null;
+                      const isCustomerConversation = breakItem.isCustomerConversation === true;
+                      
+                      return (
+                        <div
+                          key={`break-${idx}`}
+                          className={`absolute h-full opacity-50 rounded ${
+                            isCustomerConversation ? 'bg-green-500' : 'bg-orange-400'
+                          }`}
+                          style={{ left: `${startPos}%`, width: `${width}%` }}
+                          title={isCustomerConversation 
+                            ? `Kundengespräch: ${Math.round(breakItem.duration / 60000)} Min`
+                            : `Pause: ${Math.round(breakItem.duration / 60000)} Min`
+                          }
+                        />
+                      );
+                    })
                 ) : (
                   // Fallback to local stationaryPeriods
-                  stationaryPeriods.map((period, idx) => {
+                  // Filter to only show periods that overlap with current timeline range
+                  stationaryPeriods
+                    .filter(period => period.endTime >= startTime && period.startTime <= endTime)
+                    .map((period, idx) => {
+                      const totalDuration = endTime - startTime;
+                      if (totalDuration <= 0) return null;
+                      // Clamp period times to visible timeline range
+                      const clampedStart = Math.max(period.startTime, startTime);
+                      const clampedEnd = Math.min(period.endTime, endTime);
+                      const startPos = ((clampedStart - startTime) / totalDuration) * 100;
+                      const endPos = ((clampedEnd - startTime) / totalDuration) * 100;
+                      const width = endPos - startPos;
+                      if (width <= 0) return null;
+                      return (
+                        <div
+                          key={`break-${idx}`}
+                          className="absolute h-full bg-orange-400 opacity-40 rounded"
+                          style={{ left: `${startPos}%`, width: `${width}%` }}
+                          title={`Pause: ${Math.round(period.durationMs / (60000))} Min`}
+                        />
+                      );
+                    })
+                )}
+                {/* Driving segments - filter to only show segments that overlap with current timeline range */}
+                {displayPoints.length > 0 && drivingSegments
+                  .filter(segment => segment.end >= startTime && segment.start <= endTime)
+                  .map((segment, idx) => {
                     const totalDuration = endTime - startTime;
                     if (totalDuration <= 0) return null;
-                    const startPos = ((period.startTime - startTime) / totalDuration) * 100;
-                    const endPos = ((period.endTime - startTime) / totalDuration) * 100;
+                    // Clamp segment times to visible timeline range
+                    const clampedStart = Math.max(segment.start, startTime);
+                    const clampedEnd = Math.min(segment.end, endTime);
+                    const startPos = ((clampedStart - startTime) / totalDuration) * 100;
+                    const endPos = ((clampedEnd - startTime) / totalDuration) * 100;
                     const width = endPos - startPos;
+                    if (width <= 0) return null;
                     return (
                       <div
-                        key={`break-${idx}`}
-                        className="absolute h-full bg-orange-400 opacity-40 rounded"
+                        key={`drive-${idx}`}
+                        className="absolute h-full bg-blue-500 opacity-40 rounded"
                         style={{ left: `${startPos}%`, width: `${width}%` }}
-                        title={`Pause: ${Math.round(period.durationMs / (60000))} Min`}
+                        title="Fahrt (Auto)"
                       />
                     );
-                  })
-                )}
-                {/* Driving segments */}
-                {displayPoints.length > 0 && drivingSegments.map((segment, idx) => {
-                  const totalDuration = endTime - startTime;
-                  if (totalDuration <= 0) return null;
-                  const startPos = ((segment.start - startTime) / totalDuration) * 100;
-                  const endPos = ((segment.end - startTime) / totalDuration) * 100;
-                  const width = endPos - startPos;
-                  return (
-                    <div
-                      key={`drive-${idx}`}
-                      className="absolute h-full bg-blue-500 opacity-40 rounded"
-                      style={{ left: `${startPos}%`, width: `${width}%` }}
-                      title="Fahrt (Auto)"
-                    />
-                  );
-                })}
+                  })}
               </div>
 
               {/* Hour marker ticks */}
