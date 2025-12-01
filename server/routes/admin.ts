@@ -400,20 +400,90 @@ async function calculateBreaks(rawLogs: TrackingData[], contractTimestamps: numb
   );
 
   // Enrich breaks with customer conversation detection (based on EGON contracts)
-  const breaksWithContracts = enrichedGaps.map(gap => {
+  // Split breaks if contracts are found - only mark time around contracts as customer conversation
+  const MIN_BREAK_DURATION = 20 * 60 * 1000; // 20 minutes - minimum for a segment to be a "break"
+  const MAX_CONVERSATION_BEFORE_CONTRACT = 45 * 60 * 1000; // 45 minutes - max time BEFORE contract counted as conversation
+  
+  const breaksWithContracts: Array<typeof enrichedGaps[0] & { 
+    isCustomerConversation?: boolean; 
+    contractsInBreak?: number[];
+  }> = [];
+  
+  for (const gap of enrichedGaps) {
     const contractsInThisBreak = getContractsInBreak(gap.start, gap.end, contractTimestamps);
-    const isCustomerConversation = contractsInThisBreak.length > 0;
     
-    if (isCustomerConversation) {
-      console.log(`[calculateBreaks] 📝 Kundengespräch detected: ${contractsInThisBreak.length} contract(s) during break ${new Date(gap.start).toLocaleTimeString()} - ${new Date(gap.end).toLocaleTimeString()}`);
+    if (contractsInThisBreak.length === 0) {
+      // No contracts - this is a regular break
+      breaksWithContracts.push({
+        ...gap,
+        isCustomerConversation: false,
+        contractsInBreak: undefined
+      });
+      continue;
     }
     
-    return {
-      ...gap,
-      isCustomerConversation,
-      contractsInBreak: contractsInThisBreak.length > 0 ? contractsInThisBreak : undefined
-    };
-  });
+    // Sort contracts chronologically
+    const sortedContracts = [...contractsInThisBreak].sort((a, b) => a - b);
+    const firstContractTime = sortedContracts[0];
+    const lastContractTime = sortedContracts[sortedContracts.length - 1];
+    
+    console.log(`[calculateBreaks] 📝 Processing break with ${sortedContracts.length} contract(s): ${new Date(gap.start).toLocaleTimeString()} - ${new Date(gap.end).toLocaleTimeString()}`);
+    console.log(`[calculateBreaks]   First contract: ${new Date(firstContractTime).toLocaleTimeString()}, Last contract: ${new Date(lastContractTime).toLocaleTimeString()}`);
+    
+    // Calculate conversation start: max 45 min before first contract, but not before break start
+    const conversationStart = Math.max(gap.start, firstContractTime - MAX_CONVERSATION_BEFORE_CONTRACT);
+    
+    // Calculate conversation end: same time as last contract (time AFTER contract with >20min inactivity = break)
+    const conversationEnd = lastContractTime;
+    
+    // Time BEFORE the conversation (if any) - this is a regular break
+    const timeBeforeConversation = conversationStart - gap.start;
+    if (timeBeforeConversation >= MIN_BREAK_DURATION) {
+      console.log(`[calculateBreaks]   ⏸️ Break BEFORE conversation: ${Math.round(timeBeforeConversation / 60000)} min`);
+      breaksWithContracts.push({
+        start: gap.start,
+        end: conversationStart,
+        duration: timeBeforeConversation,
+        location: gap.location,
+        locations: gap.locations, // POI info applies to entire original gap area
+        isCustomerConversation: false,
+        contractsInBreak: undefined
+      });
+    }
+    
+    // The customer conversation segment (from max 45min before first contract to last contract)
+    const conversationDuration = conversationEnd - conversationStart;
+    console.log(`[calculateBreaks]   💬 Kundengespräch: ${Math.round(conversationDuration / 60000)} min (${new Date(conversationStart).toLocaleTimeString()} - ${new Date(conversationEnd).toLocaleTimeString()})`);
+    breaksWithContracts.push({
+      start: conversationStart,
+      end: conversationEnd,
+      duration: conversationDuration,
+      location: gap.location,
+      locations: gap.locations,
+      isCustomerConversation: true,
+      contractsInBreak: sortedContracts
+    });
+    
+    // Time AFTER the last contract - this is a regular break (if >20min)
+    const timeAfterConversation = gap.end - conversationEnd;
+    if (timeAfterConversation >= MIN_BREAK_DURATION) {
+      console.log(`[calculateBreaks]   ⏸️ Break AFTER conversation: ${Math.round(timeAfterConversation / 60000)} min`);
+      breaksWithContracts.push({
+        start: conversationEnd,
+        end: gap.end,
+        duration: timeAfterConversation,
+        location: gap.location,
+        locations: gap.locations,
+        isCustomerConversation: false,
+        contractsInBreak: undefined
+      });
+    }
+  }
+  
+  // Sort all breaks chronologically
+  breaksWithContracts.sort((a, b) => a.start - b.start);
+  
+  console.log(`[calculateBreaks] 📊 Final breaks count: ${breaksWithContracts.length} (from ${enrichedGaps.length} original gaps)`);
 
   return breaksWithContracts;
 }
