@@ -639,9 +639,20 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
 
   const basePoints = pointsAfterSix;
 
+  // Debug: Log source breakdown of GPS points
+  useEffect(() => {
+    const sourceBreakdown = basePoints.reduce((acc, p) => {
+      const src = p.source || 'native';
+      acc[src] = (acc[src] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    console.log(`[RouteReplay] 📊 GPS source breakdown:`, sourceBreakdown);
+    console.log(`[RouteReplay] 📊 Total points: ${basePoints.length}, activeUserAgents: ${activeUserAgents.size}`);
+  }, [basePoints, activeUserAgents]);
+
   // Filter basePoints by active User-Agents first
   const uaFilteredPoints = useMemo(() => {
-    return basePoints.filter(p => {
+    const result = basePoints.filter(p => {
       // If it's a native point, check if its User-Agent is active
       if (p.source === 'native' || !p.source) {
         // If we have active agents selected, only show those
@@ -653,6 +664,8 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
       // Always include external data (assumed to belong to the session/user context)
       return true;
     });
+    console.log(`[RouteReplay] 📊 uaFilteredPoints: ${result.length} (from ${basePoints.length})`);
+    return result;
   }, [basePoints, activeUserAgents]);
 
   // Detect stationary periods based on filtered points
@@ -691,6 +704,15 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
       rawSegments.push(currentSegment);
     }
 
+    // Debug: Log raw segments before merge
+    if (rawSegments.length > 0) {
+      console.log(`[DrivingSegments] Raw segments before merge: ${rawSegments.length}`);
+      rawSegments.forEach((seg, idx) => {
+        const duration = (seg.end - seg.start) / 60000;
+        console.log(`  [${idx}] ${new Date(seg.start).toLocaleTimeString()} - ${new Date(seg.end).toLocaleTimeString()} (${duration.toFixed(1)} min)`);
+      });
+    }
+
     // Merge segments that are less than 10 minutes apart
     // This handles traffic lights, short stops, etc.
     const TEN_MINUTES_MS = 10 * 60 * 1000;
@@ -705,12 +727,23 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
         
         if (gapBetween < TEN_MINUTES_MS) {
           // Merge: extend the last segment to include this one (keep original startPointIndex)
+          console.log(`[DrivingSegments] 🔗 Merging segments: gap=${(gapBetween/60000).toFixed(1)}min < 10min`);
           lastSegment.end = segment.end;
         } else {
           // Gap is too large, start a new segment
+          console.log(`[DrivingSegments] ❌ Not merging: gap=${(gapBetween/60000).toFixed(1)}min >= 10min`);
           mergedSegments.push({ ...segment });
         }
       }
+    }
+    
+    // Debug: Log merged segments
+    if (mergedSegments.length > 0) {
+      console.log(`[DrivingSegments] After merge: ${mergedSegments.length} segments (was ${rawSegments.length})`);
+      mergedSegments.forEach((seg, idx) => {
+        const duration = (seg.end - seg.start) / 60000;
+        console.log(`  [${idx}] ${new Date(seg.start).toLocaleTimeString()} - ${new Date(seg.end).toLocaleTimeString()} (${duration.toFixed(1)} min)`);
+      });
     }
     
     // Filter out segments where user never moved 50m from start point
@@ -781,6 +814,7 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
       // For 'all' source, combine all points into a single track
       // This ensures we have one continuous line and one marker
       grouped['combined'] = displayPoints;
+      console.log(`[RouteReplay] 📊 pointsByUser (source=all): combined=${displayPoints.length} points`);
       return grouped;
     }
 
@@ -797,6 +831,7 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
       grouped[key].push(point);
     });
     
+    console.log(`[RouteReplay] 📊 pointsByUser:`, Object.entries(grouped).map(([k, v]) => `${k}=${v.length}`).join(', '));
     return grouped;
   }, [displayPoints, source]);
 
@@ -1342,6 +1377,12 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
       if (pos) {
         positions['external'] = pos;
       }
+    }
+    
+    // Debug: Log positions
+    const posKeys = Object.keys(positions);
+    if (posKeys.length === 0) {
+      console.log(`[RouteReplay] ⚠️ currentPositions is EMPTY! source=${source}, pointsByUser keys:`, Object.keys(pointsByUser));
     }
     
     return positions;
