@@ -1,7 +1,7 @@
 {
-  "version": "2.8.1",
-  "buildTime": "2025-11-24T17:47:07.403Z",
-  "buildNumber": "build-1764006427405",
+  "version": "2.8.2",
+  "buildTime": "2025-12-06T21:15:03.760Z",
+  "buildNumber": "build-1765055703761",
   "features": [
     "Feature: Batch-Upload Support für Tracking App (v1.4+)",
     "Fix: FollowMee Sync - Korrektur von Daten-Duplikaten",
