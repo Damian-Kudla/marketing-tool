@@ -389,11 +389,13 @@ export default function ImageWithOverlays({
       
       // Create a mapping of originalName -> currentName from editableResidents
       const originalToCurrentName = new Map<string, string>();
-      editableResidents.forEach(r => {
-        if (r.originalName) {
-          originalToCurrentName.set(r.originalName.toLowerCase(), r.name);
-        }
-      });
+      if (editableResidents) {
+        editableResidents.forEach(r => {
+          if (r.originalName) {
+            originalToCurrentName.set(r.originalName.toLowerCase(), r.name);
+          }
+        });
+      }
       
       // Keep ALL edited overlays - don't filter them out!
       // They will be updated by the second useEffect based on editableResidents
@@ -431,7 +433,7 @@ export default function ImageWithOverlays({
         // This prevents edited names from incorrectly turning red (existing) just because they aren't in the original newProspects list
         let isExisting = false;
         
-        const matchingResident = editableResidents.find(r => 
+        const matchingResident = editableResidents?.find(r => 
             r.name.toLowerCase() === editedName.toLowerCase() || 
             (r.originalName && r.originalName.toLowerCase() === edited.originalName.toLowerCase())
         );
