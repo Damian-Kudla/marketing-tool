@@ -881,7 +881,7 @@ export default function ImageWithOverlays({
 
   // Multi-phase touch interaction constants
   const WOBBLE_DELAY = 200; // ms before wobble starts (allows scroll detection)
-  const STATUS_MENU_DELAY = 1000; // ms total before status menu shows (if no movement)
+  const STATUS_MENU_DELAY = 2000; // ms total before status menu shows (if no movement)
   const SCROLL_THRESHOLD = 10; // pixels - movement less than this is not considered drag
 
   // Clear all interaction timers
@@ -915,9 +915,13 @@ export default function ImageWithOverlays({
 
     // Calculate offset for potential drag
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const isTouch = 'touches' in e;
+    // On touch, shift the drag center up so the element appears above the finger
+    const touchYOffset = isTouch ? 80 : 0;
+
     setDragOffset({
       x: clientX - rect.left - rect.width / 2,
-      y: clientY - rect.top - rect.height / 2,
+      y: clientY - rect.top - rect.height / 2 + touchYOffset,
     });
     setDragPosition({ x: clientX, y: clientY });
 
@@ -1597,25 +1601,26 @@ export default function ImageWithOverlays({
             return (
               <div
                 key={index}
-                className={`absolute cursor-grab transition-all duration-150 select-none ${
-                  isDragging ? 'opacity-50 scale-95 cursor-grabbing' : ''
-                } ${isDropTarget ? 'ring-2 ring-primary ring-offset-2 scale-105' : ''} ${
-                  isFusingTarget ? 'animate-pulse ring-2 ring-green-500' : ''
-                } ${isWobbling && !isDragging ? 'animate-wobble' : ''}`}
+                className={`absolute cursor-grab transition-all duration-200 select-none ${
+                  isDragging ? 'opacity-0' : ''
+                } ${isDropTarget ? 'ring-4 ring-primary ring-offset-2 scale-125 z-40' : ''} ${
+                  isFusingTarget ? 'animate-pulse ring-4 ring-green-500' : ''
+                }`}
                 style={{
                   left: `${finalX}px`,
                   top: `${finalY}px`,
                   width: `${scaledWidth}px`,
                   height: `${scaledHeight}px`,
-                  zIndex: isDragging ? 50 : isWobbling ? 45 : isDropTarget ? 40 : 10,
-                  transition: isDragging ? 'none' : 'all 0.15s ease-out',
+                  zIndex: isDragging ? 50 : isWobbling ? 50 : isDropTarget ? 40 : 10,
+                  transition: isDragging ? 'none' : 'all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)',
                   WebkitTouchCallout: 'none', // iOS: Disable context menu
                   WebkitUserSelect: 'none',   // iOS: Disable selection
                   userSelect: 'none',
                   touchAction: 'none',        // iOS: Disable scrolling while dragging
-                  // Wobble animation via inline style as fallback
+                  // Pop up effect when holding (before drag starts)
                   ...(isWobbling && !isDragging ? {
-                    animation: 'wobble 0.15s ease-in-out infinite alternate',
+                    transform: 'scale(1.3) translateY(-60px)',
+                    filter: 'drop-shadow(0 20px 30px rgba(0,0,0,0.4))',
                   } : {}),
                 }}
                 onMouseDown={(e) => {
@@ -1651,7 +1656,7 @@ export default function ImageWithOverlays({
                 {/* Background box with rounded corners and border */}
                 <div
                   className={`absolute inset-0 rounded transition-all duration-150 ${
-                    isDropTarget ? 'shadow-lg' : ''
+                    isDropTarget ? 'shadow-xl bg-primary/10' : ''
                   }`}
                   style={{
                     backgroundColor: overlay.isDuplicate
@@ -1659,7 +1664,7 @@ export default function ImageWithOverlays({
                       : overlay.isExisting
                       ? colorConfig.existing.background
                       : colorConfig.prospects.background,
-                    border: `${isDropTarget ? '2px' : '1px'} solid ${
+                    border: `${isDropTarget ? '3px' : '1px'} solid ${
                       isDropTarget
                         ? 'hsl(var(--primary))'
                         : overlay.isDuplicate
@@ -1755,11 +1760,12 @@ export default function ImageWithOverlays({
               style={{
                 left: `${dragPosition.x - dragOffset.x}px`,
                 top: `${dragPosition.y - dragOffset.y}px`,
-                transform: 'translate(-50%, -50%) scale(1.05)',
+                transform: 'translate(-50%, -50%) scale(1.5)',
+                transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)',
               }}
             >
               <div
-                className="px-3 py-1.5 rounded shadow-xl"
+                className="px-3 py-1.5 rounded shadow-2xl"
                 style={{
                   backgroundColor: overlays[draggingIndex]?.isDuplicate
                     ? colorConfig.duplicates.solid
@@ -1767,10 +1773,10 @@ export default function ImageWithOverlays({
                     ? colorConfig.existing.solid
                     : colorConfig.prospects.solid,
                   border: '2px solid white',
-                  boxShadow: '0 10px 25px rgba(0,0,0,0.3)',
+                  boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
                 }}
               >
-                <span className="text-white font-semibold text-sm whitespace-nowrap">
+                <span className="text-white font-bold text-lg whitespace-nowrap">
                   {overlays[draggingIndex]?.text}
                 </span>
               </div>
