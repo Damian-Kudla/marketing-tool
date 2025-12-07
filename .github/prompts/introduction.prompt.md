@@ -47,8 +47,23 @@ Administratoren überwachen alle Mitarbeiter in Echtzeit:
 |------|------|
 | `client/src/components/RouteReplayMap.tsx` | Animierte Route im Admin-Popup (Google Maps) |
 | `client/src/components/GPSAddressForm.tsx` | Standort + Adresserkennung |
+| `client/src/components/ImageWithOverlays.tsx` | Foto-Overlay Logik (Touch-Optimiert, Fusion, Drag&Drop) |
 | `server/routes/admin.ts` | Admin-Endpunkte (Route, Stats) |
 | `shared/trackingTypes.ts` | GPSPoint-Interface |
+
+### Aktuelle Features & Fixes (Stand v2.8.13)
+- **Touch-Optimierung (iOS/Mobile)**:
+  - **Drag & Drop**: Textfelder erscheinen beim Ziehen **80px über dem Finger**, damit sie sichtbar bleiben.
+  - **Visuelles Feedback**: Elemente skalieren auf **1.3x (Halten)** und **1.5x (Ziehen)** mit Schatten.
+  - **Scroll-Schutz**: Scrollen wird während Drag & Drop zuverlässig deaktiviert (`touch-action: none`, `preventDefault`).
+  - **Context Menu**: System-Menü (Kopieren/Teilen) wird unterdrückt oder stark verzögert (2s).
+- **Overlay-Logik**:
+  - **Fusion**: Drag & Drop von Textfeldern aufeinander fusioniert diese (z.B. Vor- und Nachname).
+  - **Persistenz**: Bearbeitete Textfelder behalten ihren Status auch nach Neuladen/Reset.
+  - **Smart Colors**: Automatische Farbcodierung (Grün/Orange/Blau) basierend auf Kundenstatus.
+- **Netzwerk & Stabilität**:
+  - **Local Network**: Fix für White Screen auf iOS im lokalen Netzwerk (GPS Error Handling).
+  - **Data Safety**: Robuste Speicherung von Datensätzen und Fotos.
 
 
 Nun zu meinen gewünschten Änderungen für die ich dich um Hilfe bitte:
