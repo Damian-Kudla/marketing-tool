@@ -54,14 +54,15 @@ export function UserButton({ onDatasetLoad }: UserButtonProps) {
   const [showCallBacks, setShowCallBacks] = useState(false);
   const [showAppointments, setShowAppointments] = useState(false);
   const [showLeonFilter, setShowLeonFilter] = useState(false);
-  const [appVersion, setAppVersion] = useState('2.8.7');
+  const [appVersion, setAppVersion] = useState('2.8.8');
 
   // Load version from version.json
   useEffect(() => {
-    fetch('/version.json')
+    // Add timestamp to bypass cache
+    fetch(`/version.json?t=${Date.now()}`)
       .then(res => res.json())
       .then(data => setAppVersion(data.version))
-      .catch(() => setAppVersion('2.8.7')); // Fallback
+      .catch(() => setAppVersion('2.8.8')); // Fallback
   }, []);
 
   const toggleLanguage = () => {

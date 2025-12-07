@@ -1,11 +1,11 @@
 // Akquise-Tool PWA Service Worker
 // Optimized for performance with comprehensive caching strategies
-const VERSION = '2.8.7';
+const VERSION = '2.8.8';
 
-const CACHE_NAME = 'akquise-tool-v2.8.7';
-const STATIC_CACHE = 'static-cache-v2.8.7';
-const API_CACHE = 'api-cache-v2.8.7';
-const IMAGE_CACHE = 'image-cache-v2.8.7';
+const CACHE_NAME = 'akquise-tool-v2.8.8';
+const STATIC_CACHE = 'static-cache-v2.8.8';
+const API_CACHE = 'api-cache-v2.8.8';
+const IMAGE_CACHE = 'image-cache-v2.8.8';
 
 // Static assets to cache on install
 const STATIC_ASSETS = [
@@ -165,6 +165,13 @@ self.addEventListener('fetch', event => {
   // CRITICAL: Never cache admin routes - always fetch fresh data
   if (url.pathname.startsWith('/admin') || url.pathname.startsWith('/api/admin')) {
     logPWAAction('ADMIN_BYPASS', { url: request.url });
+    event.respondWith(fetch(request));
+    return;
+  }
+
+  // CRITICAL: Never cache version.json - always fetch fresh data
+  if (url.pathname === '/version.json') {
+    logPWAAction('VERSION_CHECK_BYPASS', { url: request.url });
     event.respondWith(fetch(request));
     return;
   }
