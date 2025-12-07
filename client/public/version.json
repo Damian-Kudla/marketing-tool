@@ -1,18 +1,18 @@
 {
-  "version": "2.8.6",
-  "buildTime": "2025-12-07T02:04:37.213Z",
-  "buildNumber": "build-1765073077215",
+  "version": "2.8.7",
+  "buildTime": "2025-12-07T02:19:29.144Z",
+  "buildNumber": "build-1765073969146",
   "features": [
+    "UX: Proximity Selection - Automatische Auswahl des nächstgelegenen Textfeldes bei Klick daneben",
+    "Fix: Scroll Prevention - Zuverlässiges Deaktivieren des Scrollens beim Halten (auch bei verfehlten Klicks)",
     "UX: Touch Drag - Verbessertes Drag & Drop auf Touch-Geräten (Offset + Vergrößerung)",
-    "UX: Context Menu - Verzögerung auf 2 Sekunden erhöht für bessere Bedienbarkeit",
-    "Fix: iOS Scrolling - Deaktivierung des Scrollens beim Verschieben von Overlays",
-    "Fix: Local Network - White Screen Fix (GPS Error Handling)"
+    "UX: Context Menu - Verzögerung auf 2 Sekunden erhöht für bessere Bedienbarkeit"
   ],
   "technicalDetails": [
+    "UI: Implemented nearest-neighbor search for touch events on container",
+    "UI: Added non-passive touchmove listener to prevent scrolling during interaction",
     "UI: Added touchYOffset (80px) for visibility above finger",
-    "UI: Increased scale to 1.5x during drag/hold",
-    "UI: Increased context menu delay to 2000ms",
-    "UI: Added touchAction: none to overlays"
+    "UI: Increased scale to 1.5x during drag/hold"
   ],
   "previousFeatures": [
     "Fix: Overlay-Persistenz - Textfelder bleiben nach Bearbeitung erhalten",
