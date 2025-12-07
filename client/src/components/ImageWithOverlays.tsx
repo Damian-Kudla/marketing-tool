@@ -1475,12 +1475,26 @@ export default function ImageWithOverlays({
           </div>
         )}
         
-        <div ref={containerRef} className="relative w-full" style={{ touchAction: 'auto' }}>
+        <div 
+          ref={containerRef} 
+          className="relative w-full select-none" 
+          style={{ 
+            touchAction: 'pan-y', // Allow vertical scrolling but prevent horizontal interference
+            WebkitTouchCallout: 'none', // iOS: Disable magnifying glass/context menu
+            WebkitUserSelect: 'none',   // iOS: Disable text selection
+            userSelect: 'none'          // Standard: Disable text selection
+          }}
+          onContextMenu={(e) => {
+            // Prevent native context menu (Save Image, Share, etc.)
+            e.preventDefault();
+            return false;
+          }}
+        >
           <img
             ref={imageRef}
             src={imageSrc}
             alt="Nameplate with overlays"
-            className="w-full h-auto"
+            className="w-full h-auto select-none"
             onLoad={updateDimensions}
             data-testid="img-with-overlays"
             style={{ 
@@ -1489,6 +1503,8 @@ export default function ImageWithOverlays({
               maxHeight: '80vh',
               maxWidth: '100%',
               aspectRatio: 'auto',
+              WebkitTouchCallout: 'none', // iOS: Disable context menu on image
+              pointerEvents: 'none'       // Prevent image dragging/selection
             }}
           />
           
@@ -1593,6 +1609,9 @@ export default function ImageWithOverlays({
                   height: `${scaledHeight}px`,
                   zIndex: isDragging ? 50 : isWobbling ? 45 : isDropTarget ? 40 : 10,
                   transition: isDragging ? 'none' : 'all 0.15s ease-out',
+                  WebkitTouchCallout: 'none', // iOS: Disable context menu
+                  WebkitUserSelect: 'none',   // iOS: Disable selection
+                  userSelect: 'none',
                   // Wobble animation via inline style as fallback
                   ...(isWobbling && !isDragging ? {
                     animation: 'wobble 0.15s ease-in-out infinite alternate',
