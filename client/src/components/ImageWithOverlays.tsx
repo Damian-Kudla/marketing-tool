@@ -41,6 +41,8 @@ interface OverlayBox {
   editedText?: string; // Store the edited text separately
 }
 
+import { ComicExplosion } from './ComicExplosion';
+
 interface ImageWithOverlaysProps {
   imageSrc: string;
   fullVisionResponse?: any;
@@ -162,6 +164,7 @@ export default function ImageWithOverlays({
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [isFusing, setIsFusing] = useState(false);
   const [fusingIndices, setFusingIndices] = useState<{ source: number; target: number } | null>(null);
+  const [explosionPos, setExplosionPos] = useState<{ x: number; y: number } | null>(null);
 
   // Multi-phase touch interaction state
   const [wobblingIndex, setWobblingIndex] = useState<number | null>(null); // Index of wobbling overlay
@@ -1466,6 +1469,20 @@ export default function ImageWithOverlays({
         setIsFusing(true);
         setFusingIndices({ source: draggingIndex, target: dropTargetIndex });
 
+        // Trigger explosion effect
+        const containerRect = containerRef.current?.getBoundingClientRect();
+        if (containerRect) {
+          const scaledX = (targetOverlay.x + (targetOverlay.xOffset || 0)) * scaleX + imageOffset.offsetX + containerRect.left;
+          const scaledY = (targetOverlay.y + (targetOverlay.yOffset || 0)) * scaleY + imageOffset.offsetY + containerRect.top;
+          const scaledWidth = targetOverlay.width * scaleX * targetOverlay.scale;
+          const scaledHeight = targetOverlay.height * scaleY * targetOverlay.scale;
+
+          const centerX = scaledX + scaledWidth / 2;
+          const centerY = scaledY + scaledHeight / 2;
+          
+          setExplosionPos({ x: centerX, y: centerY });
+        }
+
         // Wait for animation
         await new Promise(resolve => setTimeout(resolve, 400));
 
@@ -2038,6 +2055,15 @@ export default function ImageWithOverlays({
               </span>
             </div>
           </div>
+        )}
+
+        {/* Comic Explosion Effect */}
+        {explosionPos && (
+          <ComicExplosion
+            x={explosionPos.x}
+            y={explosionPos.y}
+            onComplete={() => setExplosionPos(null)}
+          />
         )}
       </CardContent>
     </Card>
