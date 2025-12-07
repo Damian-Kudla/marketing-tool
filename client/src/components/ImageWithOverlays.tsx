@@ -1481,10 +1481,17 @@ export default function ImageWithOverlays({
           const centerY = scaledY + scaledHeight / 2;
           
           setExplosionPos({ x: centerX, y: centerY });
+          
+          // --- HIER VIBRIEREN (HAPTIC FEEDBACK) ---
+          if ('vibrate' in navigator) {
+             // Ein starkes, kurzes Vibrieren für die Kollision
+             try { navigator.vibrate([50, 20, 50]); } catch (err) { /* ignore */ }
+          }
         }
 
-        // Wait for animation
-        await new Promise(resolve => setTimeout(resolve, 400));
+        // Wait for animation PEAK (ca. 150-200ms)
+        // Die Explosion poppt auf -> bei voller Größe (die Blase verdeckt alles) -> Boxen mergen
+        await new Promise(resolve => setTimeout(resolve, 200));
 
         // Update editableResidents: update target, remove source
         const updatedResidents = editableResidents
