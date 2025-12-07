@@ -36,11 +36,15 @@ class GPSTrackingService {
       };
 
       // Use watchPosition for continuous tracking
-      this.watchId = navigator.geolocation.watchPosition(
-        (position) => this.handlePositionUpdate(position),
-        (error) => this.handlePositionError(error),
-        options
-      );
+      try {
+        this.watchId = navigator.geolocation.watchPosition(
+          (position) => this.handlePositionUpdate(position),
+          (error) => this.handlePositionError(error),
+          options
+        );
+      } catch (err) {
+        console.error('[GPS] Failed to start watchPosition:', err);
+      }
 
       // Also send position every 15 seconds even if it hasn't changed much
       this.trackingInterval = window.setInterval(() => {

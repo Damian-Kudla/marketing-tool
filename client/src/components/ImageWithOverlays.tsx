@@ -1612,6 +1612,7 @@ export default function ImageWithOverlays({
                   WebkitTouchCallout: 'none', // iOS: Disable context menu
                   WebkitUserSelect: 'none',   // iOS: Disable selection
                   userSelect: 'none',
+                  touchAction: 'none',        // iOS: Disable scrolling while dragging
                   // Wobble animation via inline style as fallback
                   ...(isWobbling && !isDragging ? {
                     animation: 'wobble 0.15s ease-in-out infinite alternate',
