@@ -1,7 +1,7 @@
 {
-  "version": "2.8.7",
-  "buildTime": "2025-12-07T02:19:29.144Z",
-  "buildNumber": "build-1765073969146",
+  "version": "2.8.8",
+  "buildTime": "2025-12-07T02:38:50.890Z",
+  "buildNumber": "build-1765075130892",
   "features": [
     "UX: Proximity Selection - Automatische Auswahl des nächstgelegenen Textfeldes bei Klick daneben",
     "Fix: Scroll Prevention - Zuverlässiges Deaktivieren des Scrollens beim Halten (auch bei verfehlten Klicks)",
