@@ -900,8 +900,32 @@ export default function ImageWithOverlays({
     }
   }, []);
 
+  // Helper to get overlay rect relative to viewport
+  const getOverlayRect = useCallback((index: number) => {
+    if (!containerRef.current || !overlays[index]) return null;
+    
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const overlay = overlays[index];
+    
+    const scaledX = (overlay.x + (overlay.xOffset || 0)) * scaleX + imageOffset.offsetX + containerRect.left;
+    const scaledY = (overlay.y + (overlay.yOffset || 0)) * scaleY + imageOffset.offsetY + containerRect.top;
+    const scaledWidth = overlay.width * scaleX * overlay.scale;
+    const scaledHeight = overlay.height * scaleY * overlay.scale;
+    
+    return {
+      left: scaledX,
+      top: scaledY,
+      width: scaledWidth,
+      height: scaledHeight,
+      right: scaledX + scaledWidth,
+      bottom: scaledY + scaledHeight,
+      centerX: scaledX + scaledWidth / 2,
+      centerY: scaledY + scaledHeight / 2
+    };
+  }, [overlays, scaleX, scaleY, imageOffset]);
+
   // Handle touch/mouse down - start the multi-phase interaction
-  const handleInteractionStart = useCallback((index: number, e: React.MouseEvent | React.TouchEvent) => {
+  const handleInteractionStart = useCallback((index: number, e: React.MouseEvent | React.TouchEvent | TouchEvent | MouseEvent) => {
     if (isFusing || statusMenuOpen) return;
 
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
@@ -914,15 +938,21 @@ export default function ImageWithOverlays({
     setHasMoved(false);
 
     // Calculate offset for potential drag
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const overlayRect = getOverlayRect(index);
     const isTouch = 'touches' in e;
     // On touch, shift the drag center up so the element appears above the finger
     const touchYOffset = isTouch ? 80 : 0;
 
-    setDragOffset({
-      x: clientX - rect.left - rect.width / 2,
-      y: clientY - rect.top - rect.height / 2 + touchYOffset,
-    });
+    if (overlayRect) {
+      setDragOffset({
+        x: clientX - overlayRect.left - overlayRect.width / 2,
+        y: clientY - overlayRect.top - overlayRect.height / 2 + touchYOffset,
+      });
+    } else {
+      // Fallback if rect calculation fails
+      setDragOffset({ x: 0, y: touchYOffset });
+    }
+    
     setDragPosition({ x: clientX, y: clientY });
 
     // Phase 1: After WOBBLE_DELAY, start wobbling (indicates drag is possible)
@@ -963,7 +993,63 @@ export default function ImageWithOverlays({
     }, STATUS_MENU_DELAY);
 
     // Don't preventDefault here - allow scroll detection
-  }, [isFusing, statusMenuOpen, overlays]);
+  }, [isFusing, statusMenuOpen, overlays, getOverlayRect]);
+
+  // Handle container touch start for proximity selection
+  const handleContainerTouchStart = useCallback((e: React.TouchEvent) => {
+    // If we hit an overlay directly, stop propagation so we don't double-trigger
+    // (This is handled by overlay's onTouchStart stopping propagation, or we check target)
+    if ((e.target as HTMLElement).closest('[data-testid^="overlay-box-"]')) return;
+
+    const clientX = e.touches[0].clientX;
+    const clientY = e.touches[0].clientY;
+
+    // Find nearest overlay
+    let minDistance = Infinity;
+    let nearestIndex = -1;
+
+    overlays.forEach((_, index) => {
+      const rect = getOverlayRect(index);
+      if (rect) {
+        // Calculate distance from touch to center of overlay
+        const dx = clientX - rect.centerX;
+        const dy = clientY - rect.centerY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance < minDistance) {
+          minDistance = distance;
+          nearestIndex = index;
+        }
+      }
+    });
+
+    if (nearestIndex !== -1) {
+      // Start interaction with nearest overlay
+      handleInteractionStart(nearestIndex, e);
+    }
+  }, [overlays, getOverlayRect, handleInteractionStart]);
+
+  // Handle container touch move to prevent scrolling when holding
+  const handleContainerTouchMove = useCallback((e: TouchEvent) => {
+    // If we are in wobble mode (holding) or dragging, prevent scrolling
+    if (wobblingIndexRef.current !== null || draggingIndex !== null) {
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    }
+  }, [draggingIndex]);
+
+  // Attach non-passive touchmove listener to container
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    container.addEventListener('touchmove', handleContainerTouchMove, { passive: false });
+    
+    return () => {
+      container.removeEventListener('touchmove', handleContainerTouchMove);
+    };
+  }, [handleContainerTouchMove]);
 
   // Handle touch/mouse move during interaction
   const handleInteractionMove = useCallback((index: number, e: React.MouseEvent | React.TouchEvent) => {
@@ -1493,6 +1579,7 @@ export default function ImageWithOverlays({
             e.preventDefault();
             return false;
           }}
+          onTouchStart={handleContainerTouchStart}
         >
           <img
             ref={imageRef}
@@ -1639,6 +1726,7 @@ export default function ImageWithOverlays({
                   }
                 }}
                 onTouchStart={(e) => {
+                  e.stopPropagation(); // Prevent container proximity logic
                   handleInteractionStart(index, e);
                 }}
                 onTouchMove={(e) => {
