@@ -924,6 +924,9 @@ export default function ImageWithOverlays({
     };
   }, [overlays, scaleX, scaleY, imageOffset]);
 
+  // Ref to track the currently active interaction index (for container moves)
+  const activeInteractionIndexRef = useRef<number | null>(null);
+
   // Handle touch/mouse down - start the multi-phase interaction
   const handleInteractionStart = useCallback((index: number, e: React.MouseEvent | React.TouchEvent | TouchEvent | MouseEvent) => {
     if (isFusing || statusMenuOpen) return;
@@ -934,6 +937,7 @@ export default function ImageWithOverlays({
 
     // Store start position to detect movement
     touchStartPosRef.current = { x: clientX, y: clientY };
+    activeInteractionIndexRef.current = index; // Track active index
     statusMenuTriggeredRef.current = false;
     setHasMoved(false);
 
@@ -1029,30 +1033,8 @@ export default function ImageWithOverlays({
     }
   }, [overlays, getOverlayRect, handleInteractionStart]);
 
-  // Handle container touch move to prevent scrolling when holding
-  const handleContainerTouchMove = useCallback((e: TouchEvent) => {
-    // If we are in wobble mode (holding) or dragging, prevent scrolling
-    if (wobblingIndexRef.current !== null || draggingIndex !== null) {
-      if (e.cancelable) {
-        e.preventDefault();
-      }
-    }
-  }, [draggingIndex]);
-
-  // Attach non-passive touchmove listener to container
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    container.addEventListener('touchmove', handleContainerTouchMove, { passive: false });
-    
-    return () => {
-      container.removeEventListener('touchmove', handleContainerTouchMove);
-    };
-  }, [handleContainerTouchMove]);
-
   // Handle touch/mouse move during interaction
-  const handleInteractionMove = useCallback((index: number, e: React.MouseEvent | React.TouchEvent) => {
+  const handleInteractionMove = useCallback((index: number, e: React.MouseEvent | React.TouchEvent | TouchEvent) => {
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
 
@@ -1063,9 +1045,32 @@ export default function ImageWithOverlays({
     const totalMovement = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 
     // If movement exceeds threshold before wobble phase, cancel everything (user is scrolling)
+    // UNLESS we are in proximity mode (activeInteractionIndexRef set via container touch)
+    // In that case, we might want to allow immediate drag if the user moves significantly?
+    // But user said "Das textfeld kann gerne sofort zum Finger verschoben werden."
+    // So if we have an active interaction, and we move, we should probably start dragging.
+    
     if (totalMovement > SCROLL_THRESHOLD && wobblingIndexRef.current === null && !draggingIndex) {
-      clearInteractionTimers();
-      touchStartPosRef.current = null;
+      // If this was a direct touch on the overlay, we might want to allow scroll.
+      // But if it was a proximity touch (container), maybe we prioritize drag?
+      // Actually, if we want "immediate drag", we should just start dragging here.
+      
+      // Cancel status menu timer - user is dragging
+      if (statusMenuTimerRef.current) {
+        clearTimeout(statusMenuTimerRef.current);
+        statusMenuTimerRef.current = null;
+      }
+
+      // Enter drag mode immediately
+      setHasMoved(true);
+      setDraggingIndex(index);
+      setWobblingIndex(null);
+      setLongPressIndex(null);
+
+      // Prevent scrolling now that we're dragging
+      if (e.cancelable) {
+        e.preventDefault();
+      }
       return;
     }
 
@@ -1084,15 +1089,34 @@ export default function ImageWithOverlays({
       setLongPressIndex(null);
 
       // Prevent scrolling now that we're dragging
-      e.preventDefault();
+      if (e.cancelable) {
+        e.preventDefault();
+      }
     }
 
     // Update drag position if already dragging
     if (draggingIndex === index) {
       setDragPosition({ x: clientX, y: clientY });
-      e.preventDefault();
+      if (e.cancelable) {
+        e.preventDefault();
+      }
     }
   }, [draggingIndex, clearInteractionTimers]);
+
+  // Handle container touch move to prevent scrolling when holding AND to update drag
+  const handleContainerTouchMove = useCallback((e: TouchEvent) => {
+    // If we have an active interaction index, forward the move event
+    if (activeInteractionIndexRef.current !== null) {
+      handleInteractionMove(activeInteractionIndexRef.current, e);
+    }
+
+    // If we are in wobble mode (holding) or dragging, prevent scrolling
+    if (wobblingIndexRef.current !== null || draggingIndex !== null) {
+      if (e.cancelable) {
+        e.preventDefault();
+      }
+    }
+  }, [draggingIndex, handleInteractionMove]);
 
   // Handle touch/mouse end
   const handleInteractionEnd = useCallback((index: number) => {
@@ -1131,6 +1155,7 @@ export default function ImageWithOverlays({
     setWobblingIndex(null);
     setLongPressIndex(null);
     touchStartPosRef.current = null;
+    activeInteractionIndexRef.current = null; // Clear active index
     setHasMoved(false);
   }, [draggingIndex, clearInteractionTimers, handleOverlayClick]);
 
