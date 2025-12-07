@@ -2,6 +2,7 @@ import { type User, type InsertUser, type Customer, type InsertCustomer, type Ad
 import { randomUUID } from "crypto";
 import { google } from "./services/googleApiWrapper";
 import leven from "leven";
+import { LOG_CONFIG } from "./config/logConfig";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -235,7 +236,9 @@ export class GoogleSheetsStorage implements IStorage {
         // Remove the house number part from street
         cleanedStreet = cleanedStreet.substring(0, numberMatch.index).trim();
         
-        console.log(`[cleanStreetData] Extracted house number from street: "${street}" → street="${cleanedStreet}", number="${cleanedHouseNumber}"`);
+        if (LOG_CONFIG.DATA_CLEANING.logHouseNumberExtraction) {
+          console.log(`[cleanStreetData] Extracted house number: "${street}" → "${cleanedStreet}", "${cleanedHouseNumber}"`);
+        }
       } else {
         // No house number in street and houseNumber field is empty → Skip this row
         // console.warn(`[cleanStreetData] ⚠️ Skipping row: No house number found in "${street}"`);
@@ -327,18 +330,25 @@ export class GoogleSheetsStorage implements IStorage {
 
   private async fetchCustomersFromSheet(): Promise<Customer[]> {
     if (!this.initialized) {
-      console.log('[CustomerCache] Google Sheets not initialized, returning empty customer list');
+      if (LOG_CONFIG.CUSTOMER_CACHE.logLifecycle) {
+        console.log('[CustomerCache] Google Sheets not initialized');
+      }
       return [];
     }
 
     if (this.isCacheValid() && this.cache.customers) {
-      const cacheAge = Math.round((Date.now() - (this.cache.timestamp || 0)) / 1000);
-      console.log(`✅ [CustomerCache] Cache HIT - Using cached customer data (${this.cache.customers.length} customers, age: ${cacheAge}s/${this.CACHE_TTL/1000}s)`);
+      // Only log cache hits if explicitly enabled (very noisy - dozens per request)
+      if (LOG_CONFIG.CUSTOMER_CACHE.logEveryHit) {
+        const cacheAge = Math.round((Date.now() - (this.cache.timestamp || 0)) / 1000);
+        console.log(`✅ [CustomerCache] Cache HIT (${this.cache.customers.length} customers, age: ${cacheAge}s)`);
+      }
       return this.cache.customers;
     }
 
     try {
-      console.log('🔄 [CustomerCache] Cache MISS - Fetching customers from Google Sheets API...');
+      if (LOG_CONFIG.CUSTOMER_CACHE.logMiss) {
+        console.log('🔄 [CustomerCache] Cache MISS - Fetching from Google Sheets...');
+      }
       const startTime = Date.now();
       
       const response = await this.sheetsClient.spreadsheets.values.get({
@@ -348,7 +358,9 @@ export class GoogleSheetsStorage implements IStorage {
 
       const fetchTime = Date.now() - startTime;
       const rows = response.data.values || [];
-      console.log(`📊 [CustomerCache] Fetched ${rows.length} rows from Google Sheets in ${fetchTime}ms`);
+      if (LOG_CONFIG.CUSTOMER_CACHE.logMiss) {
+        console.log(`📊 [CustomerCache] Fetched ${rows.length} rows in ${fetchTime}ms`);
+      }
       
       let skippedRows = 0;
       const customers: Customer[] = [];
@@ -384,11 +396,13 @@ export class GoogleSheetsStorage implements IStorage {
         });
       }
 
-      if (skippedRows > 0) {
-        console.warn(`⚠️ [CustomerCache] Skipped ${skippedRows} rows (missing name or invalid street/house number)`);
+      if (skippedRows > 0 && LOG_CONFIG.DATA_CLEANING.logSummary) {
+        console.warn(`⚠️ [CustomerCache] Skipped ${skippedRows} rows (missing name or invalid data)`);
       }
 
-      console.log(`✅ [CustomerCache] Parsed ${customers.length} valid customers and stored in cache`);
+      if (LOG_CONFIG.CUSTOMER_CACHE.logMiss) {
+        console.log(`✅ [CustomerCache] Loaded ${customers.length} customers into cache`);
+      }
 
       this.cache.customers = customers;
       this.cache.timestamp = Date.now();
@@ -612,7 +626,9 @@ export class GoogleSheetsStorage implements IStorage {
       });
 
       // Invalidate cache
-      console.log('🗑️ [CustomerCache] Cache invalidated after new customer creation');
+      if (LOG_CONFIG.CUSTOMER_CACHE.logLifecycle) {
+        console.log('🗑️ [CustomerCache] Cache invalidated');
+      }
       this.cache.customers = null;
       this.cache.timestamp = null;
 

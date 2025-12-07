@@ -668,6 +668,13 @@ export default function ScannerPage() {
   const handleAddressSearch = useCallback((customers: any[], historicalProspects?: any[]) => {
     console.log('Address search result:', customers, 'Historical prospects:', historicalProspects?.length || 0);
 
+    // Clear any existing photos from previous queries
+    setPhotos([]);
+    setPhotoImageSrc(null);
+    setEditableResidents([]);
+    setCurrentDatasetId(null);
+    setDatasetCreatedAt(null);
+
     // Show results as existing customers
     // Also set allCustomersAtAddress to show the "All Customers at Address" section
     setOcrResult({
@@ -1152,20 +1159,23 @@ export default function ScannerPage() {
                     </div>
                     {/* ImageWithOverlays for this specific photo */}
                     {photo.imageSrc && photo.fullVisionResponse && (
-                      <ImageWithOverlays
-                        imageSrc={photo.imageSrc}
-                        fullVisionResponse={photo.fullVisionResponse}
-                        residentNames={photo.residentNames}
-                        existingCustomers={photo.existingCustomers}
-                        newProspects={photo.newProspects}
-                        allCustomersAtAddress={photo.allCustomersAtAddress}
-                        address={address}
-                        onNamesUpdated={(names) => handleNamesUpdated(names, photo.id)}
-                        editableResidents={editableResidents}
-                        onResidentsUpdated={setEditableResidents}
-                        currentDatasetId={currentDatasetId}
-                        onRequestDatasetCreation={handleRequestDatasetCreation}
-                      />
+                      <div className="relative">
+                        <MaximizeButton panel={`overlay-${photo.id}`} className="absolute top-2 right-2 z-10" />
+                        <ImageWithOverlays
+                          imageSrc={photo.imageSrc}
+                          fullVisionResponse={photo.fullVisionResponse}
+                          residentNames={photo.residentNames}
+                          existingCustomers={photo.existingCustomers}
+                          newProspects={photo.newProspects}
+                          allCustomersAtAddress={photo.allCustomersAtAddress}
+                          address={address}
+                          onNamesUpdated={(names) => handleNamesUpdated(names, photo.id)}
+                          editableResidents={editableResidents}
+                          onResidentsUpdated={setEditableResidents}
+                          currentDatasetId={currentDatasetId}
+                          onRequestDatasetCreation={handleRequestDatasetCreation}
+                        />
+                      </div>
                     )}
                   </div>
                 ))}
@@ -1528,7 +1538,31 @@ export default function ScannerPage() {
         </>
       )}
 
-      {maximizedPanel === 'overlays' && photoImageSrc && ocrResult?.fullVisionResponse && (
+      {(() => {
+        const isOverlayPanel = maximizedPanel === 'overlays' || (typeof maximizedPanel === 'string' && maximizedPanel?.startsWith('overlay-'));
+        if (!isOverlayPanel) return null;
+
+        let targetPhoto = null;
+        if (maximizedPanel === 'overlays') {
+             if (photoImageSrc && ocrResult?.fullVisionResponse) {
+                 targetPhoto = {
+                     imageSrc: photoImageSrc,
+                     fullVisionResponse: ocrResult.fullVisionResponse,
+                     residentNames: ocrResult.residentNames,
+                     existingCustomers: ocrResult.existingCustomers,
+                     newProspects: ocrResult.newProspects,
+                     allCustomersAtAddress: ocrResult.allCustomersAtAddress,
+                     id: undefined
+                 };
+             }
+        } else if (typeof maximizedPanel === 'string' && maximizedPanel.startsWith('overlay-')) {
+            const photoId = maximizedPanel.replace('overlay-', '');
+            targetPhoto = photos.find(p => p.id === photoId);
+        }
+
+        if (!targetPhoto || !targetPhoto.imageSrc || !targetPhoto.fullVisionResponse) return null;
+
+        return (
         <>
           {/* Backdrop - click to close */}
           <div 
@@ -1541,17 +1575,17 @@ export default function ScannerPage() {
               className="relative w-full max-w-6xl mt-12 pointer-events-auto bg-background rounded-lg shadow-lg border p-6 animate-in fade-in zoom-in-95 duration-200"
               onClick={(e) => e.stopPropagation()}
             >
-              <MaximizeButton panel="overlays" className="absolute top-4 right-4" />
+              <MaximizeButton panel={maximizedPanel} className="absolute top-4 right-4" />
               <div className="pt-8 maximized-image-container">
                 <ImageWithOverlays
-                  imageSrc={photoImageSrc}
-                  fullVisionResponse={ocrResult.fullVisionResponse}
-                  residentNames={ocrResult.residentNames}
-                  existingCustomers={ocrResult.existingCustomers}
-                  newProspects={ocrResult.newProspects}
-                  allCustomersAtAddress={ocrResult.allCustomersAtAddress}
+                  imageSrc={targetPhoto.imageSrc}
+                  fullVisionResponse={targetPhoto.fullVisionResponse}
+                  residentNames={targetPhoto.residentNames}
+                  existingCustomers={targetPhoto.existingCustomers}
+                  newProspects={targetPhoto.newProspects}
+                  allCustomersAtAddress={targetPhoto.allCustomersAtAddress}
                   address={address}
-                  onNamesUpdated={handleNamesUpdated}
+                  onNamesUpdated={(names) => handleNamesUpdated(names, targetPhoto.id)}
                   editableResidents={editableResidents}
                   onResidentsUpdated={setEditableResidents}
                   currentDatasetId={currentDatasetId}
@@ -1561,7 +1595,8 @@ export default function ScannerPage() {
             </div>
           </div>
         </>
-      )}
+        );
+      })()}
 
       {maximizedPanel === 'results' && (
         <>

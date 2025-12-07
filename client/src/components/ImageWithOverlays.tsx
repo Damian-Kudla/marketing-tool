@@ -171,6 +171,8 @@ export default function ImageWithOverlays({
   const [hasMoved, setHasMoved] = useState(false); // Track if user moved after wobble started
   const wobbleTimerRef = useRef<NodeJS.Timeout | null>(null);
   const statusMenuTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const containerTouchTimerRef = useRef<NodeJS.Timeout | null>(null); // Timer for container-level long press
+  const [selectedByProximity, setSelectedByProximity] = useState(false); // Track if overlay was selected by proximity (not direct hit)
 
   // Undo history for fusion operations
   interface FusionHistory {
@@ -883,8 +885,44 @@ export default function ImageWithOverlays({
   const WOBBLE_DELAY = 200; // ms before wobble starts (allows scroll detection)
   const STATUS_MENU_DELAY = 2000; // ms total before status menu shows (if no movement)
   const SCROLL_THRESHOLD = 10; // pixels - movement less than this is not considered drag
+  const NEAREST_OVERLAY_THRESHOLD = 150; // pixels - max distance to select nearest overlay on miss
 
-  // Clear all interaction timers
+  // Find the nearest overlay to a given point (in client coordinates)
+  const findNearestOverlay = useCallback((clientX: number, clientY: number): { index: number; distance: number } | null => {
+    if (overlays.length === 0 || !containerRef.current) return null;
+
+    const containerRect = containerRef.current.getBoundingClientRect();
+    let nearestIndex = -1;
+    let nearestDistance = Infinity;
+
+    overlays.forEach((overlay, index) => {
+      // Calculate the center of this overlay in client coordinates
+      const scaledX = (overlay.x + (overlay.xOffset || 0)) * scaleX + imageOffset.offsetX + containerRect.left;
+      const scaledY = (overlay.y + (overlay.yOffset || 0)) * scaleY + imageOffset.offsetY + containerRect.top;
+      const scaledWidth = overlay.width * scaleX * overlay.scale;
+      const scaledHeight = overlay.height * scaleY * overlay.scale;
+
+      const centerX = scaledX + scaledWidth / 2;
+      const centerY = scaledY + scaledHeight / 2;
+
+      // Calculate distance from touch point to overlay center
+      const distance = Math.sqrt(
+        Math.pow(clientX - centerX, 2) + Math.pow(clientY - centerY, 2)
+      );
+
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = index;
+      }
+    });
+
+    if (nearestIndex >= 0 && nearestDistance <= NEAREST_OVERLAY_THRESHOLD) {
+      return { index: nearestIndex, distance: nearestDistance };
+    }
+    return null;
+  }, [overlays, scaleX, scaleY, imageOffset]);
+
+  // Clear all interaction timers (defined early so container handlers can use it)
   const clearInteractionTimers = useCallback(() => {
     if (wobbleTimerRef.current) {
       clearTimeout(wobbleTimerRef.current);
@@ -898,7 +936,150 @@ export default function ImageWithOverlays({
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
+    if (containerTouchTimerRef.current) {
+      clearTimeout(containerTouchTimerRef.current);
+      containerTouchTimerRef.current = null;
+    }
   }, []);
+
+  // Handle container-level touch start (for selecting nearest overlay on miss)
+  const handleContainerTouchStart = useCallback((e: React.TouchEvent) => {
+    // Only process if touch target is the container or image (not an overlay)
+    const target = e.target as HTMLElement;
+    if (target.closest('[data-testid^="overlay-box-"]')) {
+      // Touch is on an overlay - let the overlay's handler deal with it
+      return;
+    }
+
+    if (isFusing || statusMenuOpen) return;
+
+    const clientX = e.touches[0].clientX;
+    const clientY = e.touches[0].clientY;
+
+    // Store start position
+    touchStartPosRef.current = { x: clientX, y: clientY };
+    statusMenuTriggeredRef.current = false;
+    setSelectedByProximity(false);
+    setHasMoved(false);
+
+    // Start timer to find nearest overlay after WOBBLE_DELAY
+    containerTouchTimerRef.current = setTimeout(() => {
+      // Check if user has moved (scrolling)
+      if (!touchStartPosRef.current) return;
+
+      // Find nearest overlay
+      const nearest = findNearestOverlay(clientX, clientY);
+      if (nearest) {
+        // Haptic feedback
+        if ('vibrate' in navigator) {
+          try { navigator.vibrate(30); } catch (err) { /* ignore */ }
+        }
+
+        // Mark as selected by proximity (overlay will be moved to finger)
+        setSelectedByProximity(true);
+
+        // Calculate drag offset to position overlay above finger
+        const overlay = overlays[nearest.index];
+        const containerRect = containerRef.current?.getBoundingClientRect();
+        if (containerRect) {
+          const scaledWidth = overlay.width * scaleX * overlay.scale;
+          const scaledHeight = overlay.height * scaleY * overlay.scale;
+
+          // Offset so overlay appears above the finger (80px up)
+          setDragOffset({
+            x: 0,
+            y: 80, // Above finger
+          });
+          setDragPosition({ x: clientX, y: clientY });
+        }
+
+        // Start wobbling this overlay
+        setWobblingIndex(nearest.index);
+        setLongPressIndex(nearest.index);
+
+        // Set up status menu timer for 2 seconds of no movement
+        statusMenuTimerRef.current = setTimeout(() => {
+          setWobblingIndex(currentWobbling => {
+            if (currentWobbling === nearest.index) {
+              if ('vibrate' in navigator) {
+                try { navigator.vibrate(50); } catch (err) { /* ignore */ }
+              }
+              statusMenuTriggeredRef.current = true;
+              setStatusMenuPosition({ x: clientX, y: clientY });
+              setStatusMenuOverlay({ overlay: overlays[nearest.index], index: nearest.index });
+              setStatusMenuOpen(true);
+              setWobblingIndex(null);
+              setLongPressIndex(null);
+              setSelectedByProximity(false);
+            }
+            return null;
+          });
+          statusMenuTimerRef.current = null;
+        }, STATUS_MENU_DELAY - WOBBLE_DELAY);
+      }
+      containerTouchTimerRef.current = null;
+    }, WOBBLE_DELAY);
+  }, [isFusing, statusMenuOpen, findNearestOverlay, overlays, scaleX, scaleY]);
+
+  // Handle container-level touch move
+  const handleContainerTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!touchStartPosRef.current) return;
+
+    const clientX = e.touches[0].clientX;
+    const clientY = e.touches[0].clientY;
+
+    const deltaX = Math.abs(clientX - touchStartPosRef.current.x);
+    const deltaY = Math.abs(clientY - touchStartPosRef.current.y);
+    const totalMovement = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+    // If movement exceeds threshold before wobble phase, cancel (user is scrolling)
+    if (totalMovement > SCROLL_THRESHOLD && wobblingIndexRef.current === null && draggingIndex === null) {
+      clearInteractionTimers();
+      touchStartPosRef.current = null;
+      setSelectedByProximity(false);
+      return;
+    }
+
+    // If wobbling (selected by proximity) and user moves, start drag mode
+    if (wobblingIndexRef.current !== null && selectedByProximity && totalMovement > SCROLL_THRESHOLD) {
+      // Cancel status menu timer
+      if (statusMenuTimerRef.current) {
+        clearTimeout(statusMenuTimerRef.current);
+        statusMenuTimerRef.current = null;
+      }
+
+      // Enter drag mode
+      setHasMoved(true);
+      setDraggingIndex(wobblingIndexRef.current);
+      setWobblingIndex(null);
+      setLongPressIndex(null);
+
+      e.preventDefault();
+    }
+
+    // Update drag position if dragging
+    if (draggingIndex !== null) {
+      setDragPosition({ x: clientX, y: clientY });
+      e.preventDefault();
+    }
+  }, [draggingIndex, selectedByProximity, clearInteractionTimers]);
+
+  // Handle container-level touch end
+  const handleContainerTouchEnd = useCallback(() => {
+    clearInteractionTimers();
+
+    if (!touchStartPosRef.current) {
+      setSelectedByProximity(false);
+      return;
+    }
+
+    // Reset all state
+    setWobblingIndex(null);
+    setLongPressIndex(null);
+    touchStartPosRef.current = null;
+    setSelectedByProximity(false);
+    setHasMoved(false);
+  }, [clearInteractionTimers]);
 
   // Handle touch/mouse down - start the multi-phase interaction
   const handleInteractionStart = useCallback((index: number, e: React.MouseEvent | React.TouchEvent) => {
@@ -1435,54 +1616,69 @@ export default function ImageWithOverlays({
   return (
     <Card data-testid="card-image-overlays">
       <CardContent className="p-0">
-        {/* Legend with Undo Button */}
+        {/* Legend with Undo Button and Fusion Preview */}
         {(hasProspects || hasExisting || hasDuplicates) && (
-          <div className="flex items-center justify-between px-4 py-2 text-sm border-b">
-            <div className="flex items-center gap-4 flex-wrap">
-              {hasProspects && (
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colorConfig.prospects.solid }} />
-                  <span>{t('photo.legend.prospects', 'Prospects')}</span>
-                </div>
-              )}
-              {hasExisting && (
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colorConfig.existing.solid }} />
-                  <span>{t('photo.legend.existing', 'Existing Customers')}</span>
-                </div>
-              )}
-              {hasDuplicates && (
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colorConfig.duplicates.solid }} />
-                  <span>{t('photo.legend.duplicates', 'Duplicates')}</span>
-                </div>
-              )}
-              {/* Fusion hint */}
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Combine className="w-3 h-3" />
-                <span className="hidden sm:inline">Ziehen zum Fusionieren</span>
+          <div className="flex flex-col border-b">
+            {/* Fusion Preview - shown when dragging over a target */}
+            {draggingIndex !== null && dropTargetIndex !== null && (
+              <div className="flex items-center justify-center gap-2 px-4 py-3 bg-primary/10 border-b animate-in fade-in duration-200">
+                <Combine className="w-5 h-5 text-primary animate-pulse" />
+                <span className="font-semibold text-primary">
+                  {overlays[dropTargetIndex]?.text}
+                </span>
+                <span className="text-primary/70">+</span>
+                <span className="font-semibold text-primary">
+                  {overlays[draggingIndex]?.text}
+                </span>
               </div>
-            </div>
-            {/* Undo button */}
-            {fusionHistory.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleUndoFusion}
-                className="h-7 gap-1 text-muted-foreground hover:text-foreground"
-                title="Letzte Fusion rückgängig machen"
-              >
-                <Undo2 className="h-4 w-4" />
-                <span className="hidden sm:inline text-xs">Rückgängig</span>
-              </Button>
             )}
+            <div className="flex items-center justify-between px-4 py-2 text-sm">
+              <div className="flex items-center gap-4 flex-wrap">
+                {hasProspects && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colorConfig.prospects.solid }} />
+                    <span>{t('photo.legend.prospects', 'Prospects')}</span>
+                  </div>
+                )}
+                {hasExisting && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colorConfig.existing.solid }} />
+                    <span>{t('photo.legend.existing', 'Existing Customers')}</span>
+                  </div>
+                )}
+                {hasDuplicates && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colorConfig.duplicates.solid }} />
+                    <span>{t('photo.legend.duplicates', 'Duplicates')}</span>
+                  </div>
+                )}
+                {/* Fusion hint */}
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Combine className="w-3 h-3" />
+                  <span className="hidden sm:inline">Ziehen zum Fusionieren</span>
+                </div>
+              </div>
+              {/* Undo button */}
+              {fusionHistory.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleUndoFusion}
+                  className="h-7 gap-1 text-muted-foreground hover:text-foreground"
+                  title="Letzte Fusion rückgängig machen"
+                >
+                  <Undo2 className="h-4 w-4" />
+                  <span className="hidden sm:inline text-xs">Rückgängig</span>
+                </Button>
+              )}
+            </div>
           </div>
         )}
         
-        <div 
-          ref={containerRef} 
-          className="relative w-full select-none" 
-          style={{ 
+        <div
+          ref={containerRef}
+          className="relative w-full select-none"
+          style={{
             touchAction: 'pan-y', // Allow vertical scrolling but prevent horizontal interference
             WebkitTouchCallout: 'none', // iOS: Disable magnifying glass/context menu
             WebkitUserSelect: 'none',   // iOS: Disable text selection
@@ -1493,6 +1689,9 @@ export default function ImageWithOverlays({
             e.preventDefault();
             return false;
           }}
+          onTouchStart={handleContainerTouchStart}
+          onTouchMove={handleContainerTouchMove}
+          onTouchEnd={handleContainerTouchEnd}
         >
           <img
             ref={imageRef}
@@ -1536,7 +1735,7 @@ export default function ImageWithOverlays({
             const displayText = isFusedName ? nameParts.reduce((a, b) => a.length > b.length ? a : b) : overlay.text;
             const optimalFontSize = calculateFontSize(displayText, scaledWidth + 16, scaledHeight / (isFusedName ? 2 : 1));
 
-            // Calculate position (override if dragging)
+            // Calculate position (override if dragging or selected by proximity)
             let finalX = scaledX;
             let finalY = scaledY;
 
@@ -1545,11 +1744,25 @@ export default function ImageWithOverlays({
                // Center of the element in client coords
                const centerX = dragPosition.x - dragOffset.x;
                const centerY = dragPosition.y - dragOffset.y;
-               
+
                // Top-Left in client coords
                const leftClient = centerX - scaledWidth / 2;
                const topClient = centerY - scaledHeight / 2;
-               
+
+               // Relative to container
+               finalX = leftClient - containerRect.left;
+               finalY = topClient - containerRect.top;
+            } else if (isWobbling && selectedByProximity && containerRef.current) {
+               // When selected by proximity (long press miss), move overlay to finger position
+               const containerRect = containerRef.current.getBoundingClientRect();
+               // Position overlay centered horizontally and 80px above the finger
+               const centerX = dragPosition.x;
+               const centerY = dragPosition.y - dragOffset.y; // 80px above finger
+
+               // Top-Left in client coords
+               const leftClient = centerX - scaledWidth / 2;
+               const topClient = centerY - scaledHeight / 2;
+
                // Relative to container
                finalX = leftClient - containerRect.left;
                finalY = topClient - containerRect.top;

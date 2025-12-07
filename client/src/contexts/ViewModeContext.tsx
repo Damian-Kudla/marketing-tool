@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
 export type ViewMode = 'list' | 'grid';
-export type MaximizedPanel = 'location' | 'photo' | 'overlays' | 'results' | null;
+export type MaximizedPanel = 'location' | 'photo' | 'overlays' | 'results' | string | null;
 
 interface ViewModeContextType {
   viewMode: ViewMode;

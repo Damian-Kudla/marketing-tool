@@ -28,6 +28,7 @@ import type { LogEntry } from './fallbackLogging';
 import { getBerlinTimestamp } from '../utils/timezone';
 import { getCETDate, insertLog, getFollowMeeTimestamps, type LogInsertData } from './sqliteLogService';
 import { google } from './googleApiWrapper';
+import { LOG_CONFIG } from '../config/logConfig';
 
 const FOLLOWMEE_API_KEY = process.env.FOLLOWMEE_API;
 const FOLLOWMEE_USERNAME = process.env.FOLLOWMEE_USERNAME || 'Saskia.zucht';
@@ -123,11 +124,13 @@ class FollowMeeApiService {
           username: user.username,
           followMeeDeviceId: user.followMeeDeviceId.trim()
         });
-        console.log(`[FollowMee] Mapped user ${user.username} to device ${user.followMeeDeviceId}`);
+        if (LOG_CONFIG.FOLLOWMEE.logDeviceMappings) {
+          console.log(`[FollowMee] Mapped ${user.username} → ${user.followMeeDeviceId}`);
+        }
       }
     }
 
-    console.log(`[FollowMee] Updated mappings for ${this.userMappings.size} users with FollowMee devices`);
+    console.log(`[FollowMee] ${this.userMappings.size} users with FollowMee devices`);
   }
 
   /**
@@ -319,7 +322,6 @@ class FollowMeeApiService {
    */
   async initialSync() {
     if (this.initialSyncCompleted) {
-      console.log('[FollowMee] Initial sync already completed');
       return;
     }
 
@@ -329,9 +331,7 @@ class FollowMeeApiService {
       return;
     }
 
-    console.log('[FollowMee] ============================================');
-    console.log('[FollowMee] STARTING INITIAL SYNC');
-    console.log('[FollowMee] ============================================');
+    console.log('[FollowMee] Starting initial sync...');
 
     try {
       // Fetch device list
@@ -355,20 +355,23 @@ class FollowMeeApiService {
         locationsByDevice.get(location.DeviceID)!.push(location);
       }
 
-      console.log(`[FollowMee] Found data for ${locationsByDevice.size} devices`);
+      // Track sync stats for summary
+      let totalNewLocations = 0;
+      let usersWithNewData = 0;
 
       // Process each user
       for (const mapping of Array.from(this.userMappings.values())) {
         const deviceLocations = locationsByDevice.get(mapping.followMeeDeviceId);
 
         if (!deviceLocations || deviceLocations.length === 0) {
-          console.log(`[FollowMee] No FollowMee data for ${mapping.username} (Device: ${mapping.followMeeDeviceId})`);
+          if (LOG_CONFIG.FOLLOWMEE.logPerUserDetails) {
+            console.log(`[FollowMee] No data for ${mapping.username}`);
+          }
           this.gpsDataCache.set(mapping.userId, []);
           continue;
         }
 
         // CRITICAL: Filter to ONLY today's locations BEFORE duplicate check
-        // This prevents importing yesterday's data that gets deleted later by SQLite sync
         const today = getCETDate();
         const todaysLocations = deviceLocations.filter(loc => {
           const timestamp = this.parseFollowMeeDate(loc.Date);
@@ -376,20 +379,18 @@ class FollowMeeApiService {
           return locDate === today;
         });
 
-        console.log(`[FollowMee] Processing ${deviceLocations.length} FollowMee locations (24h) → ${todaysLocations.length} from today (${today}) for ${mapping.username}`);
+        if (LOG_CONFIG.FOLLOWMEE.logPerUserDetails) {
+          console.log(`[FollowMee] ${mapping.username}: ${todaysLocations.length}/${deviceLocations.length} locations from today`);
+        }
 
         if (todaysLocations.length === 0) {
-          console.log(`[FollowMee] No locations from today for ${mapping.username}`);
           this.gpsDataCache.set(mapping.userId, []);
           continue;
         }
 
-        // CRITICAL: Load existing timestamps from BOTH sources to prevent duplicates
-        // 1. SQLite (primary source - always available)
+        // Load existing timestamps from BOTH sources to prevent duplicates
         const sqliteTimestamps = getFollowMeeTimestamps(today, mapping.userId);
-        console.log(`[FollowMee] Found ${sqliteTimestamps.size} existing FollowMee entries in SQLite for ${mapping.username}`);
 
-        // 2. Google Sheets (backup source - may be unavailable if quota exceeded)
         let sheetsTimestamps = new Set<number>();
         try {
           const existingLogs = await this.loadUserLogsFromSheets(mapping);
@@ -403,22 +404,22 @@ class FollowMeeApiService {
               // Ignore parse errors
             }
           }
-          console.log(`[FollowMee] Found ${sheetsTimestamps.size} existing FollowMee entries in Sheets for ${mapping.username}`);
         } catch (error) {
-          console.warn(`[FollowMee] Could not load Sheets data for ${mapping.username} (may be quota exceeded), using SQLite only`);
+          // Sheets may be unavailable, use SQLite only
         }
 
         // Merge timestamps from both sources
         const existingTimestamps = new Set(Array.from(sqliteTimestamps).concat(Array.from(sheetsTimestamps)));
-        console.log(`[FollowMee] Total unique existing FollowMee entries: ${existingTimestamps.size} for ${mapping.username}`);
 
-        // Filter new locations (not in existing logs) - using today's locations only
+        // Filter new locations (not in existing logs)
         const newLocations = todaysLocations.filter(loc => {
           const timestamp = this.parseFollowMeeDate(loc.Date);
           return !existingTimestamps.has(timestamp);
         });
 
-        console.log(`[FollowMee] ${newLocations.length} new locations to import for ${mapping.username}`);
+        if (LOG_CONFIG.FOLLOWMEE.logPerUserDetails && newLocations.length > 0) {
+          console.log(`[FollowMee] ${mapping.username}: ${newLocations.length} new locations to import`);
+        }
 
         // Sort by timestamp
         newLocations.sort((a, b) =>
@@ -428,10 +429,10 @@ class FollowMeeApiService {
         // Queue new locations via batchLogger (Google Sheets) + SQLite
         for (const location of newLocations) {
           const logEntry = this.locationToLogEntry(location, mapping);
-          
+
           // 1. Google Sheets (batch)
           batchLogger.addUserActivity(logEntry);
-          
+
           // 2. CRITICAL: AUCH SQLite schreiben (verhindert Datenverlust)
           try {
             const timestamp = this.parseFollowMeeDate(location.Date);
@@ -446,13 +447,11 @@ class FollowMeeApiService {
 
             insertLog(date, sqliteLog);
           } catch (error) {
-            console.error(`[FollowMee] ❌ SQLite write error for ${mapping.username}:`, error);
-            // Don't throw - Google Sheets backup still works
+            console.error(`[FollowMee] SQLite write error for ${mapping.username}:`, error);
           }
         }
 
-        // Build cache with today's FollowMee data (sorted by timestamp) - already filtered above
-
+        // Build cache with today's FollowMee data (sorted by timestamp)
         const cacheData: CachedGPSData[] = todaysLocations
           .map(loc => ({
             timestamp: this.parseFollowMeeDate(loc.Date),
@@ -463,16 +462,20 @@ class FollowMeeApiService {
 
         this.gpsDataCache.set(mapping.userId, cacheData);
 
-        console.log(`[FollowMee] ✅ Queued ${newLocations.length} new locations for ${mapping.username}`);
-        console.log(`[FollowMee] 📦 Cached ${todaysLocations.length} total locations for ${mapping.username} (today: ${today})`);
+        // Track stats
+        if (newLocations.length > 0) {
+          totalNewLocations += newLocations.length;
+          usersWithNewData++;
+        }
       }
 
       this.initialSyncCompleted = true;
       this.lastSyncTime = Date.now();
 
-      console.log('[FollowMee] ============================================');
-      console.log('[FollowMee] INITIAL SYNC COMPLETED');
-      console.log('[FollowMee] ============================================');
+      // Summary log
+      if (LOG_CONFIG.FOLLOWMEE.logSyncSummary) {
+        console.log(`[FollowMee] ✅ Initial sync complete: ${totalNewLocations} new locations for ${usersWithNewData} users`);
+      }
 
     } catch (error) {
       console.error('[FollowMee] Error during initial sync:', error);
@@ -485,24 +488,19 @@ class FollowMeeApiService {
    */
   async periodicSync() {
     if (!this.initialSyncCompleted) {
-      console.log('[FollowMee] Initial sync not completed yet, running it now...');
       await this.initialSync();
       return;
     }
 
     if (this.userMappings.size === 0) {
-      console.log('[FollowMee] No users with FollowMee devices configured');
       return;
     }
 
     try {
-      console.log('[FollowMee] Starting periodic sync...');
-
       // Fetch 24h FollowMee data
       const response = await this.fetchHistoryForAllDevices(24);
 
       if (!response.Data || response.Data.length === 0) {
-        console.log('[FollowMee] No new FollowMee data');
         return;
       }
 
@@ -515,6 +513,10 @@ class FollowMeeApiService {
         locationsByDevice.get(location.DeviceID)!.push(location);
       }
 
+      // Track sync stats
+      let totalNewLocations = 0;
+      let usersWithNewData = 0;
+
       // Process each user
       for (const mapping of Array.from(this.userMappings.values())) {
         const deviceLocations = locationsByDevice.get(mapping.followMeeDeviceId);
@@ -526,36 +528,31 @@ class FollowMeeApiService {
         // Get cached data for comparison
         const cachedData = this.gpsDataCache.get(mapping.userId) || [];
         const cachedTimestamps = new Set(cachedData.map(d => d.timestamp));
-        
+
         // FALLBACK: If cache is empty, also check SQLite to prevent duplicates
-        // This handles edge cases like server restart with empty cache
         const today = getCETDate();
         let sqliteTimestamps = new Set<number>();
         if (cachedTimestamps.size === 0) {
           sqliteTimestamps = getFollowMeeTimestamps(today, mapping.userId);
-          console.log(`[FollowMee] Cache empty, loaded ${sqliteTimestamps.size} timestamps from SQLite for ${mapping.username}`);
         }
-        
+
         // Merge cache and SQLite timestamps
         const existingTimestamps = new Set(Array.from(cachedTimestamps).concat(Array.from(sqliteTimestamps)));
 
         // Find NEW locations (not in cache or SQLite)
-        // CRITICAL: Filter to ONLY today's locations to prevent re-importing yesterday's data
-        // (The cache is trimmed to today, so yesterday's data would otherwise look "new")
         const newLocations = deviceLocations.filter(loc => {
           const timestamp = this.parseFollowMeeDate(loc.Date);
           const locDate = getCETDate(timestamp);
-          
-          // Must be from today AND not in cache/SQLite
           return locDate === today && !existingTimestamps.has(timestamp);
         });
 
         if (newLocations.length === 0) {
-          console.log(`[FollowMee] No new locations for ${mapping.username}`);
           continue;
         }
 
-        console.log(`[FollowMee] ${newLocations.length} new locations for ${mapping.username}`);
+        if (LOG_CONFIG.FOLLOWMEE.logPerUserDetails) {
+          console.log(`[FollowMee] ${mapping.username}: ${newLocations.length} new locations`);
+        }
 
         // Sort by timestamp
         newLocations.sort((a, b) =>
@@ -565,10 +562,10 @@ class FollowMeeApiService {
         // Queue new locations via batchLogger (Google Sheets) + SQLite
         for (const location of newLocations) {
           const logEntry = this.locationToLogEntry(location, mapping);
-          
+
           // 1. Google Sheets (batch)
           batchLogger.addUserActivity(logEntry);
-          
+
           // 2. CRITICAL: AUCH SQLite schreiben (verhindert Datenverlust)
           try {
             const timestamp = this.parseFollowMeeDate(location.Date);
@@ -583,8 +580,7 @@ class FollowMeeApiService {
 
             insertLog(date, sqliteLog);
           } catch (error) {
-            console.error(`[FollowMee] ❌ SQLite write error for ${mapping.username}:`, error);
-            // Don't throw - Google Sheets backup still works
+            console.error(`[FollowMee] SQLite write error for ${mapping.username}:`, error);
           }
         }
 
@@ -606,12 +602,17 @@ class FollowMeeApiService {
 
         this.gpsDataCache.set(mapping.userId, trimmedCache);
 
-        console.log(`[FollowMee] ✅ Queued ${newLocations.length} new locations for ${mapping.username}`);
-        console.log(`[FollowMee] 📦 Cache updated: ${trimmedCache.length} locations (trimmed to today: ${today})`);
+        // Track stats
+        totalNewLocations += newLocations.length;
+        usersWithNewData++;
       }
 
       this.lastSyncTime = Date.now();
-      console.log('[FollowMee] ✅ Periodic sync completed');
+
+      // Summary log (only if there was new data)
+      if (totalNewLocations > 0 && LOG_CONFIG.FOLLOWMEE.logSyncSummary) {
+        console.log(`[FollowMee] ✅ Periodic sync: ${totalNewLocations} new locations for ${usersWithNewData} users`);
+      }
 
     } catch (error) {
       console.error('[FollowMee] Error during periodic sync:', error);

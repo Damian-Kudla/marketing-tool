@@ -37,33 +37,72 @@ export const LOG_CONFIG = {
   CACHE: {
     // Dataset cache search operations
     logDatasetSearch: false, // [DatasetCache.getByAddress] logs
-    
+
     // User dataset by date queries
     logUserDatasetQueries: false, // [getUserDatasetsByDate] logs
-    
+
     // Only log cache hits/misses for important operations
     logValidatedStreetCache: true, // Keep for API monitoring
   },
-  
+
+  // CustomerCache (storage.ts) - Bestandskundendaten
+  CUSTOMER_CACHE: {
+    // Log every cache hit (VERY noisy - dozens per request)
+    logEveryHit: false,
+
+    // Log cache misses (when fresh data is fetched)
+    logMiss: true,
+
+    // Log cache initialization/invalidation
+    logLifecycle: true,
+  },
+
   // Batch logger operations
   BATCH_LOGGER: {
     // Log every queue addition (very noisy)
     logQueueAdd: false,
-    
+
     // Log empty queue flushes
     logEmptyFlush: false,
-    
+
     // Log successful flushes (keep for monitoring)
     logFlushSuccess: true,
+
+    // Log each flush operation detail (set false to only log summary)
+    logFlushDetails: false,
   },
-  
+
   // Data cleaning/parsing warnings
   DATA_CLEANING: {
     // Log skipped rows during customer data parsing
     logSkippedRows: false, // Only show summary
-    
+
+    // Log house number extractions from street field
+    logHouseNumberExtraction: false,
+
     // Show summary at end
     logSummary: true,
+  },
+
+  // FollowMee GPS tracking service
+  FOLLOWMEE: {
+    // Log verbose details for each user during sync
+    logPerUserDetails: false,
+
+    // Log each device mapping on startup
+    logDeviceMappings: false,
+
+    // Log sync summary only (recommended)
+    logSyncSummary: true,
+  },
+
+  // DatasetCache operations
+  DATASET_CACHE: {
+    // Log every dataset update/dirty marking
+    logUpdates: false,
+
+    // Log sync operations
+    logSync: true,
   },
   
   // Appointment service filtering

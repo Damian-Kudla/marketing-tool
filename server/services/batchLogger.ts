@@ -114,30 +114,33 @@ class BatchLogger {
     this.isProcessing = true;
 
     try {
-      console.log(`[BatchLogger] Flushing ${this.queue.size} user queue(s)...`);
+      const queueCount = this.queue.size;
+      const totalLogs = Array.from(this.queue.values()).reduce((sum, entries) => sum + entries.length, 0);
 
       // Process each user's queue SEQUENTIALLY (not in parallel)
-      // This helps stay under the rate limit by spacing out API calls
       const queueEntries = Array.from(this.queue.entries());
-      
+
       for (const [userId, entries] of queueEntries) {
         if (entries.length === 0) continue;
-        
+
         // Check rate limit before each user queue
         if (googleSheetsRateLimitManager.isRateLimited()) {
           console.log('[BatchLogger] Rate limit triggered during flush, stopping early');
           break;
         }
-        
+
         // Add small delay between users to spread out API calls
         if (queueEntries.indexOf([userId, entries] as any) > 0) {
-          await this.sleep(1000); // 1 second delay between user flushes
+          await this.sleep(1000);
         }
-        
+
         await this.flushUserQueue(userId, entries);
       }
 
-      console.log('[BatchLogger] Flush complete');
+      // Summary log
+      if (LOG_CONFIG.BATCH_LOGGER.logFlushSuccess) {
+        console.log(`[BatchLogger] Flushed ${totalLogs} logs from ${queueCount} queue(s)`);
+      }
     } catch (error) {
       console.error('[BatchLogger] Error during flush:', error);
     } finally {
@@ -151,7 +154,9 @@ class BatchLogger {
 
   private async flushUserQueue(queueKey: string, entries: BatchQueueEntry[]): Promise<void> {
     try {
-      console.log(`[BatchLogger] Flushing ${entries.length} logs for ${queueKey}...`);
+      if (LOG_CONFIG.BATCH_LOGGER.logFlushDetails) {
+        console.log(`[BatchLogger] Flushing ${entries.length} logs for ${queueKey}...`);
+      }
 
       const firstEntryType = entries[0].type;
 
@@ -165,8 +170,6 @@ class BatchLogger {
 
       // Remove successfully flushed entries from queue
       this.queue.delete(queueKey);
-
-      console.log(`[BatchLogger] Successfully flushed logs for ${queueKey}`);
     } catch (error: any) {
       // Check if it's a rate limit error (429) using global manager
       if (googleSheetsRateLimitManager.isRateLimitError(error)) {
@@ -252,7 +255,9 @@ class BatchLogger {
       }));
 
       const inserted = authLogsDB.insertBatch(logsToInsert);
-      console.log(`[BatchLogger] Saved ${inserted} auth logs to SQLite`);
+      if (LOG_CONFIG.BATCH_LOGGER.logFlushDetails) {
+        console.log(`[BatchLogger] Saved ${inserted} auth logs to SQLite`);
+      }
     } catch (error) {
       console.error('[BatchLogger] Failed to save auth logs to SQLite:', error);
     }

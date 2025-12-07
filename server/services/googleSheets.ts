@@ -278,13 +278,12 @@ class DatasetCache {
   // Sync all dirty datasets to Google Sheets
   private async syncDirtyDatasets() {
     if (this.dirtyDatasets.size === 0) {
-      console.log('[DatasetCache] No dirty datasets to sync');
       return;
     }
 
-    console.log(`[DatasetCache] Syncing ${this.dirtyDatasets.size} dirty datasets to Google Sheets...`);
     const datasetIds = Array.from(this.dirtyDatasets);
     const syncPromises: Promise<void>[] = [];
+    let syncedCount = 0;
 
     for (const datasetId of datasetIds) {
       const dataset = this.cache.get(datasetId);
@@ -293,17 +292,20 @@ class DatasetCache {
           this.sheetsService.writeDatasetToSheets(dataset)
             .then(() => {
               this.dirtyDatasets.delete(datasetId);
-              console.log(`[DatasetCache] Synced dataset ${datasetId}`);
+              syncedCount++;
             })
             .catch((error: any) => {
-              console.error(`[DatasetCache] Failed to sync dataset ${datasetId}:`, error);
+              console.error(`[DatasetCache] Sync failed for ${datasetId}:`, error.message || error);
             })
         );
       }
     }
 
     await Promise.allSettled(syncPromises);
-    console.log('[DatasetCache] Sync complete');
+
+    if (syncedCount > 0 && LOG_CONFIG.DATASET_CACHE.logSync) {
+      console.log(`[DatasetCache] Synced ${syncedCount} datasets to Sheets`);
+    }
   }
 
   // Get dataset from cache
@@ -388,9 +390,9 @@ class DatasetCache {
     this.cache.set(dataset.id, dataset);
     if (markDirty) {
       this.dirtyDatasets.add(dataset.id);
-      console.log(`[DatasetCache] Dataset ${dataset.id} updated in cache and marked dirty`);
-    } else {
-      console.log(`[DatasetCache] Dataset ${dataset.id} added to cache (already in sheets)`);
+      if (LOG_CONFIG.DATASET_CACHE.logUpdates) {
+        console.log(`[DatasetCache] Dataset ${dataset.id} updated and marked dirty`);
+      }
     }
   }
 
@@ -1078,25 +1080,23 @@ class AddressDatasetService implements AddressSheetsService {
 
     // Step 2: Update cache and mark as dirty (will sync to sheets in background)
     datasetCache.set(dataset);
-    console.log(`[updateResidentInDataset] Cache updated for dataset ${datasetId} (will sync to sheets in next batch)`);
   }
 
   async bulkUpdateResidentsInDataset(datasetId: string, editableResidents: EditableResident[]): Promise<void> {
     // Get dataset from cache
     const dataset = datasetCache.get(datasetId);
     if (!dataset) {
-      console.error(`[bulkUpdateResidentsInDataset] ERROR: Dataset ${datasetId} not found in cache!`);
-      console.error(`[bulkUpdateResidentsInDataset] Cache has ${datasetCache.getAll().length} datasets`);
+      console.error(`[bulkUpdateResidentsInDataset] Dataset ${datasetId} not found in cache`);
       throw new Error(`Dataset ${datasetId} not found in cache`);
     }
 
-    console.log(`[bulkUpdateResidentsInDataset] BEFORE update:`, {
-      datasetId,
-      currentResidentsCount: dataset.editableResidents.length,
-      newResidentsCount: editableResidents.length,
-      currentResidents: JSON.stringify(dataset.editableResidents),
-      newResidents: JSON.stringify(editableResidents)
-    });
+    if (LOG_CONFIG.BULK_UPDATES.logBeforeAfter) {
+      console.log(`[bulkUpdateResidentsInDataset] BEFORE:`, {
+        datasetId,
+        currentCount: dataset.editableResidents.length,
+        newCount: editableResidents.length
+      });
+    }
 
     // Update residents in cache
     dataset.editableResidents = editableResidents;
@@ -1117,24 +1117,16 @@ class AddressDatasetService implements AddressSheetsService {
         editableResidents: this.serializeResidents(dataset.editableResidents),
         fixedCustomers: this.serializeResidents(dataset.fixedCustomers)
       });
-      console.log(`[bulkUpdateResidentsInDataset] ✅ Updated in SQLite: ${datasetId}`);
     } catch (error) {
-      console.error(`[bulkUpdateResidentsInDataset] ❌ Failed to update SQLite:`, error);
+      console.error(`[bulkUpdateResidentsInDataset] SQLite error:`, error);
     }
 
     // Step 2: Update cache and mark as dirty (will sync to sheets in background)
     datasetCache.set(dataset);
 
-    // Verify the update
-    const verifyDataset = datasetCache.get(datasetId);
-    console.log(`[bulkUpdateResidentsInDataset] AFTER update - Verification:`, {
-      datasetId,
-      residentsCount: verifyDataset?.editableResidents.length,
-      residents: JSON.stringify(verifyDataset?.editableResidents),
-      markedDirty: true
-    });
-
-    console.log(`[bulkUpdateResidentsInDataset] Updated ${editableResidents.length} residents in cache for dataset ${datasetId} (will sync to sheets in next batch)`);
+    if (LOG_CONFIG.BULK_UPDATES.logSuccess) {
+      console.log(`[bulkUpdate] ${datasetId}: ${editableResidents.length} residents updated`);
+    }
   }
 
   async getTodaysDatasetByAddress(normalizedAddress: string, houseNumber?: string): Promise<AddressDataset | null> {
