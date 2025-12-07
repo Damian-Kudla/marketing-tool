@@ -1,1 +1,23 @@
-﻿{ "version": "2.8.3", "buildTime": "2025-12-07T01:12:36.376Z", "buildNumber": "build-1765069956377", "features": [ "Fix: Overlay-Persistenz - Textfelder bleiben nach Bearbeitung erhalten", "Fix: Overlay-Duplikate - Keine doppelten Markierungen beim Editieren", "Fix: Foto-Löschung - Korrekte Datenbereinigung beim Entfernen von Bildern", "Fix: Fusionierung - Drag & Drop funktioniert auch nach Namensänderungen" ], "technicalDetails": [ "Scanner: Robust overlay merging logic", "Scanner: Improved originalName tracking for fusion", "Scanner: Fixed resident cleanup on photo delete", "UI: Prevent duplicate overlays (orange/red conflict)" ], "previousFeatures": [ "Feature: Batch-Upload Support für Tracking App (v1.4+)", "Fix: FollowMee Sync - Korrektur von Daten-Duplikaten", "Fix: Admin Dashboard - Filterung ungültiger GPS-Daten", "Fix: Route Replay - Zeiteingabe-Sichtbarkeit verbessert" ] }
+{
+  "version": "2.8.4",
+  "buildTime": "2025-12-07T01:38:21.877Z",
+  "buildNumber": "build-1765071501877",
+  "features": [
+    "Fix: iOS Context Menu - Deaktivierung des System-Menüs bei Long-Press auf Overlays",
+    "Fix: iOS Usability - Verbesserte Touch-Interaktion auf mobilen Geräten"
+  ],
+  "technicalDetails": [
+    "UI: Added WebkitTouchCallout: none and userSelect: none",
+    "UI: Added onContextMenu prevention for overlays"
+  ],
+  "previousFeatures": [
+    "Fix: Overlay-Persistenz - Textfelder bleiben nach Bearbeitung erhalten",
+    "Fix: Overlay-Duplikate - Keine doppelten Markierungen beim Editieren",
+    "Fix: Foto-Löschung - Korrekte Datenbereinigung beim Entfernen von Bildern",
+    "Fix: Fusionierung - Drag & Drop funktioniert auch nach Namensänderungen",
+    "Feature: Batch-Upload Support für Tracking App (v1.4+)",
+    "Fix: FollowMee Sync - Korrektur von Daten-Duplikaten",
+    "Fix: Admin Dashboard - Filterung ungültiger GPS-Daten",
+    "Fix: Route Replay - Zeiteingabe-Sichtbarkeit verbessert"
+  ]
+}
