@@ -211,9 +211,9 @@ export default function ResultsDisplay({
   // State for alphabetical sorting
   const [sortAlphabetically, setSortAlphabetically] = useState<boolean>(false);
   
-  // Accordion state: automatically expand all when searching
-  const accordionValue = searchQuery.trim() 
-    ? ["allCustomers", "duplicates", "prospects", "existing", "addressProspects"] 
+  // Accordion state: automatically expand all when searching (except allCustomers which stays collapsed)
+  const accordionValue = searchQuery.trim()
+    ? ["duplicates", "prospects", "existing", "addressProspects"]
     : undefined; // undefined = use internal accordion state (user can collapse/expand)
   
   // State for editing
@@ -1593,9 +1593,9 @@ export default function ResultsDisplay({
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
-          <Accordion 
-            type="multiple" 
-            defaultValue={["historicalProspects", "allCustomers", "duplicates", "prospects", "existing", "addressProspects"]}
+          <Accordion
+            type="multiple"
+            defaultValue={["historicalProspects", "duplicates", "prospects", "existing", "addressProspects"]}
             value={accordionValue}
           >
             {/* Show historical prospects from last visit (Neukunden von letztem Besuch) */}
