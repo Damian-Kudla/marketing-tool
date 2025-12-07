@@ -3,6 +3,19 @@ import { useTranslation } from 'react-i18next';
 import GPSAddressForm, { type Address } from '@/components/GPSAddressForm';
 import PhotoCapture from '@/components/PhotoCapture';
 import ResultsDisplay, { type OCRResult } from '@/components/ResultsDisplay';
+
+// Interface for multi-photo support
+interface PhotoData {
+  id: string;
+  imageSrc: string;
+  fullVisionResponse: any;
+  residentNames: string[];
+  existingCustomers: any[];
+  newProspects: string[];
+  allCustomersAtAddress?: any[];
+}
+
+const MAX_PHOTOS = 10; // Limit to prevent misuse
 import { UserButton } from '@/components/UserButton';
 import { expandHouseNumberRange } from '@/utils/addressUtils';
 import { ClickableAddressHeader } from '@/components/ClickableAddressHeader';
@@ -11,7 +24,8 @@ import { AddressOverview } from '@/components/AddressOverview';
 import { MaximizeButton } from '@/components/MaximizeButton';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { RotateCcw, ArrowRight, ArrowLeft, X, Info, Navigation } from 'lucide-react';
+import { RotateCcw, ArrowRight, ArrowLeft, X, Info, Navigation, Plus, Camera, Trash2, Loader2 } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ocrAPI, datasetAPI } from '@/services/api';
 import { useFilteredToast } from '@/hooks/use-filtered-toast';
 import { useViewMode } from '@/contexts/ViewModeContext';
@@ -58,6 +72,10 @@ export default function ScannerPage() {
   const [normalizedAddress, setNormalizedAddress] = useState<string | null>(null);
   const [ocrResult, setOcrResult] = useState<OCRResult | null>(null);
   const [photoImageSrc, setPhotoImageSrc] = useState<string | null>(null);
+
+  // Multi-photo support
+  const [photos, setPhotos] = useState<PhotoData[]>([]);
+  const [isAddingPhoto, setIsAddingPhoto] = useState(false); // Show PhotoCapture for additional photo
   const [canEdit, setCanEdit] = useState(true);
   const [currentDatasetId, setCurrentDatasetId] = useState<string | null>(null);
   const [datasetCreatedAt, setDatasetCreatedAt] = useState<string | null>(null);
@@ -106,6 +124,9 @@ export default function ScannerPage() {
   }, [currentDatasetId, toast, t]);
 
   // Memory Optimization: Listen for dataset creation and cleanup photo state
+  // REMOVED: This caused the result lists and photo to disappear after dataset creation
+  // The user wants to keep seeing the results/photo after creating the dataset
+  /*
   useEffect(() => {
     const handleDatasetCreatedCleanup = () => {
       console.log('[Scanner] Dataset created - performing memory cleanup');
@@ -119,6 +140,7 @@ export default function ScannerPage() {
       window.removeEventListener('dataset-created-cleanup', handleDatasetCreatedCleanup);
     };
   }, []);
+  */
 
   // Auto-reset when address changes to a different normalized address
   useEffect(() => {
@@ -392,14 +414,20 @@ export default function ScannerPage() {
       if (dataset.normalizedAddress) {
         const { street, number, city, postal } = dataset.normalizedAddress;
         console.log('[handleRequestDatasetCreation] Updating address with normalized values:', dataset.normalizedAddress);
-        setAddress({
+        
+        const newAddress = {
           street,
           number,
           city,
           postal,
           onlyEven: address?.onlyEven,
           onlyOdd: address?.onlyOdd
-        });
+        };
+        
+        setAddress(newAddress);
+        // FIX: Also update normalizedAddress to prevent auto-reset in useEffect
+        // This ensures that when the effect runs, normalizedAddress matches the new address
+        setNormalizedAddress(createNormalizedAddressString(newAddress));
       }
       
       // Update state with new dataset ID
@@ -470,20 +498,130 @@ export default function ScannerPage() {
 
   const handlePhotoProcessed = (result: any, imageSrc?: string) => {
     console.log('OCR result:', result);
-    
+
     if (result.residentNames !== undefined) {
-      setOcrResult({
-        residentNames: result.residentNames,
+      // Create new photo data
+      const newPhoto: PhotoData = {
+        id: `photo-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        imageSrc: imageSrc || '',
+        fullVisionResponse: result.fullVisionResponse,
+        residentNames: result.residentNames || [],
         existingCustomers: result.existingCustomers || [],
         newProspects: result.newProspects || [],
         allCustomersAtAddress: result.allCustomersAtAddress || [],
-        fullVisionResponse: result.fullVisionResponse,
-        relatedHouseNumbers: result.relatedHouseNumbers || [],
+      };
+
+      // Add photo to array
+      setPhotos(prevPhotos => {
+        const updatedPhotos = [...prevPhotos, newPhoto];
+        console.log('[handlePhotoProcessed] Updated photos array:', updatedPhotos.length);
+        return updatedPhotos;
       });
-      if (imageSrc) {
+
+      // Combine OCR results from all photos (including the new one)
+      setOcrResult(prevResult => {
+        // Combine with previous results if they exist
+        const combinedResidentNames = [
+          ...(prevResult?.residentNames || []),
+          ...(result.residentNames || [])
+        ];
+        const combinedExistingCustomers = [
+          ...(prevResult?.existingCustomers || []),
+          ...(result.existingCustomers || [])
+        ];
+        const combinedNewProspects = [
+          ...(prevResult?.newProspects || []),
+          ...(result.newProspects || [])
+        ];
+        // allCustomersAtAddress should stay the same (comes from address search)
+        const allCustomersAtAddress = result.allCustomersAtAddress || prevResult?.allCustomersAtAddress || [];
+
+        // Remove duplicates by name (case-insensitive)
+        const uniqueResidentNames = [...new Set(combinedResidentNames.map(n => n.toLowerCase()))]
+          .map(lower => combinedResidentNames.find(n => n.toLowerCase() === lower)!);
+        const uniqueNewProspects = [...new Set(combinedNewProspects.map(n => n.toLowerCase()))]
+          .map(lower => combinedNewProspects.find(n => n.toLowerCase() === lower)!);
+
+        // For existing customers, deduplicate by name
+        const seenExisting = new Set<string>();
+        const uniqueExistingCustomers = combinedExistingCustomers.filter(c => {
+          const key = c.name.toLowerCase();
+          if (seenExisting.has(key)) return false;
+          seenExisting.add(key);
+          return true;
+        });
+
+        return {
+          residentNames: uniqueResidentNames,
+          existingCustomers: uniqueExistingCustomers,
+          newProspects: uniqueNewProspects,
+          allCustomersAtAddress,
+          fullVisionResponse: result.fullVisionResponse, // Latest photo's response
+          relatedHouseNumbers: result.relatedHouseNumbers || prevResult?.relatedHouseNumbers || [],
+        };
+      });
+
+      // Keep first photo's imageSrc for backward compatibility
+      if (imageSrc && !photoImageSrc) {
         setPhotoImageSrc(imageSrc);
       }
+
+      // Reset the "adding photo" state
+      setIsAddingPhoto(false);
       setShowDatasets(true); // Show datasets after photo upload
+      
+      // Force re-render of PhotoCapture component by updating key
+      setResetKey(prev => prev + 1);
+
+      // FIX: If we have an active dataset or existing editable residents, merge new findings immediately
+      // This ensures that subsequent photos add to the list even if a dataset is already created
+      if (currentDatasetId || editableResidents.length > 0) {
+        console.log('[handlePhotoProcessed] Merging new photo results into existing editable residents');
+        
+        const newResidents: any[] = [];
+        
+        // Helper to check existence (case-insensitive)
+        const exists = (name: string) => editableResidents.some(r => r.name.toLowerCase() === name.toLowerCase());
+
+        // Add new prospects
+        result.newProspects?.forEach((name: string) => {
+          if (!exists(name)) {
+            newResidents.push({
+              name,
+              category: 'potential_new_customer',
+              isFixed: false,
+              originalName: name, // Store original name
+              originalCategory: 'potential_new_customer'
+            });
+          }
+        });
+
+        // Add new existing customers
+        result.existingCustomers?.forEach((customer: any) => {
+           if (!exists(customer.name)) {
+             newResidents.push({
+               name: customer.name,
+               category: 'existing_customer',
+               isFixed: false,
+               originalName: customer.name, // Store original name
+               originalCategory: 'existing_customer'
+             });
+           }
+        });
+
+        if (newResidents.length > 0) {
+           console.log(`[handlePhotoProcessed] Adding ${newResidents.length} new residents to list`);
+           const updatedResidents = [...editableResidents, ...newResidents];
+           setEditableResidents(updatedResidents);
+           
+           // If dataset exists, save to backend immediately
+           if (currentDatasetId) {
+              console.log('[handlePhotoProcessed] Saving merged residents to backend');
+              datasetAPI.bulkUpdateResidents(currentDatasetId, sanitizeResidents(updatedResidents))
+                .catch(err => console.error('[handlePhotoProcessed] Failed to save merged residents:', err));
+           }
+        }
+      }
     }
   };
 
@@ -527,9 +665,9 @@ export default function ScannerPage() {
     }
   }, [address, toast]);
 
-  const handleAddressSearch = useCallback((customers: any[]) => {
-    console.log('Address search result:', customers);
-    
+  const handleAddressSearch = useCallback((customers: any[], historicalProspects?: any[]) => {
+    console.log('Address search result:', customers, 'Historical prospects:', historicalProspects?.length || 0);
+
     // Show results as existing customers
     // Also set allCustomersAtAddress to show the "All Customers at Address" section
     setOcrResult({
@@ -537,6 +675,7 @@ export default function ScannerPage() {
       existingCustomers: customers,
       newProspects: [],
       allCustomersAtAddress: customers, // Include all customers to show in dedicated section
+      historicalProspects: historicalProspects || [], // Neukunden vom letzten Besuch
     });
     setShowDatasets(true); // Show datasets after address search
     setUseNormalizedDatasetSearch(true); // Use normalized search (with API call) for "Adresse durchsuchen"
@@ -565,10 +704,102 @@ export default function ScannerPage() {
     setAddress(correctedAddress);
   }, [address, toast]);
 
+  // Helper function to remove a photo and recalculate combined results
+  const handleRemovePhoto = useCallback(async (photoId: string, photoIndex: number) => {
+    const remainingPhotos = photos.filter(p => p.id !== photoId);
+
+    // Update photos state
+    setPhotos(remainingPhotos);
+
+    if (remainingPhotos.length === 0) {
+      // All photos removed - reset related state
+      setOcrResult(null);
+      setPhotoImageSrc(null);
+      setEditableResidents([]);
+      
+      // Also clear dataset residents if dataset exists
+      if (currentDatasetId) {
+        try {
+          await datasetAPI.bulkUpdateResidents(currentDatasetId, []);
+        } catch (error) {
+          console.error('Error clearing dataset residents:', error);
+        }
+      }
+
+      toast({
+        title: 'Foto entfernt',
+        description: 'Alle Fotos wurden entfernt',
+      });
+    } else {
+      // Recalculate ocrResult from remaining photos
+      const combinedResidentNames = remainingPhotos.flatMap(p => p.residentNames);
+      const combinedExistingCustomers = remainingPhotos.flatMap(p => p.existingCustomers);
+      const combinedNewProspects = remainingPhotos.flatMap(p => p.newProspects);
+
+      // Deduplicate
+      const uniqueResidentNames = [...new Set(combinedResidentNames.map(n => n.toLowerCase()))]
+        .map(lower => combinedResidentNames.find(n => n.toLowerCase() === lower)!);
+      const uniqueNewProspects = [...new Set(combinedNewProspects.map(n => n.toLowerCase()))]
+        .map(lower => combinedNewProspects.find(n => n.toLowerCase() === lower)!);
+      const seenExisting = new Set<string>();
+      const uniqueExistingCustomers = combinedExistingCustomers.filter(c => {
+        const key = c.name.toLowerCase();
+        if (seenExisting.has(key)) return false;
+        seenExisting.add(key);
+        return true;
+      });
+
+      setOcrResult(prev => prev ? {
+        ...prev,
+        residentNames: uniqueResidentNames,
+        existingCustomers: uniqueExistingCustomers,
+        newProspects: uniqueNewProspects,
+        fullVisionResponse: remainingPhotos[remainingPhotos.length - 1]?.fullVisionResponse,
+      } : null);
+
+      // Update photoImageSrc to first remaining photo
+      setPhotoImageSrc(remainingPhotos[0]?.imageSrc || null);
+
+      // Filter editableResidents to remove those that were only in the deleted photo
+      const validNamesSet = new Set(combinedResidentNames.map(n => n.toLowerCase()));
+      
+      const filteredResidents = editableResidents.filter(resident => {
+        // Keep manually added residents (no originalName)
+        if (!resident.originalName) return true;
+        
+        // Keep if name matches any remaining resident
+        if (validNamesSet.has(resident.name.toLowerCase())) return true;
+        
+        // Keep if originalName matches any remaining resident
+        if (validNamesSet.has(resident.originalName.toLowerCase())) return true;
+        
+        return false;
+      });
+      
+      setEditableResidents(filteredResidents);
+      
+      // Sync with backend if dataset exists
+      if (currentDatasetId) {
+         try {
+            await datasetAPI.bulkUpdateResidents(currentDatasetId, filteredResidents);
+         } catch (error) {
+            console.error('Error syncing filtered residents:', error);
+         }
+      }
+
+      toast({
+        title: 'Foto entfernt',
+        description: `Foto ${photoIndex + 1} wurde entfernt`,
+      });
+    }
+  }, [photos, toast, editableResidents, currentDatasetId]);
+
   const handleReset = () => {
     // Reset all state to initial values
     setOcrResult(null);
     setPhotoImageSrc(null);
+    setPhotos([]); // Clear all photos
+    setIsAddingPhoto(false); // Reset adding photo state
     setAddress(null); // This triggers GPSAddressForm to clear via initialAddress prop
     setNormalizedAddress(null);
     setCanEdit(true);
@@ -580,7 +811,7 @@ export default function ScannerPage() {
     setShowCorrectionEffect(false); // Reset correction effect
     setShowCallBackModeBanner(false);
     setResetKey(prev => prev + 1); // Increment key to force PhotoCapture remount
-    
+
     // Log for debugging
     console.log('[Reset] All state cleared, page reset to initial state');
   };
@@ -601,11 +832,31 @@ export default function ScannerPage() {
     }
   };
 
-  const handleNamesUpdated = async (updatedNames: string[]) => {
+  const handleNamesUpdated = async (updatedNames: string[], photoId?: string) => {
     if (!address) return;
 
     try {
-      const result = await ocrAPI.correctOCR(updatedNames, address);
+      // 1. Update the specific photo in the photos array if photoId is provided
+      let currentPhotos = photos;
+      if (photoId) {
+        currentPhotos = photos.map(p => 
+          p.id === photoId 
+            ? { ...p, residentNames: updatedNames }
+            : p
+        );
+        setPhotos(currentPhotos);
+      }
+
+      // 2. Determine the full list of names to send to OCR API
+      let namesToProcess = updatedNames;
+      
+      // If we have multiple photos and this update came from one of them,
+      // we need to combine names from ALL photos to preserve data from other photos
+      if (photoId && currentPhotos.length > 0) {
+         namesToProcess = currentPhotos.flatMap(p => p.residentNames);
+      }
+
+      const result = await ocrAPI.correctOCR(namesToProcess, address);
         setOcrResult({
           residentNames: result.residentNames,
           existingCustomers: result.existingCustomers || [],
@@ -631,6 +882,32 @@ export default function ScannerPage() {
   if (callBackMode && address && hasResidents) {
     return (
       <div className="min-h-screen bg-background">
+        {/* Dataset Creation Loading Dialog */}
+        {isCreatingDataset && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm">
+            <Card className="w-full max-w-md mx-4 animate-in fade-in zoom-in-95 duration-200">
+              <CardHeader className="relative">
+                <CardTitle className="flex items-center gap-3">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  {t('dataset.creating', 'Datensatz wird erstellt...')}
+                </CardTitle>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="absolute right-4 top-4 text-destructive hover:bg-destructive/10"
+                  onClick={() => setIsCreatingDataset(false)}
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  {t('dataset.creatingDesc', 'Bitte warten, der Datensatz wird angelegt...')}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
         <header className="sticky top-0 z-50 bg-background border-b safe-area-top">
           <div className="container mx-auto px-4 py-3 overflow-x-auto header-scroll-container">
             <div className="flex items-center justify-between gap-4 min-w-max">
@@ -748,6 +1025,32 @@ export default function ScannerPage() {
   // Normal Mode
   return (
     <div className="min-h-screen bg-background">
+      {/* Dataset Creation Loading Dialog */}
+      {isCreatingDataset && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background/80 backdrop-blur-sm">
+          <Card className="w-full max-w-md mx-4 animate-in fade-in zoom-in-95 duration-200">
+            <CardHeader className="relative">
+              <CardTitle className="flex items-center gap-3">
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                {t('dataset.creating', 'Datensatz wird erstellt...')}
+              </CardTitle>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="absolute right-4 top-4 text-destructive hover:bg-destructive/10"
+                onClick={() => setIsCreatingDataset(false)}
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                {t('dataset.creatingDesc', 'Bitte warten, der Datensatz wird angelegt...')}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
       <header className="sticky top-0 z-50 bg-background border-b safe-area-top">
         <div className="container mx-auto px-4 py-3 overflow-x-auto header-scroll-container">
           <div className="flex items-center justify-between gap-4 min-w-max">
@@ -817,34 +1120,101 @@ export default function ScannerPage() {
               />
             )}
             
-            {canEdit && (
+            {/* PhotoCapture - show only when no photos yet (first photo) */}
+            {canEdit && photos.length === 0 && (
               <div className="relative">
                 <MaximizeButton panel="photo" />
                 <PhotoCapture key={resetKey} onPhotoProcessed={handlePhotoProcessed} address={address} />
               </div>
             )}
-            
-            {/* Image with Overlays in List view - with maximize button */}
-            {photoImageSrc && ocrResult?.fullVisionResponse && (
-              <div className="relative">
-                <MaximizeButton panel="overlays" />
-                <ImageWithOverlays
-                  imageSrc={photoImageSrc}
-                  fullVisionResponse={ocrResult.fullVisionResponse}
-                  residentNames={ocrResult.residentNames}
-                  existingCustomers={ocrResult.existingCustomers}
-                  newProspects={ocrResult.newProspects}
-                  allCustomersAtAddress={ocrResult.allCustomersAtAddress}
-                  address={address}
-                  onNamesUpdated={handleNamesUpdated}
-                  editableResidents={editableResidents}
-                  onResidentsUpdated={setEditableResidents}
-                  currentDatasetId={currentDatasetId}
-                  onRequestDatasetCreation={handleRequestDatasetCreation}
-                />
+
+            {/* Multi-Photo Display: Show all uploaded photos with their overlays */}
+            {photos.length > 0 && (
+              <div className="space-y-4">
+                {photos.map((photo, index) => (
+                  <div key={photo.id} className="relative">
+                    {/* Photo header with number and delete button */}
+                    <div className="flex items-center justify-between mb-2 px-1">
+                      <span className="text-sm font-medium text-muted-foreground">
+                        Foto {index + 1} von {photos.length}
+                      </span>
+                      {canEdit && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRemovePhoto(photo.id, index)}
+                          className="h-7 px-2 text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Entfernen
+                        </Button>
+                      )}
+                    </div>
+                    {/* ImageWithOverlays for this specific photo */}
+                    {photo.imageSrc && photo.fullVisionResponse && (
+                      <ImageWithOverlays
+                        imageSrc={photo.imageSrc}
+                        fullVisionResponse={photo.fullVisionResponse}
+                        residentNames={photo.residentNames}
+                        existingCustomers={photo.existingCustomers}
+                        newProspects={photo.newProspects}
+                        allCustomersAtAddress={photo.allCustomersAtAddress}
+                        address={address}
+                        onNamesUpdated={(names) => handleNamesUpdated(names, photo.id)}
+                        editableResidents={editableResidents}
+                        onResidentsUpdated={setEditableResidents}
+                        currentDatasetId={currentDatasetId}
+                        onRequestDatasetCreation={handleRequestDatasetCreation}
+                      />
+                    )}
+                  </div>
+                ))}
+
+                {/* Add Another Photo Section */}
+                {canEdit && photos.length < MAX_PHOTOS && (
+                  <>
+                    {isAddingPhoto ? (
+                      // Inline PhotoCapture when adding another photo
+                      <div className="relative border-2 border-dashed border-muted-foreground/25 rounded-lg p-2">
+                        <PhotoCapture
+                          key={`add-photo-${resetKey}`}
+                          onPhotoProcessed={handlePhotoProcessed}
+                          address={address}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setIsAddingPhoto(false)}
+                          className="w-full mt-2 text-muted-foreground"
+                        >
+                          <X className="h-4 w-4 mr-1" />
+                          Abbrechen
+                        </Button>
+                      </div>
+                    ) : (
+                      // Button to add another photo
+                      <Button
+                        variant="outline"
+                        size="lg"
+                        onClick={() => setIsAddingPhoto(true)}
+                        className="w-full min-h-12 gap-2 border-dashed"
+                      >
+                        <Plus className="h-5 w-5" />
+                        Weiteres Foto hinzufügen
+                      </Button>
+                    )}
+                  </>
+                )}
+
+                {/* Info when max photos reached */}
+                {photos.length >= MAX_PHOTOS && (
+                  <p className="text-sm text-muted-foreground text-center py-2">
+                    Maximale Anzahl an Fotos erreicht ({MAX_PHOTOS})
+                  </p>
+                )}
               </div>
             )}
-            
+
             {/* Related House Numbers Hint */}
             {ocrResult?.relatedHouseNumbers && ocrResult.relatedHouseNumbers.length > 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
@@ -904,35 +1274,102 @@ export default function ScannerPage() {
                 />
               )}
               
-              {canEdit && (
+              {/* PhotoCapture - show only when no photos yet (first photo) */}
+              {canEdit && photos.length === 0 && (
                 <div className="relative">
                   <MaximizeButton panel="photo" />
                   <PhotoCapture onPhotoProcessed={handlePhotoProcessed} address={address} />
                 </div>
               )}
 
-              {/* ImageWithOverlays at bottom of left column */}
-              {photoImageSrc && ocrResult?.fullVisionResponse && (
-                <div className="relative">
-                  <MaximizeButton panel="overlays" />
-                  <ImageWithOverlays
-                    imageSrc={photoImageSrc}
-                    fullVisionResponse={ocrResult.fullVisionResponse}
-                    residentNames={ocrResult.residentNames}
-                    existingCustomers={ocrResult.existingCustomers}
-                    newProspects={ocrResult.newProspects}
-                    allCustomersAtAddress={ocrResult.allCustomersAtAddress}
-                    address={address}
-                    onNamesUpdated={handleNamesUpdated}
-                    editableResidents={editableResidents}
-                    onResidentsUpdated={setEditableResidents}
-                    currentDatasetId={currentDatasetId}
-                    onRequestDatasetCreation={handleRequestDatasetCreation}
-                  />
+              {/* Multi-Photo Display: Show all uploaded photos with their overlays */}
+              {photos.length > 0 && (
+                <div className="space-y-4">
+                  {photos.map((photo, index) => (
+                    <div key={photo.id} className="relative">
+                      {/* Photo header with number and delete button */}
+                      <div className="flex items-center justify-between mb-2 px-1">
+                        <span className="text-sm font-medium text-muted-foreground">
+                          Foto {index + 1} von {photos.length}
+                        </span>
+                        {canEdit && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemovePhoto(photo.id, index)}
+                            className="h-7 px-2 text-muted-foreground hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Entfernen
+                          </Button>
+                        )}
+                      </div>
+                      {/* ImageWithOverlays for this specific photo */}
+                      {photo.imageSrc && photo.fullVisionResponse && (
+                        <ImageWithOverlays
+                          imageSrc={photo.imageSrc}
+                          fullVisionResponse={photo.fullVisionResponse}
+                          residentNames={photo.residentNames}
+                          existingCustomers={photo.existingCustomers}
+                          newProspects={photo.newProspects}
+                          allCustomersAtAddress={photo.allCustomersAtAddress}
+                          address={address}
+                          onNamesUpdated={(names) => handleNamesUpdated(names, photo.id)}
+                          editableResidents={editableResidents}
+                          onResidentsUpdated={setEditableResidents}
+                          currentDatasetId={currentDatasetId}
+                          onRequestDatasetCreation={handleRequestDatasetCreation}
+                        />
+                      )}
+                    </div>
+                  ))}
+
+                  {/* Add Another Photo Section */}
+                  {canEdit && photos.length < MAX_PHOTOS && (
+                    <>
+                      {isAddingPhoto ? (
+                        // Inline PhotoCapture when adding another photo
+                        <div className="relative border-2 border-dashed border-muted-foreground/25 rounded-lg p-2">
+                          <PhotoCapture
+                            key={`add-photo-grid-${resetKey}`}
+                            onPhotoProcessed={handlePhotoProcessed}
+                            address={address}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setIsAddingPhoto(false)}
+                            className="w-full mt-2 text-muted-foreground"
+                          >
+                            <X className="h-4 w-4 mr-1" />
+                            Abbrechen
+                          </Button>
+                        </div>
+                      ) : (
+                        // Button to add another photo
+                        <Button
+                          variant="outline"
+                          size="lg"
+                          onClick={() => setIsAddingPhoto(true)}
+                          className="w-full min-h-12 gap-2 border-dashed"
+                        >
+                          <Plus className="h-5 w-5" />
+                          Weiteres Foto hinzufügen
+                        </Button>
+                      )}
+                    </>
+                  )}
+
+                  {/* Info when max photos reached */}
+                  {photos.length >= MAX_PHOTOS && (
+                    <p className="text-sm text-muted-foreground text-center py-2">
+                      Maximale Anzahl an Fotos erreicht ({MAX_PHOTOS})
+                    </p>
+                  )}
                 </div>
               )}
             </div>
-            
+
             {/* Related House Numbers Hint */}
             {ocrResult?.relatedHouseNumbers && ocrResult.relatedHouseNumbers.length > 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
@@ -947,7 +1384,7 @@ export default function ScannerPage() {
                 </p>
               </div>
             )}
-            
+
             {/* Right column: Results lists only (no ImageWithOverlays) */}
             <div className="relative overflow-y-auto">
               <MaximizeButton panel="results" />

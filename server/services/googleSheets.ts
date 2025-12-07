@@ -145,48 +145,19 @@ class DatasetCache {
       // Extract postal code (5 digits in Germany)
       const postalMatch = normalizedAddr.match(/\b\d{5}\b/);
       const postal = postalMatch ? postalMatch[0] : '';
-      
-      // NEW: Find street name by looking for common patterns
-      // Street names usually contain: "straße", "str", "weg", "platz", etc.
-      // And they come BEFORE city/district names
-      
-      let streetName = '';
-      
-      // Split by comma to get parts
-      const parts = normalizedAddr.split(',').map(p => p.trim());
-      
-      // Look for the part that contains a street indicator
-      for (const part of parts) {
-        const lowerPart = part.toLowerCase();
-        // Check if this part contains a street name
-        if (
-          lowerPart.includes('straße') ||
-          lowerPart.includes('strasse') ||
-          lowerPart.includes('str') ||
-          lowerPart.includes('weg') ||
-          lowerPart.includes('platz') ||
-          lowerPart.includes('allee') ||
-          lowerPart.includes('gasse') ||
-          lowerPart.includes('ring') ||
-          lowerPart.includes('damm')
-        ) {
-          streetName = part;
-          break;
+
+      // IMPROVED: Take only the part BEFORE the postal code as the street
+      // This ensures city names (which come AFTER postal) are excluded
+      let streetPart = normalizedAddr;
+      if (postal) {
+        const postalIndex = normalizedAddr.indexOf(postal);
+        if (postalIndex > 0) {
+          streetPart = normalizedAddr.substring(0, postalIndex);
         }
       }
-      
-      // If no street indicator found, take the first part (before first comma or before postal)
-      if (!streetName) {
-        if (postal) {
-          const postalIndex = normalizedAddr.indexOf(postal);
-          streetName = postalIndex > 0 ? normalizedAddr.substring(0, postalIndex) : parts[0] || '';
-        } else {
-          streetName = parts[0] || '';
-        }
-      }
-      
+
       // Normalize street name: remove numbers, punctuation
-      let street = streetName
+      let street = streetPart
         .replace(/\d+[a-zA-Z]?(?:,?\s*\d+[a-zA-Z]?)*/g, '') // Remove house numbers
         .replace(/[,\.\/]/g, ' ') // Replace punctuation with spaces
         .replace(/straße/gi, 'str') // Normalize street names
@@ -194,7 +165,7 @@ class DatasetCache {
         .replace(/\s+/g, ' ') // Normalize spaces
         .trim()
         .toLowerCase();
-      
+
       return `${street}|${postal}`;
     };
 

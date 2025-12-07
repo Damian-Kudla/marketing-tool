@@ -278,7 +278,7 @@ export function ResidentEditPopup({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>
             {isEditing 
@@ -288,7 +288,7 @@ export function ResidentEditPopup({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        <div className="space-y-4 py-4 overflow-y-auto flex-1 px-1">
           <div className="space-y-2">
             <Label htmlFor="name">{t('resident.edit.name', 'Name')}</Label>
             <Input

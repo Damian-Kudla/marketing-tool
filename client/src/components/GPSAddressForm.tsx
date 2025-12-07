@@ -12,7 +12,7 @@ import { expandHouseNumberRange, validateHouseNumber } from '@/utils/addressUtil
 
 interface GPSAddressFormProps {
   onAddressDetected?: (address: Address) => void;
-  onAddressSearch?: (customers: any[]) => void;
+  onAddressSearch?: (customers: any[], historicalProspects?: any[]) => void;
   initialAddress?: Address | null;
   onResetDataset?: () => void; // Callback to reset dataset when filters change
   showCorrectionEffect?: boolean; // Trigger visual effect when address is corrected
@@ -337,19 +337,20 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
       if (address.city?.trim()) searchParams.city = address.city;
       
       const response = await addressAPI.searchAddress(searchParams);
-      
-      // Handle new response format with customers and relatedHouseNumbers
+
+      // Handle new response format with customers, historicalProspects, and relatedHouseNumbers
       const customers = response.customers || response || [];
       const relatedNumbers = response.relatedHouseNumbers || [];
-      
+      const historicalProspects = response.historicalProspects || [];
+
       // Remove duplicates based on customer ID (in case backend returns duplicates)
       const uniqueCustomers = Array.from(
         new Map(customers.map((c: any) => [c.id || c.name, c])).values()
       );
-      
+
       // Update related house numbers state (always show if available)
       setRelatedHouseNumbers(relatedNumbers);
-      
+
       if (uniqueCustomers.length === 0) {
         toast({
           title: t('address.searchSuccess'),
@@ -363,10 +364,10 @@ export default function GPSAddressForm({ onAddressDetected, onAddressSearch, ini
           category: 'system',
         });
       }
-      
+
       // Set the address in parent component so it shows in header
       onAddressDetected?.({ ...address, onlyEven, onlyOdd });
-      onAddressSearch?.(uniqueCustomers);
+      onAddressSearch?.(uniqueCustomers, historicalProspects);
     } catch (error) {
       console.error('Address search error:', error);
       toast({

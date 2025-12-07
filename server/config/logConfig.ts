@@ -88,9 +88,21 @@ export const LOG_CONFIG = {
   HISTORICAL_SCRAPER: {
     // Log per-user stats during initialization
     logPerUserStats: false, // Reduce startup noise
-    
+
     // Log final summary
     logSummary: true,
+  },
+
+  // Historical matching service
+  HISTORICAL_MATCHING: {
+    // Log dataset lookup operations
+    logDatasetLookup: false,
+
+    // Log detailed matching results
+    logDetailedResults: false,
+
+    // Log previous tenant detection
+    logPreviousTenant: false,
   },
 };
 

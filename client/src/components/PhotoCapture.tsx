@@ -2,7 +2,14 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Camera, Upload, Loader2, X, RotateCw, RotateCcw, Crop } from 'lucide-react';
+import { Camera, Upload, Loader2, X, RotateCw, RotateCcw, Crop, Info, ImageIcon } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { useFilteredToast } from '@/hooks/use-filtered-toast';
 import type { Address } from '@/components/GPSAddressForm';
 import { ocrAPI } from '@/services/api';
@@ -45,6 +52,9 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
   const [showCropDialog, setShowCropDialog] = useState(false);
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
 
+  // Quality toggle state - false = compressed (default), true = original quality
+  const [useOriginalQuality, setUseOriginalQuality] = useState(false);
+
   // Compression info state
   const [compressionInfo, setCompressionInfo] = useState<{
     originalSize: number;
@@ -72,11 +82,19 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
     setCompressionInfo(null);
 
     try {
-      // STEP 1: Compress the image first (if needed)
+      // STEP 1: Compress the image first (if needed and not using original quality)
       let fileToProcess = file;
       const originalSize = file.size;
 
-      if (needsCompression(file)) {
+      if (useOriginalQuality) {
+        // User wants original quality - skip compression
+        console.log('[PhotoCapture] Original quality selected, skipping compression');
+        setCompressionInfo({
+          originalSize,
+          compressedSize: originalSize,
+          wasCompressed: false
+        });
+      } else if (needsCompression(file)) {
         console.log('[PhotoCapture] Image needs compression, starting compression...');
         setCompressing(true);
 
@@ -459,11 +477,19 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
     setCompressing(false);
 
     try {
-      // STEP 1: Compress the cropped image if needed
+      // STEP 1: Compress the cropped image if needed and not using original quality
       let fileToProcess = croppedFile;
       const originalSize = croppedFile.size;
 
-      if (needsCompression(croppedFile)) {
+      if (useOriginalQuality) {
+        // User wants original quality - skip compression
+        console.log('[PhotoCapture] Original quality selected, skipping compression for cropped image');
+        setCompressionInfo({
+          originalSize,
+          compressedSize: originalSize,
+          wasCompressed: false
+        });
+      } else if (needsCompression(croppedFile)) {
         console.log('[PhotoCapture] Cropped image needs compression, starting compression...');
         setCompressing(true);
 
@@ -662,6 +688,19 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
               </div>
             )}
 
+            {/* Original quality info display */}
+            {compressionInfo && !compressionInfo.wasCompressed && useOriginalQuality && compressionInfo.originalSize > 500 * 1024 && (
+              <div className="flex items-center gap-2 p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-sm">
+                <ImageIcon className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <span className="text-amber-700 dark:text-amber-300">
+                  Originalqualität: {formatFileSize(compressionInfo.originalSize)}
+                  <span className="text-amber-600 dark:text-amber-400 ml-1">
+                    (Upload kann länger dauern)
+                  </span>
+                </span>
+              </div>
+            )}
+
             {/* Orientation info display */}
             {(orientationInfo?.orientationInfo.needsCorrection || manualRotation !== 0) && (
               <div className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-900/20 rounded-lg text-sm">
@@ -688,6 +727,120 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
                 </span>
               </div>
             )}
+
+            {/* Quality Toggle in Preview - allows changing before upload */}
+            <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                <Label htmlFor="quality-toggle-preview" className="text-sm font-medium cursor-pointer">
+                  {t('photo.compressedQuality', 'Komprimiert')}
+                </Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full">
+                      <Info className="h-4 w-4 text-muted-foreground" />
+                      <span className="sr-only">Info zur Bildqualität</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80" side="top">
+                    <div className="space-y-3">
+                      <h4 className="font-semibold text-sm">Bildqualität</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex gap-2">
+                          <span className="text-green-600 font-medium">Komprimiert:</span>
+                          <span className="text-muted-foreground">Schnellerer Upload, etwas Qualitätsverlust</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <span className="text-blue-600 font-medium">Original:</span>
+                          <span className="text-muted-foreground">Beste Qualität, längerer Upload</span>
+                        </div>
+                      </div>
+                      <div className="pt-2 border-t">
+                        <p className="text-xs text-muted-foreground">
+                          <strong>Empfehlung:</strong> In der Regel reicht das komprimierte Bild.
+                          Bei Klingelschildern mit vielen Namen oder wenn aus größerer Entfernung fotografiert wurde,
+                          wird Originalqualität empfohlen, um alle Namen bestmöglich zu erkennen.
+                        </p>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <Switch
+                id="quality-toggle-preview"
+                checked={!useOriginalQuality}
+                onCheckedChange={async (checked) => {
+                  setUseOriginalQuality(!checked);
+                  // Re-process image with new quality setting if we have an original file
+                  if (selectedFile && !processing && !correcting) {
+                    setCorrecting(true);
+                    setCompressing(false);
+                    setCompressionInfo(null);
+                    try {
+                      let fileToProcess = selectedFile;
+                      const originalSize = selectedFile.size;
+
+                      if (checked) {
+                        // Switch to original quality - skip compression
+                        console.log('[PhotoCapture] Switching to original quality');
+                        setCompressionInfo({
+                          originalSize,
+                          compressedSize: originalSize,
+                          wasCompressed: false
+                        });
+                      } else if (needsCompression(selectedFile)) {
+                        // Switch to compressed - compress the image
+                        console.log('[PhotoCapture] Switching to compressed quality');
+                        setCompressing(true);
+                        try {
+                          const compressionResult = await compressImage(selectedFile);
+                          fileToProcess = compressionResult.compressedFile;
+                          setCompressionInfo({
+                            originalSize: compressionResult.originalSize,
+                            compressedSize: compressionResult.compressedSize,
+                            wasCompressed: compressionResult.wasCompressed
+                          });
+                        } catch (compressionError) {
+                          console.error('[PhotoCapture] Compression failed:', compressionError);
+                        } finally {
+                          setCompressing(false);
+                        }
+                      } else {
+                        setCompressionInfo({
+                          originalSize,
+                          compressedSize: originalSize,
+                          wasCompressed: false
+                        });
+                      }
+
+                      // Re-apply orientation correction
+                      const correctionResult = await correctImageOrientationNative(fileToProcess);
+                      const newCorrectedFile = new File(
+                        [correctionResult.correctedBlob],
+                        selectedFile.name,
+                        { type: 'image/jpeg' }
+                      );
+                      setCorrectedFile(newCorrectedFile);
+                      setOrientationInfo(correctionResult);
+
+                      // Update preview
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setPreview(reader.result as string);
+                      };
+                      reader.readAsDataURL(newCorrectedFile);
+                    } catch (error) {
+                      console.error('[PhotoCapture] Error re-processing:', error);
+                    } finally {
+                      setCorrecting(false);
+                      setCompressing(false);
+                    }
+                  }
+                }}
+                disabled={processing || correcting || rotating || compressing}
+                data-testid="switch-quality-preview"
+              />
+            </div>
 
             <div className="space-y-2">
               <Button
@@ -785,6 +938,52 @@ export default function PhotoCapture({ onPhotoProcessed, address }: PhotoCapture
               <Upload className="h-5 w-5" />
               {t('photo.upload')}
             </Button>
+
+            {/* Quality Toggle with Info Popover */}
+            <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg mt-2">
+              <div className="flex items-center gap-2">
+                <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                <Label htmlFor="quality-toggle" className="text-sm font-medium cursor-pointer">
+                  {t('photo.compressedQuality', 'Komprimiert')}
+                </Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full">
+                      <Info className="h-4 w-4 text-muted-foreground" />
+                      <span className="sr-only">Info zur Bildqualität</span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80" side="top">
+                    <div className="space-y-3">
+                      <h4 className="font-semibold text-sm">Bildqualität</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex gap-2">
+                          <span className="text-green-600 font-medium">Komprimiert:</span>
+                          <span className="text-muted-foreground">Schnellerer Upload, etwas Qualitätsverlust</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <span className="text-blue-600 font-medium">Original:</span>
+                          <span className="text-muted-foreground">Beste Qualität, längerer Upload</span>
+                        </div>
+                      </div>
+                      <div className="pt-2 border-t">
+                        <p className="text-xs text-muted-foreground">
+                          <strong>Empfehlung:</strong> In der Regel reicht das komprimierte Bild.
+                          Bei Klingelschildern mit vielen Namen oder wenn aus größerer Entfernung fotografiert wurde,
+                          wird Originalqualität empfohlen, um alle Namen bestmöglich zu erkennen.
+                        </p>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <Switch
+                id="quality-toggle"
+                checked={!useOriginalQuality}
+                onCheckedChange={(checked) => setUseOriginalQuality(!checked)}
+                data-testid="switch-quality"
+              />
+            </div>
           </div>
         )}
       </CardContent>

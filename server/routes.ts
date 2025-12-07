@@ -31,6 +31,11 @@ import {
   type OrientationAnalysisResult 
 } from "./services/imageOrientation";
 import { getBerlinTimestamp } from "./utils/timezone";
+import {
+  performEnhancedOCRMatching,
+  enhanceCustomerListWithHistoricalData,
+  getHistoricalProspects
+} from "./services/historicalMatchingService";
 
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -596,7 +601,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // No match found - this is a prospect
           newProspects.push(residentName);
         }
-      } 
+      }
+
+      // ==================== ENHANCED HISTORICAL MATCHING ====================
+      // Führe erweiterten Abgleich mit historischen Datensätzen durch
+      let enhancedResults;
+      let historicalDatasetUsed;
+      let clarificationNeeded;
+
+      if (address && address.street && address.number && address.postal) {
+        try {
+          // Normalisiere Adresse für konsistentes Matching (nutzt Google Geocoding)
+          const normalized = await normalizeAddress(
+            address.street,
+            address.number,
+            address.city,
+            address.postal,
+            (req as any).username
+          );
+
+          // Verwende normalisierte Adresse wenn verfügbar, sonst Fallback auf Input
+          const normalizedAddressString = normalized 
+            ? normalized.formattedAddress 
+            : `${address.street} ${address.postal} ${address.city || ''}`.trim().toLowerCase();
+
+          const enhancedData = await performEnhancedOCRMatching(
+            residentNames,
+            existingCustomers,
+            newProspects,
+            address,
+            normalizedAddressString,
+            normalized?.number
+          );
+
+          enhancedResults = enhancedData.enhancedResults;
+          historicalDatasetUsed = enhancedData.historicalDatasetUsed;
+
+          // Extrahiere Namen mit Klärungsbedarf
+          clarificationNeeded = enhancedResults
+            .filter(r => r.category === 'clarification_needed')
+            .map(r => ({
+              name: r.name,
+              reason: r.historicalInfo?.matchType === 'list_vs_dataset_conflict'
+                ? 'In der Bestandskundenliste gefunden, aber im letzten Datensatz als Neukunde geführt'
+                : 'Nicht in der Bestandskundenliste, aber im letzten Datensatz als Bestandskunde geführt',
+              inCustomerList: r.isExistingCustomer,
+              inHistoricalDataset: true,
+              historicalCategory: r.historicalInfo?.historicalCategory,
+              datasetDate: r.historicalInfo?.datasetDate,
+              datasetHouseNumber: r.historicalInfo?.datasetHouseNumber,
+            }));
+
+          console.log('[OCR] Enhanced matching completed:', {
+            totalNames: residentNames.length,
+            enhancedResults: enhancedResults.length,
+            clarificationNeeded: clarificationNeeded.length,
+            historicalDatasetUsed: historicalDatasetUsed?.id
+          });
+        } catch (enhancedError) {
+          console.error('[OCR] Enhanced matching failed, continuing with basic results:', enhancedError);
+          // Bei Fehler: Weiter mit den Basis-Ergebnissen ohne historischen Abgleich
+        }
+      }
 
       const response: OCRResponse = {
         residentNames,
@@ -604,10 +670,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         newProspects,
         existingCustomers,
         allCustomersAtAddress,
-         relatedHouseNumbers: relatedHouseNumbers.length > 0 ? relatedHouseNumbers : undefined,
+        relatedHouseNumbers: relatedHouseNumbers.length > 0 ? relatedHouseNumbers : undefined,
         // Backend orientation correction disabled - always false
         orientationCorrectionApplied: false,
         backendOrientationInfo: null,
+        // Enhanced historical matching results
+        enhancedResults,
+        clarificationNeeded: clarificationNeeded && clarificationNeeded.length > 0 ? clarificationNeeded : undefined,
+        historicalDatasetUsed: historicalDatasetUsed || undefined,
       };
 
       // Prepare address string for logging
@@ -652,7 +722,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       for (const residentName of residentNames) {
         const matches = await storage.searchCustomers(residentName, address);
-        
+
         if (matches.length > 0) {
           // Keep the original name from OCR, but use customer data from database
           for (const match of matches) {
@@ -666,12 +736,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // ==================== ENHANCED HISTORICAL MATCHING ====================
+      let enhancedResults;
+      let historicalDatasetUsed;
+      let clarificationNeeded;
+
+      if (address && address.street && address.number && address.postal) {
+        try {
+          // Normalisiere Adresse für konsistentes Matching (nutzt Google Geocoding)
+          const normalized = await normalizeAddress(
+            address.street,
+            address.number,
+            address.city,
+            address.postal,
+            (req as any).username
+          );
+
+          // Verwende normalisierte Adresse wenn verfügbar, sonst Fallback auf Input
+          const normalizedAddressString = normalized 
+            ? normalized.formattedAddress 
+            : `${address.street} ${address.postal} ${address.city || ''}`.trim().toLowerCase();
+
+          const enhancedData = await performEnhancedOCRMatching(
+            residentNames,
+            existingCustomers,
+            newProspects,
+            address,
+            normalizedAddressString,
+            normalized?.number
+          );
+
+          enhancedResults = enhancedData.enhancedResults;
+          historicalDatasetUsed = enhancedData.historicalDatasetUsed;
+
+          clarificationNeeded = enhancedResults
+            .filter(r => r.category === 'clarification_needed')
+            .map(r => ({
+              name: r.name,
+              reason: r.historicalInfo?.matchType === 'list_vs_dataset_conflict'
+                ? 'In der Bestandskundenliste gefunden, aber im letzten Datensatz als Neukunde geführt'
+                : 'Nicht in der Bestandskundenliste, aber im letzten Datensatz als Bestandskunde geführt',
+              inCustomerList: r.isExistingCustomer,
+              inHistoricalDataset: true,
+              historicalCategory: r.historicalInfo?.historicalCategory,
+              datasetDate: r.historicalInfo?.datasetDate,
+              datasetHouseNumber: r.historicalInfo?.datasetHouseNumber,
+            }));
+        } catch (enhancedError) {
+          console.error('[OCR-Correct] Enhanced matching failed:', enhancedError);
+        }
+      }
+
       const response: OCRResponse = {
         residentNames,
         fullVisionResponse: null,
         newProspects,
         existingCustomers,
         allCustomersAtAddress,
+        enhancedResults,
+        clarificationNeeded: clarificationNeeded && clarificationNeeded.length > 0 ? clarificationNeeded : undefined,
+        historicalDatasetUsed: historicalDatasetUsed || undefined,
       };
 
       // Prepare address string
@@ -725,6 +849,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
         relatedHouseNumbers = await storage.findRelatedHouseNumbers(address);
       }
 
+      // ==================== ENHANCE WITH HISTORICAL DATA ====================
+      // Erweitere die Bestandskundenliste mit historischen Bestandskunden
+      let enhancedCustomers;
+      let historicalProspects;
+      try {
+        // Normalisiere Adresse für konsistentes Matching (nutzt Google Geocoding)
+        const normalized = await normalizeAddress(
+          address.street,
+          address.number,
+          address.city,
+          address.postal,
+          (req as any).username
+        );
+
+        // Verwende normalisierte Adresse wenn verfügbar, sonst Fallback auf Input
+        const normalizedAddressString = normalized
+          ? normalized.formattedAddress
+          : `${address.street} ${address.postal} ${address.city || ''}`.trim().toLowerCase();
+
+        enhancedCustomers = await enhanceCustomerListWithHistoricalData(
+          matches,
+          address,
+          normalizedAddressString,
+          normalized?.number
+        );
+
+        // Hole auch die Neukunden vom letzten Besuch
+        historicalProspects = await getHistoricalProspects(matches, address);
+
+        console.log('[API] /api/search-address - Enhanced customers:', {
+          originalCount: matches.length,
+          enhancedCount: enhancedCustomers.length,
+          historicalAdded: enhancedCustomers.filter(c => c.isFromHistoricalDataset).length,
+          historicalProspectsCount: historicalProspects?.length || 0
+        });
+      } catch (enhanceError) {
+        console.error('[API] /api/search-address - Failed to enhance with historical data:', enhanceError);
+        // Bei Fehler: Normale Kundenliste verwenden
+        enhancedCustomers = matches.map(c => ({
+          ...c,
+          isFromHistoricalDataset: false,
+          notInCurrentList: false
+        }));
+      }
+
       // Log the address search WITH existing customers in the dedicated column
       const addressString = address ? `${address.street} ${address.number}, ${address.city} ${address.postal}`.trim() : undefined;
       await logUserActivityWithRetry(
@@ -740,7 +909,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       res.json({
-        customers: matches,
+        customers: enhancedCustomers,
+        historicalProspects, // Neukunden vom letzten Besuch
         relatedHouseNumbers: relatedHouseNumbers.length > 0 ? relatedHouseNumbers : undefined
       });
     } catch (error) {

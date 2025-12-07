@@ -110,9 +110,24 @@ export type OCRCorrectionRequest = z.infer<typeof ocrCorrectionRequestSchema>;
 export const residentStatusSchema = z.enum(['no_interest', 'not_reached', 'interest_later', 'appointment', 'written']);
 export type ResidentStatus = z.infer<typeof residentStatusSchema>;
 
-// Resident category enum
-export const residentCategorySchema = z.enum(['existing_customer', 'potential_new_customer', 'duplicate', 'all_existing_customers']);
+// Resident category enum (includes clarification_needed for historical matching conflicts)
+export const residentCategorySchema = z.enum(['existing_customer', 'potential_new_customer', 'duplicate', 'all_existing_customers', 'clarification_needed']);
 export type ResidentCategory = z.infer<typeof residentCategorySchema>;
+
+// Historischer Neukunde für "Neukunden von letztem Besuch" Liste
+export const historicalProspectSchema = z.object({
+  name: z.string(),
+  status: residentStatusSchema.optional(),
+  notes: z.string().optional(),
+  floor: z.number().optional(),
+  door: z.string().optional(),
+  // Hinweis wenn in aktueller Bestandskundenliste gefunden
+  maybeNowCustomer: z.boolean().default(false),
+  // Dataset Info
+  datasetDate: z.coerce.date(),
+  datasetId: z.string(),
+});
+export type HistoricalProspect = z.infer<typeof historicalProspectSchema>;
 
 // Extended resident data with editing capabilities
 export const editableResidentSchema = z.object({

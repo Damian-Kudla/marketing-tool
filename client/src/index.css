@@ -419,3 +419,12 @@
     inset: -1px;
   }
 }
+
+@keyframes wobble {
+  0% { transform: rotate(-1deg) scale(1.02); }
+  100% { transform: rotate(1deg) scale(1.02); }
+}
+
+.animate-wobble {
+  animation: wobble 0.15s ease-in-out infinite alternate;
+}

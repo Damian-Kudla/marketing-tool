@@ -1,9 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { X, Check } from 'lucide-react';
+import { X, Check, Undo2, Combine } from 'lucide-react';
 import { useFilteredToast } from '@/hooks/use-filtered-toast';
 import { ResidentEditPopup } from './ResidentEditPopup';
 import { StatusContextMenu } from './StatusContextMenu';
@@ -99,6 +99,9 @@ const calculateDuplicates = (names: string[], existingCustomerNames: string[] = 
     }
   });
   
+  // REMOVED: Word-based duplicates caused too many false positives (e.g. "Oguras d" marked as duplicate of "Oguras")
+  // We now only check for exact full name matches
+  /*
   // Add word-based duplicates (different names sharing words)
   // BUT only if at least one of the names is an existing customer
   wordToNames.forEach((nameList, word) => {
@@ -112,6 +115,7 @@ const calculateDuplicates = (names: string[], existingCustomerNames: string[] = 
       }
     }
   });
+  */
   
   return duplicates;
 };
@@ -151,6 +155,34 @@ export default function ImageWithOverlays({
   const [statusMenuPosition, setStatusMenuPosition] = useState({ x: 0, y: 0 });
   const [statusMenuOverlay, setStatusMenuOverlay] = useState<{ overlay: OverlayBox; index: number } | null>(null);
 
+  // Drag & Drop state for overlay fusion
+  const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
+  const [isFusing, setIsFusing] = useState(false);
+  const [fusingIndices, setFusingIndices] = useState<{ source: number; target: number } | null>(null);
+
+  // Multi-phase touch interaction state
+  const [wobblingIndex, setWobblingIndex] = useState<number | null>(null); // Index of wobbling overlay
+  const wobblingIndexRef = useRef<number | null>(null); // Ref for event handlers to avoid stale closures
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const statusMenuTriggeredRef = useRef(false); // Track if status menu was triggered
+  const [hasMoved, setHasMoved] = useState(false); // Track if user moved after wobble started
+  const wobbleTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const statusMenuTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Undo history for fusion operations
+  interface FusionHistory {
+    targetName: string; // The name that was extended
+    sourceName: string; // The name that was merged into target
+    resultName?: string; // The combined name (stored to handle renames)
+    originalTargetResident: EditableResident; // Original state of target resident
+    originalSourceResident: EditableResident; // Original state of source resident
+    timestamp: number;
+  }
+  const [fusionHistory, setFusionHistory] = useState<FusionHistory[]>([]);
+
   // Track window width for responsive edit modal
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -160,7 +192,6 @@ export default function ImageWithOverlays({
 
   // Calculate overlays when data changes
   useEffect(() => {
-
     if (!fullVisionResponse?.textAnnotations || residentNames.length === 0) {
       setOverlays([]);
       return;
@@ -395,7 +426,28 @@ export default function ImageWithOverlays({
       const updatedEditedOverlays = editedOverlays.map(edited => {
         const editedName = edited.editedText || edited.text;
         const isDuplicate = currentDuplicateNames.has(editedName.toLowerCase());
-        const isExisting = !newProspects.includes(editedName);
+        
+        // FIX: Use editableResidents to determine status if available
+        // This prevents edited names from incorrectly turning red (existing) just because they aren't in the original newProspects list
+        let isExisting = false;
+        
+        const matchingResident = editableResidents.find(r => 
+            r.name.toLowerCase() === editedName.toLowerCase() || 
+            (r.originalName && r.originalName.toLowerCase() === edited.originalName.toLowerCase())
+        );
+        
+        if (matchingResident) {
+            isExisting = matchingResident.category === 'existing_customer';
+        } else {
+            // Fallback: Only mark as existing if it matches a known existing customer
+            // Otherwise default to prospect (yellow) to avoid "red by default" behavior
+            // This handles renamed prospects that don't match any existing customer
+            const matchesExisting = existingCustomers.some(c => c.name.toLowerCase() === editedName.toLowerCase());
+            const matchesAll = allCustomersAtAddress?.some(c => c.name.toLowerCase() === editedName.toLowerCase());
+            
+            isExisting = matchesExisting || !!matchesAll;
+        }
+        
         const matchedCustomer = isExisting 
           ? existingCustomers.find(c => c.name.toLowerCase() === editedName.toLowerCase())
           : undefined;
@@ -411,7 +463,18 @@ export default function ImageWithOverlays({
       // Merge: use edited version if exists for this originalName, otherwise use new overlay
       const merged: OverlayBox[] = [];
       processedNewOverlays.forEach(newOverlay => {
-        const editedVersion = editedByName.get(newOverlay.originalName.toLowerCase());
+        // Try to find matching edited overlay by originalName
+        let editedVersion = editedByName.get(newOverlay.originalName.toLowerCase());
+        
+        // If not found by originalName, try to find by current text (in case originalName was updated in residentNames)
+        if (!editedVersion) {
+            // Check if this newOverlay corresponds to a resident that has an originalName in editedByName
+            const matchingResident = editableResidents.find(r => r.name.toLowerCase() === newOverlay.text.toLowerCase());
+            if (matchingResident && matchingResident.originalName) {
+                editedVersion = editedByName.get(matchingResident.originalName.toLowerCase());
+            }
+        }
+
         if (editedVersion) {
           // Use edited version without updating bounding box
           merged.push({
@@ -421,14 +484,47 @@ export default function ImageWithOverlays({
             isDuplicate: editedVersion.isDuplicate,
             matchedCustomer: editedVersion.matchedCustomer,
           });
-          editedByName.delete(newOverlay.originalName.toLowerCase()); // Mark as used
+          // Mark as used (delete from map so we don't add it again in the orphaned check)
+          editedByName.delete(editedVersion.originalName.toLowerCase()); 
         } else {
-          merged.push(newOverlay);
+          // This is a new overlay (or one that wasn't edited before)
+          // Check status against editableResidents to ensure correct color
+          let isExisting = newOverlay.isExisting;
+          
+          const matchingResident = editableResidents.find(r => 
+            r.name.toLowerCase() === newOverlay.text.toLowerCase() ||
+            (r.originalName && r.originalName.toLowerCase() === newOverlay.originalName.toLowerCase())
+          );
+          
+          if (matchingResident) {
+             isExisting = matchingResident.category === 'existing_customer';
+          }
+
+          merged.push({
+            ...newOverlay,
+            isExisting
+          });
         }
       });
       
       // Don't add remaining edited overlays - they should be deleted if their name is gone
       // (Previously we added them here, but now we filter them out at the beginning)
+      
+      // FIX: If an edited overlay was NOT matched with a new overlay (because the name changed and OCR didn't find it),
+      // we should still keep it IF the resident still exists in editableResidents.
+      editedByName.forEach((editedOverlay) => {
+        const stillExists = editableResidents.some(r => 
+          (r.originalName && r.originalName.toLowerCase() === editedOverlay.originalName.toLowerCase()) ||
+          r.name.toLowerCase() === (editedOverlay.editedText || editedOverlay.text).toLowerCase()
+        );
+        
+        if (stillExists) {
+          console.log('[ImageWithOverlays] Keeping orphaned edited overlay:', editedOverlay.text);
+          merged.push(editedOverlay);
+        } else {
+          console.log('[ImageWithOverlays] Dropping orphaned edited overlay (resident deleted):', editedOverlay.text);
+        }
+      });
       
       return merged;
     });
@@ -465,36 +561,60 @@ export default function ImageWithOverlays({
   };
 
   // Update overlay properties when editableResidents changes (name, category, etc.)
+  // Also REMOVE overlays whose corresponding resident was deleted (e.g., after fusion)
   useEffect(() => {
-    if (overlays.length === 0 || editableResidents.length === 0) return;
+    if (overlays.length === 0) return;
+    // Allow editableResidents to be empty - this means all overlays should be removed
 
     setOverlays(prevOverlays => {
-      return prevOverlays.map(overlay => {
+      // First, filter out overlays whose residents no longer exist
+      const filteredOverlays = prevOverlays.filter(overlay => {
         // Try multiple matching strategies to find the corresponding resident
-        // Strategy 1: Match by current displayed text (most reliable for repeated edits)
-        let matchingResident = editableResidents.find(r => 
+        // Strategy 1: Match by current displayed text
+        let matchingResident = editableResidents.find(r =>
           r.name.toLowerCase() === (overlay.editedText || overlay.text).toLowerCase()
         );
 
         // Strategy 2: Match by originalName if Strategy 1 failed
         if (!matchingResident) {
-          matchingResident = editableResidents.find(r => 
+          matchingResident = editableResidents.find(r =>
             r.originalName?.toLowerCase() === overlay.originalName.toLowerCase()
           );
         }
 
         // Strategy 3: Match by original text if both failed
         if (!matchingResident) {
-          matchingResident = editableResidents.find(r => 
+          matchingResident = editableResidents.find(r =>
             r.name.toLowerCase() === overlay.text.toLowerCase()
           );
         }
 
         if (!matchingResident) {
-          // Resident was deleted - keep overlay as is but maybe mark it
-          console.log('[ImageWithOverlays] No matching resident found for overlay:', overlay.text);
-          return overlay;
+          // Resident was deleted - REMOVE this overlay
+          console.log('[ImageWithOverlays] Removing overlay for deleted resident:', overlay.text);
+          return false; // Filter out
         }
+        return true; // Keep
+      });
+
+      // Then, update the remaining overlays
+      return filteredOverlays.map(overlay => {
+        // Find matching resident (we know it exists from the filter above)
+        let matchingResident = editableResidents.find(r =>
+          r.name.toLowerCase() === (overlay.editedText || overlay.text).toLowerCase()
+        );
+        if (!matchingResident) {
+          matchingResident = editableResidents.find(r =>
+            r.originalName?.toLowerCase() === overlay.originalName.toLowerCase()
+          );
+        }
+        if (!matchingResident) {
+          matchingResident = editableResidents.find(r =>
+            r.name.toLowerCase() === overlay.text.toLowerCase()
+          );
+        }
+
+        if (!matchingResident) return overlay; // Should not happen after filter
 
         // Update text if name changed
         const updatedText = matchingResident.name;
@@ -502,8 +622,8 @@ export default function ImageWithOverlays({
         const isDuplicate = overlay.isDuplicate; // Keep duplicate status
 
         // Only update if something actually changed (prevent unnecessary re-renders)
-        if (overlay.text === updatedText && 
-            overlay.isExisting === isExisting && 
+        if (overlay.text === updatedText &&
+            overlay.isExisting === isExisting &&
             overlay.isDuplicate === isDuplicate) {
           return overlay; // No changes needed
         }
@@ -693,22 +813,52 @@ export default function ImageWithOverlays({
 
   // Handle click to edit - always opens ResidentEditPopup
   const handleOverlayClick = async (index: number) => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
+    // Clear any lingering interaction state
+    clearInteractionTimers();
+    setWobblingIndex(null);
     setLongPressIndex(null);
-    
+    touchStartPosRef.current = null;
+
+    // Don't open edit popup if we're dragging or fusing
+    if (draggingIndex !== null || isFusing) return;
+
     // Find the corresponding editable resident by originalName (stable identifier)
     const overlay = overlays[index];
     const originalName = overlay.originalName;
     
-    // Find resident by original name
-    const matchingResident = editableResidents.find(r => 
-      r.name.toLowerCase() === originalName.toLowerCase()
+    // Find resident by original name OR current text
+    // This handles cases where originalName might be lost in the resident object
+    let matchingResident = editableResidents.find(r => 
+      (r.originalName && r.originalName.toLowerCase() === originalName.toLowerCase()) ||
+      r.name.toLowerCase() === overlay.text.toLowerCase() ||
+      (overlay.editedText && r.name.toLowerCase() === overlay.editedText.toLowerCase())
     );
     
     if (!matchingResident) return;
+
+    // FIX: Restore originalName if missing in resident but present in overlay
+    // This prevents the overlay from being removed after subsequent edits
+    if (!matchingResident.originalName && overlay.originalName) {
+        console.log('[ImageWithOverlays] Restoring missing originalName from overlay:', overlay.originalName);
+        const restoredResident = { ...matchingResident, originalName: overlay.originalName };
+        
+        // Update local state immediately to ensure consistency
+        const residentIndex = editableResidents.findIndex(r => r === matchingResident);
+        if (residentIndex >= 0) {
+            const newResidents = [...editableResidents];
+            newResidents[residentIndex] = restoredResident;
+            onResidentsUpdated?.(newResidents);
+            
+            // Also update backend if possible
+            if (currentDatasetId) {
+                 import('@/services/api').then(({ datasetAPI }) => {
+                     datasetAPI.bulkUpdateResidents(currentDatasetId, newResidents).catch(console.error);
+                 });
+            }
+        }
+        
+        matchingResident = restoredResident;
+    }
     
     // If no dataset exists yet, automatically create it without confirmation
     if (!currentDatasetId && onRequestDatasetCreation) {
@@ -724,54 +874,175 @@ export default function ImageWithOverlays({
     setShowEditPopup(true);
   };
 
-  // Handle long press start - now opens status context menu
-  const handleLongPressStart = (index: number, e: React.MouseEvent | React.TouchEvent) => {
-    e.preventDefault();
-    
-    longPressTimerRef.current = setTimeout(() => {
-      const overlay = overlays[index];
-      
-      // Get position from event
-      let x: number, y: number;
-      if ('touches' in e.nativeEvent && e.nativeEvent.touches.length > 0) {
-        const touch = e.nativeEvent.touches[0];
-        x = touch.clientX;
-        y = touch.clientY;
-      } else if ('clientX' in e.nativeEvent) {
-        x = e.nativeEvent.clientX;
-        y = e.nativeEvent.clientY;
-      } else {
-        // Fallback to overlay position
-        const rect = (e.target as HTMLElement).getBoundingClientRect();
-        x = rect.left + rect.width / 2;
-        y = rect.top + rect.height / 2;
-      }
+  // Sync wobblingIndex state to ref
+  useEffect(() => {
+    wobblingIndexRef.current = wobblingIndex;
+  }, [wobblingIndex]);
 
-      // Haptic feedback
-      if ('vibrate' in navigator) {
-        try {
-          navigator.vibrate(50);
-        } catch (err) {
-          console.debug('Haptic feedback not available');
-        }
-      }
+  // Multi-phase touch interaction constants
+  const WOBBLE_DELAY = 200; // ms before wobble starts (allows scroll detection)
+  const STATUS_MENU_DELAY = 1000; // ms total before status menu shows (if no movement)
+  const SCROLL_THRESHOLD = 10; // pixels - movement less than this is not considered drag
 
-      // Open status context menu
-      setStatusMenuPosition({ x, y });
-      setStatusMenuOverlay({ overlay, index });
-      setStatusMenuOpen(true);
-      
-      longPressTimerRef.current = null;
-    }, 600); // 600ms for consistent long press timing
-  };
-
-  // Handle long press end
-  const handleLongPressEnd = () => {
+  // Clear all interaction timers
+  const clearInteractionTimers = useCallback(() => {
+    if (wobbleTimerRef.current) {
+      clearTimeout(wobbleTimerRef.current);
+      wobbleTimerRef.current = null;
+    }
+    if (statusMenuTimerRef.current) {
+      clearTimeout(statusMenuTimerRef.current);
+      statusMenuTimerRef.current = null;
+    }
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
-  };
+  }, []);
+
+  // Handle touch/mouse down - start the multi-phase interaction
+  const handleInteractionStart = useCallback((index: number, e: React.MouseEvent | React.TouchEvent) => {
+    if (isFusing || statusMenuOpen) return;
+
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const overlay = overlays[index];
+
+    // Store start position to detect movement
+    touchStartPosRef.current = { x: clientX, y: clientY };
+    statusMenuTriggeredRef.current = false;
+    setHasMoved(false);
+
+    // Calculate offset for potential drag
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setDragOffset({
+      x: clientX - rect.left - rect.width / 2,
+      y: clientY - rect.top - rect.height / 2,
+    });
+    setDragPosition({ x: clientX, y: clientY });
+
+    // Phase 1: After WOBBLE_DELAY, start wobbling (indicates drag is possible)
+    wobbleTimerRef.current = setTimeout(() => {
+      // Haptic feedback to indicate wobble/drag mode
+      if ('vibrate' in navigator) {
+        try { navigator.vibrate(30); } catch (err) { /* ignore */ }
+      }
+      setWobblingIndex(index);
+      setLongPressIndex(index);
+      wobbleTimerRef.current = null;
+    }, WOBBLE_DELAY);
+
+    // Phase 2: After STATUS_MENU_DELAY, show status menu (only if no movement)
+    statusMenuTimerRef.current = setTimeout(() => {
+      // Only show status menu if user hasn't moved (hasMoved will be checked in the callback)
+      // We use a ref check pattern here since state might not be up to date
+      setWobblingIndex(currentWobbling => {
+        if (currentWobbling === index) {
+          // User is still holding without dragging - show status menu
+          // Haptic feedback
+          if ('vibrate' in navigator) {
+            try { navigator.vibrate(50); } catch (err) { /* ignore */ }
+          }
+
+          statusMenuTriggeredRef.current = true;
+          setStatusMenuPosition({ x: clientX, y: clientY });
+          setStatusMenuOverlay({ overlay, index });
+          setStatusMenuOpen(true);
+
+          // Reset interaction state
+          setWobblingIndex(null);
+          setLongPressIndex(null);
+        }
+        return null; // Reset wobbling regardless
+      });
+      statusMenuTimerRef.current = null;
+    }, STATUS_MENU_DELAY);
+
+    // Don't preventDefault here - allow scroll detection
+  }, [isFusing, statusMenuOpen, overlays]);
+
+  // Handle touch/mouse move during interaction
+  const handleInteractionMove = useCallback((index: number, e: React.MouseEvent | React.TouchEvent) => {
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+
+    if (!touchStartPosRef.current) return;
+
+    const deltaX = Math.abs(clientX - touchStartPosRef.current.x);
+    const deltaY = Math.abs(clientY - touchStartPosRef.current.y);
+    const totalMovement = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+    // If movement exceeds threshold before wobble phase, cancel everything (user is scrolling)
+    if (totalMovement > SCROLL_THRESHOLD && wobblingIndexRef.current === null && !draggingIndex) {
+      clearInteractionTimers();
+      touchStartPosRef.current = null;
+      return;
+    }
+
+    // If wobbling and user moves significantly, start drag mode
+    if (wobblingIndexRef.current === index && totalMovement > SCROLL_THRESHOLD) {
+      // Cancel status menu timer - user is dragging
+      if (statusMenuTimerRef.current) {
+        clearTimeout(statusMenuTimerRef.current);
+        statusMenuTimerRef.current = null;
+      }
+
+      // Enter drag mode
+      setHasMoved(true);
+      setDraggingIndex(index);
+      setWobblingIndex(null);
+      setLongPressIndex(null);
+
+      // Prevent scrolling now that we're dragging
+      e.preventDefault();
+    }
+
+    // Update drag position if already dragging
+    if (draggingIndex === index) {
+      setDragPosition({ x: clientX, y: clientY });
+      e.preventDefault();
+    }
+  }, [draggingIndex, clearInteractionTimers]);
+
+  // Handle touch/mouse end
+  const handleInteractionEnd = useCallback((index: number) => {
+    clearInteractionTimers();
+
+    // If touchStartPosRef.current is null, it means the interaction was cancelled (e.g. scrolled)
+    if (!touchStartPosRef.current) {
+      return;
+    }
+
+    // If status menu was triggered, do NOT treat as click
+    if (statusMenuTriggeredRef.current) {
+      setWobblingIndex(null);
+      setLongPressIndex(null);
+      touchStartPosRef.current = null;
+      return;
+    }
+
+    // If we were just wobbling (not dragging), it was a long press that didn't reach menu yet
+    // We should NOT treat this as a click, just reset.
+    if (wobblingIndexRef.current === index && !draggingIndex) {
+      setWobblingIndex(null);
+      setLongPressIndex(null);
+      touchStartPosRef.current = null;
+      return;
+    }
+
+    // If we weren't wobbling or dragging yet, it's a quick tap
+    if (wobblingIndexRef.current === null && draggingIndex === null) {
+      touchStartPosRef.current = null;
+      handleOverlayClick(index);
+      return;
+    }
+
+    // Reset interaction state
+    setWobblingIndex(null);
+    setLongPressIndex(null);
+    touchStartPosRef.current = null;
+    setHasMoved(false);
+  }, [draggingIndex, clearInteractionTimers, handleOverlayClick]);
 
 
 
@@ -783,7 +1054,12 @@ export default function ImageWithOverlays({
     
     try {
       // Find the resident matching this overlay
-      const residentIndex = editableResidents.findIndex(r => r.name === overlay.originalName);
+      // Try matching by originalName first, then by current name (fallback)
+      const residentIndex = editableResidents.findIndex(r => 
+        (r.originalName && r.originalName === overlay.originalName) ||
+        r.name === overlay.text ||
+        r.name === overlay.originalName
+      );
       
       if (residentIndex >= 0) {
         const updatedResidents = [...editableResidents];
@@ -925,9 +1201,225 @@ export default function ImageWithOverlays({
     onNamesUpdated?.(updatedNames);
   };
 
-  // Only render if we have both an image AND overlays
-  // This prevents duplicate lists when loading datasets without photos
-  if (!imageSrc || overlays.length === 0) {
+  // Drag & Drop handlers for overlay fusion (global listeners for drag movement)
+  const handleDragMove = useCallback((e: MouseEvent | TouchEvent) => {
+    if (draggingIndex === null || isFusing) return;
+
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    setDragPosition({ x: clientX, y: clientY });
+
+    // Find potential drop target (another overlay)
+    const containerRect = containerRef.current?.getBoundingClientRect();
+    if (!containerRect) return;
+
+    let foundTarget: number | null = null;
+    overlays.forEach((overlay, index) => {
+      if (index === draggingIndex) return;
+
+      const scaledX = (overlay.x + (overlay.xOffset || 0)) * scaleX + imageOffset.offsetX + containerRect.left;
+      const scaledY = (overlay.y + (overlay.yOffset || 0)) * scaleY + imageOffset.offsetY + containerRect.top;
+      const scaledWidth = overlay.width * scaleX * overlay.scale;
+      const scaledHeight = overlay.height * scaleY * overlay.scale;
+
+      // Check if drag position is within this overlay
+      if (
+        clientX >= scaledX &&
+        clientX <= scaledX + scaledWidth &&
+        clientY >= scaledY &&
+        clientY <= scaledY + scaledHeight
+      ) {
+        foundTarget = index;
+      }
+    });
+
+    setDropTargetIndex(foundTarget);
+  }, [draggingIndex, overlays, scaleX, scaleY, imageOffset, isFusing]);
+
+  const handleDragEnd = useCallback(async () => {
+    if (draggingIndex === null || isFusing) {
+      setDraggingIndex(null);
+      setDropTargetIndex(null);
+      return;
+    }
+
+    if (dropTargetIndex !== null && dropTargetIndex !== draggingIndex) {
+      // Perform fusion!
+      const sourceOverlay = overlays[draggingIndex];
+      const targetOverlay = overlays[dropTargetIndex];
+
+      // Find corresponding residents
+      // Try matching by originalName first, then by current name (fallback)
+      const sourceResident = editableResidents.find(r => 
+        (r.originalName && r.originalName === sourceOverlay.originalName) ||
+        r.name === sourceOverlay.text ||
+        r.name === sourceOverlay.originalName
+      );
+      const targetResident = editableResidents.find(r => 
+        (r.originalName && r.originalName === targetOverlay.originalName) ||
+        r.name === targetOverlay.text ||
+        r.name === targetOverlay.originalName
+      );
+
+      if (sourceResident && targetResident) {
+        // Combine names (source name goes below target name visually, but stored with space)
+        const combinedName = `${targetResident.name} ${sourceResident.name}`;
+
+        // Save to history for undo
+        setFusionHistory(prev => [...prev, {
+          targetName: targetResident.name,
+          sourceName: sourceResident.name,
+          resultName: combinedName,
+          originalTargetResident: { ...targetResident },
+          originalSourceResident: { ...sourceResident },
+          timestamp: Date.now(),
+        }]);
+
+        // Start fusion animation
+        setIsFusing(true);
+        setFusingIndices({ source: draggingIndex, target: dropTargetIndex });
+
+        // Wait for animation
+        await new Promise(resolve => setTimeout(resolve, 400));
+
+        // Update editableResidents: update target, remove source
+        const updatedResidents = editableResidents
+          .map(r => {
+            if (r.name === targetResident.name) {
+              return { ...r, name: combinedName };
+            }
+            return r;
+          })
+          .filter(r => r.name !== sourceResident.name);
+
+        onResidentsUpdated?.(updatedResidents);
+
+        // Update names list
+        const updatedNames = residentNames
+          .map(name => (name === targetResident.name ? combinedName : name))
+          .filter(name => name !== sourceResident.name);
+        onNamesUpdated?.(updatedNames);
+
+        // Save to backend if we have a dataset ID
+        if (currentDatasetId) {
+          try {
+            const { datasetAPI } = await import('@/services/api');
+            await datasetAPI.bulkUpdateResidents(currentDatasetId, updatedResidents);
+          } catch (error) {
+            console.error('[ImageWithOverlays.handleFusion] Backend save failed:', error);
+          }
+        }
+
+        toast({
+          title: 'Textfelder fusioniert',
+          description: `"${sourceResident.name}" wurde mit "${targetResident.name}" zusammengeführt`,
+        });
+
+        // End fusion animation
+        setTimeout(() => {
+          setIsFusing(false);
+          setFusingIndices(null);
+        }, 100);
+      }
+    }
+
+    setDraggingIndex(null);
+    setDropTargetIndex(null);
+  }, [draggingIndex, dropTargetIndex, overlays, editableResidents, residentNames, onResidentsUpdated, onNamesUpdated, currentDatasetId, toast, isFusing]);
+
+  // Undo last fusion
+  const handleUndoFusion = useCallback(async () => {
+    if (fusionHistory.length === 0) return;
+
+    const lastFusion = fusionHistory[fusionHistory.length - 1];
+
+    // Restore the original residents
+    const updatedResidents = editableResidents
+      .map(r => {
+        // Try to match by ID first (if available) - this handles renamed residents
+        if ((lastFusion.originalTargetResident as any).id && (r as any).id && (r as any).id === (lastFusion.originalTargetResident as any).id) {
+             return { ...lastFusion.originalTargetResident };
+        }
+
+        // Fallback to name match (using stored resultName or reconstructed name)
+        const targetName = lastFusion.resultName || `${lastFusion.originalTargetResident.name} ${lastFusion.originalSourceResident.name}`;
+        if (r.name === targetName) {
+          return { ...lastFusion.originalTargetResident };
+        }
+        return r;
+      });
+
+    // Re-add the source resident
+    updatedResidents.push({ ...lastFusion.originalSourceResident });
+
+    onResidentsUpdated?.(updatedResidents);
+
+    // Update names list - Use local residentNames to avoid pulling in residents from other photos
+    // Find the current name of the resident we are undoing (it might have been renamed)
+    let currentFusedName = lastFusion.resultName || `${lastFusion.originalTargetResident.name} ${lastFusion.originalSourceResident.name}`;
+    
+    // If we have IDs, we can find the current name even if it changed
+    if ((lastFusion.originalTargetResident as any).id) {
+        const currentResident = editableResidents.find(r => (r as any).id === (lastFusion.originalTargetResident as any).id);
+        if (currentResident) {
+            currentFusedName = currentResident.name;
+        }
+    }
+
+    const updatedLocalNames = residentNames.flatMap(name => {
+        if (name === currentFusedName) {
+             // Replace fused name with original target and source
+             return [lastFusion.originalTargetResident.name, lastFusion.originalSourceResident.name];
+        }
+        return [name];
+    });
+    
+    onNamesUpdated?.(updatedLocalNames);
+
+    // Save to backend
+    if (currentDatasetId) {
+      try {
+        const { datasetAPI } = await import('@/services/api');
+        await datasetAPI.bulkUpdateResidents(currentDatasetId, updatedResidents);
+      } catch (error) {
+        console.error('[ImageWithOverlays.handleUndoFusion] Backend save failed:', error);
+      }
+    }
+
+    // Remove from history
+    setFusionHistory(prev => prev.slice(0, -1));
+
+    toast({
+      title: 'Fusion rückgängig gemacht',
+      description: `"${lastFusion.sourceName}" wurde wiederhergestellt`,
+    });
+  }, [fusionHistory, editableResidents, residentNames, onResidentsUpdated, onNamesUpdated, currentDatasetId, toast]);
+
+  // Add global mouse/touch event listeners for drag
+  useEffect(() => {
+    if (draggingIndex === null) return;
+
+    const handleMouseMove = (e: MouseEvent) => handleDragMove(e);
+    const handleTouchMove = (e: TouchEvent) => handleDragMove(e);
+    const handleMouseUp = () => handleDragEnd();
+    const handleTouchEnd = () => handleDragEnd();
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('touchend', handleTouchEnd);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [draggingIndex, handleDragMove, handleDragEnd]);
+
+  // Only render if we have an image
+  if (!imageSrc) {
+    console.log('[ImageWithOverlays] Not rendering: No image source');
     return null;
   }
 
@@ -939,26 +1431,46 @@ export default function ImageWithOverlays({
   return (
     <Card data-testid="card-image-overlays">
       <CardContent className="p-0">
-        {/* Legend */}
+        {/* Legend with Undo Button */}
         {(hasProspects || hasExisting || hasDuplicates) && (
-          <div className="flex items-center gap-4 px-4 py-2 text-sm border-b">
-            {hasProspects && (
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colorConfig.prospects.solid }} />
-                <span>{t('photo.legend.prospects', 'Prospects')}</span>
+          <div className="flex items-center justify-between px-4 py-2 text-sm border-b">
+            <div className="flex items-center gap-4 flex-wrap">
+              {hasProspects && (
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colorConfig.prospects.solid }} />
+                  <span>{t('photo.legend.prospects', 'Prospects')}</span>
+                </div>
+              )}
+              {hasExisting && (
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colorConfig.existing.solid }} />
+                  <span>{t('photo.legend.existing', 'Existing Customers')}</span>
+                </div>
+              )}
+              {hasDuplicates && (
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colorConfig.duplicates.solid }} />
+                  <span>{t('photo.legend.duplicates', 'Duplicates')}</span>
+                </div>
+              )}
+              {/* Fusion hint */}
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Combine className="w-3 h-3" />
+                <span className="hidden sm:inline">Ziehen zum Fusionieren</span>
               </div>
-            )}
-            {hasExisting && (
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colorConfig.existing.solid }} />
-                <span>{t('photo.legend.existing', 'Existing Customers')}</span>
-              </div>
-            )}
-            {hasDuplicates && (
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: colorConfig.duplicates.solid }} />
-                <span>{t('photo.legend.duplicates', 'Duplicates')}</span>
-              </div>
+            </div>
+            {/* Undo button */}
+            {fusionHistory.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleUndoFusion}
+                className="h-7 gap-1 text-muted-foreground hover:text-foreground"
+                title="Letzte Fusion rückgängig machen"
+              >
+                <Undo2 className="h-4 w-4" />
+                <span className="hidden sm:inline text-xs">Rückgängig</span>
+              </Button>
             )}
           </div>
         )}
@@ -982,53 +1494,155 @@ export default function ImageWithOverlays({
           
           {overlays.map((overlay, index) => {
             const isShowingDetails = longPressIndex === index;
+            const isDragging = draggingIndex === index;
+            const isDropTarget = dropTargetIndex === index;
+            const isFusingSource = fusingIndices?.source === index;
+            const isFusingTarget = fusingIndices?.target === index;
+            const isWobbling = wobblingIndex === index;
+
             // Apply scale and add offset for object-fit: contain centering
             const scaledX = (overlay.x + (overlay.xOffset || 0)) * scaleX + imageOffset.offsetX;
             const scaledY = (overlay.y + (overlay.yOffset || 0)) * scaleY + imageOffset.offsetY;
             const scaledWidth = overlay.width * scaleX * overlay.scale;
             const scaledHeight = overlay.height * scaleY * overlay.scale;
-            
+
+            // Check if this is a fused name (contains space = two names)
+            const nameParts = overlay.text.split(' ');
+            const isFusedName = nameParts.length >= 2 && nameParts.every(part => part.length > 1);
+
             // Calculate optimal font size for this overlay
             // Text area extends 8px on each side (16px total) for better visibility
-            const optimalFontSize = calculateFontSize(overlay.text, scaledWidth + 16, scaledHeight);
+            // For fused names, use the longest part for sizing
+            const displayText = isFusedName ? nameParts.reduce((a, b) => a.length > b.length ? a : b) : overlay.text;
+            const optimalFontSize = calculateFontSize(displayText, scaledWidth + 16, scaledHeight / (isFusedName ? 2 : 1));
+
+            // Calculate position (override if dragging)
+            let finalX = scaledX;
+            let finalY = scaledY;
+
+            if (isDragging && containerRef.current) {
+               const containerRect = containerRef.current.getBoundingClientRect();
+               // Center of the element in client coords
+               const centerX = dragPosition.x - dragOffset.x;
+               const centerY = dragPosition.y - dragOffset.y;
+               
+               // Top-Left in client coords
+               const leftClient = centerX - scaledWidth / 2;
+               const topClient = centerY - scaledHeight / 2;
+               
+               // Relative to container
+               finalX = leftClient - containerRect.left;
+               finalY = topClient - containerRect.top;
+            }
+
+            // Don't render source overlay during fusion animation (it's flying to target)
+            if (isFusingSource) {
+              return (
+                <div
+                  key={index}
+                  className="absolute pointer-events-none"
+                  style={{
+                    left: `${scaledX}px`,
+                    top: `${scaledY}px`,
+                    width: `${scaledWidth}px`,
+                    height: `${scaledHeight}px`,
+                    animation: 'fusionFlyToTarget 0.4s ease-out forwards',
+                    zIndex: 100,
+                  }}
+                >
+                  <div
+                    className="absolute inset-0 rounded"
+                    style={{
+                      backgroundColor: overlay.isDuplicate
+                        ? colorConfig.duplicates.background
+                        : overlay.isExisting
+                        ? colorConfig.existing.background
+                        : colorConfig.prospects.background,
+                      border: `1px solid ${
+                        overlay.isDuplicate
+                          ? colorConfig.duplicates.border
+                          : overlay.isExisting
+                          ? colorConfig.existing.border
+                          : colorConfig.prospects.border
+                      }`,
+                      transform: 'scale(0.8)',
+                      opacity: 0.8,
+                    }}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-center text-black font-medium" style={{ fontSize: `${optimalFontSize}px` }}>
+                      {overlay.text}
+                    </span>
+                  </div>
+                </div>
+              );
+            }
 
             return (
               <div
                 key={index}
-                className="absolute cursor-pointer transition-all"
+                className={`absolute cursor-grab transition-all duration-150 select-none ${
+                  isDragging ? 'opacity-50 scale-95 cursor-grabbing' : ''
+                } ${isDropTarget ? 'ring-2 ring-primary ring-offset-2 scale-105' : ''} ${
+                  isFusingTarget ? 'animate-pulse ring-2 ring-green-500' : ''
+                } ${isWobbling && !isDragging ? 'animate-wobble' : ''}`}
                 style={{
-                  left: `${scaledX}px`,
-                  top: `${scaledY}px`,
+                  left: `${finalX}px`,
+                  top: `${finalY}px`,
                   width: `${scaledWidth}px`,
                   height: `${scaledHeight}px`,
+                  zIndex: isDragging ? 50 : isWobbling ? 45 : isDropTarget ? 40 : 10,
+                  transition: isDragging ? 'none' : 'all 0.15s ease-out',
+                  // Wobble animation via inline style as fallback
+                  ...(isWobbling && !isDragging ? {
+                    animation: 'wobble 0.15s ease-in-out infinite alternate',
+                  } : {}),
                 }}
-                onClick={(e) => {
-                  handleOverlayClick(index);
+                onMouseDown={(e) => {
+                  handleInteractionStart(index, e);
                 }}
-                onMouseDown={(e) => handleLongPressStart(index, e)}
-                onMouseUp={handleLongPressEnd}
-                onMouseLeave={handleLongPressEnd}
+                onMouseMove={(e) => {
+                  handleInteractionMove(index, e);
+                }}
+                onMouseUp={() => {
+                  handleInteractionEnd(index);
+                }}
+                onMouseLeave={() => {
+                  // Only end if not dragging (drag continues via global listeners)
+                  if (!isDragging) {
+                    handleInteractionEnd(index);
+                  }
+                }}
                 onTouchStart={(e) => {
-                  handleLongPressStart(index, e);
+                  handleInteractionStart(index, e);
                 }}
-                onTouchEnd={(e) => {
-                  handleLongPressEnd();
+                onTouchMove={(e) => {
+                  handleInteractionMove(index, e);
+                }}
+                onTouchEnd={() => {
+                  handleInteractionEnd(index);
                 }}
                 data-testid={`overlay-box-${index}`}
                 data-is-duplicate={overlay.isDuplicate ? 'true' : 'false'}
                 data-is-existing={overlay.isExisting ? 'true' : 'false'}
+                data-is-dragging={isDragging ? 'true' : 'false'}
+                data-is-wobbling={isWobbling ? 'true' : 'false'}
               >
                 {/* Background box with rounded corners and border */}
                 <div
-                  className="absolute inset-0 rounded"
+                  className={`absolute inset-0 rounded transition-all duration-150 ${
+                    isDropTarget ? 'shadow-lg' : ''
+                  }`}
                   style={{
                     backgroundColor: overlay.isDuplicate
                       ? colorConfig.duplicates.background
-                      : overlay.isExisting 
+                      : overlay.isExisting
                       ? colorConfig.existing.background
                       : colorConfig.prospects.background,
-                    border: `1px solid ${
-                      overlay.isDuplicate
+                    border: `${isDropTarget ? '2px' : '1px'} solid ${
+                      isDropTarget
+                        ? 'hsl(var(--primary))'
+                        : overlay.isDuplicate
                         ? colorConfig.duplicates.border
                         : overlay.isExisting
                         ? colorConfig.existing.border
@@ -1036,9 +1650,9 @@ export default function ImageWithOverlays({
                     }`,
                   }}
                 />
-                
+
                 {/* Text container - extends horizontally to avoid rounded corner clipping */}
-                <div 
+                <div
                   className="absolute inset-0 flex items-center justify-center"
                   style={{
                     left: '-8px',
@@ -1047,21 +1661,46 @@ export default function ImageWithOverlays({
                     paddingRight: '8px',
                   }}
                 >
-                  {/* Always show text, no inline editing */}
-                  <span 
-                    className="text-center leading-tight text-black font-medium"
-                    style={{
-                      fontSize: `${optimalFontSize}px`,
-                      lineHeight: '1.1',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {overlay.text}
-                  </span>
+                  {/* Show text - two lines for fused names */}
+                  {isFusedName ? (
+                    <div className="flex flex-col items-center justify-center">
+                      {nameParts.map((part, partIndex) => (
+                        <span
+                          key={partIndex}
+                          className="text-center leading-tight text-black font-medium"
+                          style={{
+                            fontSize: `${optimalFontSize * 0.85}px`,
+                            lineHeight: '1.1',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {part}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span
+                      className="text-center leading-tight text-black font-medium"
+                      style={{
+                        fontSize: `${optimalFontSize}px`,
+                        lineHeight: '1.1',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {overlay.text}
+                    </span>
+                  )}
                 </div>
 
+                {/* Drop target indicator */}
+                {isDropTarget && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-primary/20 rounded pointer-events-none">
+                    <Combine className="h-6 w-6 text-primary animate-bounce" />
+                  </div>
+                )}
+
                 {/* Long press popup */}
-                {isShowingDetails && overlay.matchedCustomer && (
+                {isShowingDetails && overlay.matchedCustomer && !isDragging && (
                   <div
                     className="absolute z-50 bg-card border rounded-lg shadow-lg p-3 min-w-[200px] pointer-events-none"
                     style={{
@@ -1088,6 +1727,35 @@ export default function ImageWithOverlays({
               </div>
             );
           })}
+
+          {/* Dragging ghost overlay */}
+          {draggingIndex !== null && !isFusing && (
+            <div
+              className="fixed pointer-events-none z-[1000]"
+              style={{
+                left: `${dragPosition.x - dragOffset.x}px`,
+                top: `${dragPosition.y - dragOffset.y}px`,
+                transform: 'translate(-50%, -50%) scale(1.05)',
+              }}
+            >
+              <div
+                className="px-3 py-1.5 rounded shadow-xl"
+                style={{
+                  backgroundColor: overlays[draggingIndex]?.isDuplicate
+                    ? colorConfig.duplicates.solid
+                    : overlays[draggingIndex]?.isExisting
+                    ? colorConfig.existing.solid
+                    : colorConfig.prospects.solid,
+                  border: '2px solid white',
+                  boxShadow: '0 10px 25px rgba(0,0,0,0.3)',
+                }}
+              >
+                <span className="text-white font-semibold text-sm whitespace-nowrap">
+                  {overlays[draggingIndex]?.text}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* New Resident Edit Popup */}
