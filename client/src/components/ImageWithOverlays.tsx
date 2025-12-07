@@ -1033,11 +1033,16 @@ export default function ImageWithOverlays({
     const totalMovement = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 
     // If movement exceeds threshold before wobble phase, cancel (user is scrolling)
-    if (totalMovement > SCROLL_THRESHOLD && wobblingIndexRef.current === null && draggingIndex === null) {
+    if (totalMovement > SCROLL_THRESHOLD && wobblingIndexRef.current === null && draggingIndex === null && !selectedByProximity) {
       clearInteractionTimers();
       touchStartPosRef.current = null;
       setSelectedByProximity(false);
       return;
+    }
+
+    // Prevent scrolling when overlay is selected (wobbling or dragging)
+    if (wobblingIndexRef.current !== null || draggingIndex !== null || selectedByProximity) {
+      e.preventDefault();
     }
 
     // If wobbling (selected by proximity) and user moves, start drag mode
@@ -1053,14 +1058,11 @@ export default function ImageWithOverlays({
       setDraggingIndex(wobblingIndexRef.current);
       setWobblingIndex(null);
       setLongPressIndex(null);
-
-      e.preventDefault();
     }
 
     // Update drag position if dragging
     if (draggingIndex !== null) {
       setDragPosition({ x: clientX, y: clientY });
-      e.preventDefault();
     }
   }, [draggingIndex, selectedByProximity, clearInteractionTimers]);
 
@@ -1616,22 +1618,9 @@ export default function ImageWithOverlays({
   return (
     <Card data-testid="card-image-overlays">
       <CardContent className="p-0">
-        {/* Legend with Undo Button and Fusion Preview */}
+        {/* Legend with Undo Button */}
         {(hasProspects || hasExisting || hasDuplicates) && (
           <div className="flex flex-col border-b">
-            {/* Fusion Preview - shown when dragging over a target */}
-            {draggingIndex !== null && dropTargetIndex !== null && (
-              <div className="flex items-center justify-center gap-2 px-4 py-3 bg-primary/10 border-b animate-in fade-in duration-200">
-                <Combine className="w-5 h-5 text-primary animate-pulse" />
-                <span className="font-semibold text-primary">
-                  {overlays[dropTargetIndex]?.text}
-                </span>
-                <span className="text-primary/70">+</span>
-                <span className="font-semibold text-primary">
-                  {overlays[draggingIndex]?.text}
-                </span>
-              </div>
-            )}
             <div className="flex items-center justify-between px-4 py-2 text-sm">
               <div className="flex items-center gap-4 flex-wrap">
                 {hasProspects && (
@@ -1679,7 +1668,8 @@ export default function ImageWithOverlays({
           ref={containerRef}
           className="relative w-full select-none"
           style={{
-            touchAction: 'pan-y', // Allow vertical scrolling but prevent horizontal interference
+            // Disable scrolling when wobbling/dragging (proximity selection or direct hit)
+            touchAction: (wobblingIndex !== null || draggingIndex !== null || selectedByProximity) ? 'none' : 'pan-y',
             WebkitTouchCallout: 'none', // iOS: Disable magnifying glass/context menu
             WebkitUserSelect: 'none',   // iOS: Disable text selection
             userSelect: 'none'          // Standard: Disable text selection
@@ -2028,6 +2018,27 @@ export default function ImageWithOverlays({
               : undefined
           }
         />
+
+        {/* Fusion Preview - Fixed position to avoid layout shifts */}
+        {draggingIndex !== null && dropTargetIndex !== null && (
+          <div
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-[1001] pointer-events-none"
+            style={{
+              animation: 'fadeIn 0.15s ease-out',
+            }}
+          >
+            <div className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-full shadow-lg">
+              <Combine className="w-4 h-4 animate-pulse" />
+              <span className="font-semibold whitespace-nowrap">
+                {overlays[dropTargetIndex]?.text}
+              </span>
+              <span className="opacity-70">+</span>
+              <span className="font-semibold whitespace-nowrap">
+                {overlays[draggingIndex]?.text}
+              </span>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
