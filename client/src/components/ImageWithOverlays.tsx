@@ -1104,7 +1104,7 @@ export default function ImageWithOverlays({
   }, [draggingIndex, clearInteractionTimers]);
 
   // Handle container touch move to prevent scrolling when holding AND to update drag
-  const handleContainerTouchMove = useCallback((e: TouchEvent) => {
+  const handleContainerTouchMove = useCallback((e: React.TouchEvent | TouchEvent) => {
     // If we have an active interaction index, forward the move event
     if (activeInteractionIndexRef.current !== null) {
       handleInteractionMove(activeInteractionIndexRef.current, e);
@@ -1605,6 +1605,7 @@ export default function ImageWithOverlays({
             return false;
           }}
           onTouchStart={handleContainerTouchStart}
+          onTouchMove={handleContainerTouchMove}
         >
           <img
             ref={imageRef}
