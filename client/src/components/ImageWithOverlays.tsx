@@ -120,125 +120,6 @@ const calculateDuplicates = (names: string[], existingCustomerNames: string[] = 
   return duplicates;
 };
 
-// Calculate optimal font size for text to fit in box without truncation
-const calculateFontSize = (text: string, boxWidth: number, boxHeight: number): number => {
-  // Start with base font size in pixels
-  let fontSize = 12;
-  const minFontSize = 6;
-  
-  // Account for border (1px each side) and padding (1px each side) = 4px total
-  const availableWidth = boxWidth - 4;
-  const availableHeight = boxHeight - 4;
-  
-  // Conservative character width ratio
-  const avgCharWidthRatio = 0.65;
-  
-  // Calculate required width for text
-  const textLength = text.length;
-  
-  // Find optimal font size by reducing until it fits
-  while (fontSize > minFontSize) {
-    const estimatedWidth = textLength * fontSize * avgCharWidthRatio;
-    const estimatedHeight = fontSize * 1.2; // line height
-    
-    if (estimatedWidth <= availableWidth && estimatedHeight <= availableHeight) {
-      break;
-    }
-    fontSize -= 0.5;
-  }
-  
-  return Math.max(fontSize, minFontSize);
-};
-
-// Handle overlapping boxes by downscaling and offsetting
-const handleOverlaps = (boxes: OverlayBox[]): OverlayBox[] => {
-  const result = boxes.map(box => ({ ...box, xOffset: 0, yOffset: 0 }));
-  let iterations = 0;
-  const maxIterations = 10;
-
-  while (iterations < maxIterations) {
-    let hasOverlap = false;
-    iterations++;
-
-    for (let i = 0; i < result.length; i++) {
-      for (let j = i + 1; j < result.length; j++) {
-        const box1 = result[i];
-        const box2 = result[j];
-
-        // Calculate scaled dimensions and positions
-        const b1x = box1.x + (box1.xOffset || 0);
-        const b1y = box1.y + (box1.yOffset || 0);
-        const b1w = box1.width * box1.scale;
-        const b1h = box1.height * box1.scale;
-        
-        const b2x = box2.x + (box2.xOffset || 0);
-        const b2y = box2.y + (box2.yOffset || 0);
-        const b2w = box2.width * box2.scale;
-        const b2h = box2.height * box2.scale;
-
-        // Check for overlap using scaled dimensions
-        const overlap = !(
-          b1x + b1w <= b2x ||
-          b2x + b2w <= b1x ||
-          b1y + b1h <= b2y ||
-          b2y + b2h <= b1y
-        );
-
-        if (overlap) {
-          hasOverlap = true;
-          
-          // Calculate overlap amounts
-          const overlapX = Math.min(b1x + b1w, b2x + b2w) - Math.max(b1x, b2x);
-          const overlapY = Math.min(b1y + b1h, b2y + b2h) - Math.max(b1y, b2y);
-          
-          // If boxes are heavily overlapped (>70% in both directions), use offsets
-          if (overlapX > Math.min(b1w, b2w) * 0.7 && overlapY > Math.min(b1h, b2h) * 0.7) {
-            // Boxes are very overlapped, offset them vertically apart to fully separate
-            result[i] = { ...box1, yOffset: (box1.yOffset || 0) - (overlapY / 2 + 1) };
-            result[j] = { ...box2, yOffset: (box2.yOffset || 0) + (overlapY / 2 + 1) };
-          } else {
-            // Scale down each box independently from its own center
-            const newScale1 = box1.scale * 0.9;
-            const oldWidth1 = box1.width * box1.scale;
-            const oldHeight1 = box1.height * box1.scale;
-            const newWidth1 = box1.width * newScale1;
-            const newHeight1 = box1.height * newScale1;
-            const centerOffsetX1 = (oldWidth1 - newWidth1) / 2;
-            const centerOffsetY1 = (oldHeight1 - newHeight1) / 2;
-            
-            result[i] = { 
-              ...box1, 
-              scale: newScale1,
-              xOffset: (box1.xOffset || 0) + centerOffsetX1,
-              yOffset: (box1.yOffset || 0) + centerOffsetY1
-            };
-            
-            const newScale2 = box2.scale * 0.9;
-            const oldWidth2 = box2.width * box2.scale;
-            const oldHeight2 = box2.height * box2.scale;
-            const newWidth2 = box2.width * newScale2;
-            const newHeight2 = box2.height * newScale2;
-            const centerOffsetX2 = (oldWidth2 - newWidth2) / 2;
-            const centerOffsetY2 = (oldHeight2 - newHeight2) / 2;
-            
-            result[j] = { 
-              ...box2, 
-              scale: newScale2,
-              xOffset: (box2.xOffset || 0) + centerOffsetX2,
-              yOffset: (box2.yOffset || 0) + centerOffsetY2
-            };
-          }
-        }
-      }
-    }
-    
-    // If no overlap found in this iteration, we're done
-    if (!hasOverlap) break;
-  }
-
-  return result;
-};
-
 export default function ImageWithOverlays({
   imageSrc,
   fullVisionResponse,
@@ -508,13 +389,11 @@ export default function ImageWithOverlays({
       
       // Create a mapping of originalName -> currentName from editableResidents
       const originalToCurrentName = new Map<string, string>();
-      if (editableResidents) {
-        editableResidents.forEach(r => {
-          if (r.originalName) {
-            originalToCurrentName.set(r.originalName.toLowerCase(), r.name);
-          }
-        });
-      }
+      editableResidents.forEach(r => {
+        if (r.originalName) {
+          originalToCurrentName.set(r.originalName.toLowerCase(), r.name);
+        }
+      });
       
       // Keep ALL edited overlays - don't filter them out!
       // They will be updated by the second useEffect based on editableResidents
@@ -552,7 +431,7 @@ export default function ImageWithOverlays({
         // This prevents edited names from incorrectly turning red (existing) just because they aren't in the original newProspects list
         let isExisting = false;
         
-        const matchingResident = editableResidents?.find(r => 
+        const matchingResident = editableResidents.find(r => 
             r.name.toLowerCase() === editedName.toLowerCase() || 
             (r.originalName && r.originalName.toLowerCase() === edited.originalName.toLowerCase())
         );
@@ -651,7 +530,35 @@ export default function ImageWithOverlays({
     });
   }, [fullVisionResponse, residentNames, existingCustomers, newProspects, editableResidents]);
 
-
+  // Calculate optimal font size for text to fit in box without truncation
+  const calculateFontSize = (text: string, boxWidth: number, boxHeight: number): number => {
+    // Start with base font size in pixels
+    let fontSize = 12;
+    const minFontSize = 6;
+    
+    // Account for border (1px each side) and padding (1px each side) = 4px total
+    const availableWidth = boxWidth - 4;
+    const availableHeight = boxHeight - 4;
+    
+    // Conservative character width ratio
+    const avgCharWidthRatio = 0.65;
+    
+    // Calculate required width for text
+    const textLength = text.length;
+    
+    // Find optimal font size by reducing until it fits
+    while (fontSize > minFontSize) {
+      const estimatedWidth = textLength * fontSize * avgCharWidthRatio;
+      const estimatedHeight = fontSize * 1.2; // line height
+      
+      if (estimatedWidth <= availableWidth && estimatedHeight <= availableHeight) {
+        break;
+      }
+      fontSize -= 0.5;
+    }
+    
+    return Math.max(fontSize, minFontSize);
+  };
 
   // Update overlay properties when editableResidents changes (name, category, etc.)
   // Also REMOVE overlays whose corresponding resident was deleted (e.g., after fusion)
@@ -664,20 +571,20 @@ export default function ImageWithOverlays({
       const filteredOverlays = prevOverlays.filter(overlay => {
         // Try multiple matching strategies to find the corresponding resident
         // Strategy 1: Match by current displayed text
-        let matchingResident = editableResidents?.find(r =>
+        let matchingResident = editableResidents.find(r =>
           r.name.toLowerCase() === (overlay.editedText || overlay.text).toLowerCase()
         );
 
         // Strategy 2: Match by originalName if Strategy 1 failed
         if (!matchingResident) {
-          matchingResident = editableResidents?.find(r =>
+          matchingResident = editableResidents.find(r =>
             r.originalName?.toLowerCase() === overlay.originalName.toLowerCase()
           );
         }
 
         // Strategy 3: Match by original text if both failed
         if (!matchingResident) {
-          matchingResident = editableResidents?.find(r =>
+          matchingResident = editableResidents.find(r =>
             r.name.toLowerCase() === overlay.text.toLowerCase()
           );
         }
@@ -693,16 +600,16 @@ export default function ImageWithOverlays({
       // Then, update the remaining overlays
       return filteredOverlays.map(overlay => {
         // Find matching resident (we know it exists from the filter above)
-        let matchingResident = editableResidents?.find(r =>
+        let matchingResident = editableResidents.find(r =>
           r.name.toLowerCase() === (overlay.editedText || overlay.text).toLowerCase()
         );
         if (!matchingResident) {
-          matchingResident = editableResidents?.find(r =>
+          matchingResident = editableResidents.find(r =>
             r.originalName?.toLowerCase() === overlay.originalName.toLowerCase()
           );
         }
         if (!matchingResident) {
-          matchingResident = editableResidents?.find(r =>
+          matchingResident = editableResidents.find(r =>
             r.name.toLowerCase() === overlay.text.toLowerCase()
           );
         }
@@ -733,7 +640,94 @@ export default function ImageWithOverlays({
     });
   }, [editableResidents]);
 
+  // Handle overlapping boxes by downscaling and offsetting
+  const handleOverlaps = (boxes: OverlayBox[]): OverlayBox[] => {
+    const result = boxes.map(box => ({ ...box, xOffset: 0, yOffset: 0 }));
+    let iterations = 0;
+    const maxIterations = 10;
 
+    while (iterations < maxIterations) {
+      let hasOverlap = false;
+      iterations++;
+
+      for (let i = 0; i < result.length; i++) {
+        for (let j = i + 1; j < result.length; j++) {
+          const box1 = result[i];
+          const box2 = result[j];
+
+          // Calculate scaled dimensions and positions
+          const b1x = box1.x + (box1.xOffset || 0);
+          const b1y = box1.y + (box1.yOffset || 0);
+          const b1w = box1.width * box1.scale;
+          const b1h = box1.height * box1.scale;
+          
+          const b2x = box2.x + (box2.xOffset || 0);
+          const b2y = box2.y + (box2.yOffset || 0);
+          const b2w = box2.width * box2.scale;
+          const b2h = box2.height * box2.scale;
+
+          // Check for overlap using scaled dimensions
+          const overlap = !(
+            b1x + b1w <= b2x ||
+            b2x + b2w <= b1x ||
+            b1y + b1h <= b2y ||
+            b2y + b2h <= b1y
+          );
+
+          if (overlap) {
+            hasOverlap = true;
+            
+            // Calculate overlap amounts
+            const overlapX = Math.min(b1x + b1w, b2x + b2w) - Math.max(b1x, b2x);
+            const overlapY = Math.min(b1y + b1h, b2y + b2h) - Math.max(b1y, b2y);
+            
+            // If boxes are heavily overlapped (>70% in both directions), use offsets
+            if (overlapX > Math.min(b1w, b2w) * 0.7 && overlapY > Math.min(b1h, b2h) * 0.7) {
+              // Boxes are very overlapped, offset them vertically apart to fully separate
+              result[i] = { ...box1, yOffset: (box1.yOffset || 0) - (overlapY / 2 + 1) };
+              result[j] = { ...box2, yOffset: (box2.yOffset || 0) + (overlapY / 2 + 1) };
+            } else {
+              // Scale down each box independently from its own center
+              const newScale1 = box1.scale * 0.9;
+              const oldWidth1 = box1.width * box1.scale;
+              const oldHeight1 = box1.height * box1.scale;
+              const newWidth1 = box1.width * newScale1;
+              const newHeight1 = box1.height * newScale1;
+              const centerOffsetX1 = (oldWidth1 - newWidth1) / 2;
+              const centerOffsetY1 = (oldHeight1 - newHeight1) / 2;
+              
+              result[i] = { 
+                ...box1, 
+                scale: newScale1,
+                xOffset: (box1.xOffset || 0) + centerOffsetX1,
+                yOffset: (box1.yOffset || 0) + centerOffsetY1
+              };
+              
+              const newScale2 = box2.scale * 0.9;
+              const oldWidth2 = box2.width * box2.scale;
+              const oldHeight2 = box2.height * box2.scale;
+              const newWidth2 = box2.width * newScale2;
+              const newHeight2 = box2.height * newScale2;
+              const centerOffsetX2 = (oldWidth2 - newWidth2) / 2;
+              const centerOffsetY2 = (oldHeight2 - newHeight2) / 2;
+              
+              result[j] = { 
+                ...box2, 
+                scale: newScale2,
+                xOffset: (box2.xOffset || 0) + centerOffsetX2,
+                yOffset: (box2.yOffset || 0) + centerOffsetY2
+              };
+            }
+          }
+        }
+      }
+      
+      // If no overlap found in this iteration, we're done
+      if (!hasOverlap) break;
+    }
+
+    return result;
+  };
 
   // Calculate actual rendered image dimensions with object-fit: contain
   const calculateRenderedImageDimensions = (img: HTMLImageElement): { width: number; height: number; offsetX: number; offsetY: number } => {
@@ -906,35 +900,8 @@ export default function ImageWithOverlays({
     }
   }, []);
 
-  // Helper to get overlay rect relative to viewport
-  const getOverlayRect = useCallback((index: number) => {
-    if (!containerRef.current || !overlays[index]) return null;
-    
-    const containerRect = containerRef.current.getBoundingClientRect();
-    const overlay = overlays[index];
-    
-    const scaledX = (overlay.x + (overlay.xOffset || 0)) * scaleX + imageOffset.offsetX + containerRect.left;
-    const scaledY = (overlay.y + (overlay.yOffset || 0)) * scaleY + imageOffset.offsetY + containerRect.top;
-    const scaledWidth = overlay.width * scaleX * overlay.scale;
-    const scaledHeight = overlay.height * scaleY * overlay.scale;
-    
-    return {
-      left: scaledX,
-      top: scaledY,
-      width: scaledWidth,
-      height: scaledHeight,
-      right: scaledX + scaledWidth,
-      bottom: scaledY + scaledHeight,
-      centerX: scaledX + scaledWidth / 2,
-      centerY: scaledY + scaledHeight / 2
-    };
-  }, [overlays, scaleX, scaleY, imageOffset]);
-
-  // Ref to track the currently active interaction index (for container moves)
-  const activeInteractionIndexRef = useRef<number | null>(null);
-
   // Handle touch/mouse down - start the multi-phase interaction
-  const handleInteractionStart = useCallback((index: number, e: React.MouseEvent | React.TouchEvent | TouchEvent | MouseEvent) => {
+  const handleInteractionStart = useCallback((index: number, e: React.MouseEvent | React.TouchEvent) => {
     if (isFusing || statusMenuOpen) return;
 
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
@@ -943,26 +910,19 @@ export default function ImageWithOverlays({
 
     // Store start position to detect movement
     touchStartPosRef.current = { x: clientX, y: clientY };
-    activeInteractionIndexRef.current = index; // Track active index
     statusMenuTriggeredRef.current = false;
     setHasMoved(false);
 
     // Calculate offset for potential drag
-    const overlayRect = getOverlayRect(index);
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const isTouch = 'touches' in e;
     // On touch, shift the drag center up so the element appears above the finger
     const touchYOffset = isTouch ? 80 : 0;
 
-    if (overlayRect) {
-      setDragOffset({
-        x: clientX - overlayRect.left - overlayRect.width / 2,
-        y: clientY - overlayRect.top - overlayRect.height / 2 + touchYOffset,
-      });
-    } else {
-      // Fallback if rect calculation fails
-      setDragOffset({ x: 0, y: touchYOffset });
-    }
-    
+    setDragOffset({
+      x: clientX - rect.left - rect.width / 2,
+      y: clientY - rect.top - rect.height / 2 + touchYOffset,
+    });
     setDragPosition({ x: clientX, y: clientY });
 
     // Phase 1: After WOBBLE_DELAY, start wobbling (indicates drag is possible)
@@ -1003,44 +963,10 @@ export default function ImageWithOverlays({
     }, STATUS_MENU_DELAY);
 
     // Don't preventDefault here - allow scroll detection
-  }, [isFusing, statusMenuOpen, overlays, getOverlayRect]);
-
-  // Handle container touch start for proximity selection
-  const handleContainerTouchStart = useCallback((e: React.TouchEvent) => {
-    // If we hit an overlay directly, stop propagation so we don't double-trigger
-    // (This is handled by overlay's onTouchStart stopping propagation, or we check target)
-    if ((e.target as HTMLElement).closest('[data-testid^="overlay-box-"]')) return;
-
-    const clientX = e.touches[0].clientX;
-    const clientY = e.touches[0].clientY;
-
-    // Find nearest overlay
-    let minDistance = Infinity;
-    let nearestIndex = -1;
-
-    overlays.forEach((_, index) => {
-      const rect = getOverlayRect(index);
-      if (rect) {
-        // Calculate distance from touch to center of overlay
-        const dx = clientX - rect.centerX;
-        const dy = clientY - rect.centerY;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        if (distance < minDistance) {
-          minDistance = distance;
-          nearestIndex = index;
-        }
-      }
-    });
-
-    if (nearestIndex !== -1) {
-      // Start interaction with nearest overlay
-      handleInteractionStart(nearestIndex, e);
-    }
-  }, [overlays, getOverlayRect, handleInteractionStart]);
+  }, [isFusing, statusMenuOpen, overlays]);
 
   // Handle touch/mouse move during interaction
-  const handleInteractionMove = useCallback((index: number, e: React.MouseEvent | React.TouchEvent | TouchEvent) => {
+  const handleInteractionMove = useCallback((index: number, e: React.MouseEvent | React.TouchEvent) => {
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
 
@@ -1051,32 +977,9 @@ export default function ImageWithOverlays({
     const totalMovement = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 
     // If movement exceeds threshold before wobble phase, cancel everything (user is scrolling)
-    // UNLESS we are in proximity mode (activeInteractionIndexRef set via container touch)
-    // In that case, we might want to allow immediate drag if the user moves significantly?
-    // But user said "Das textfeld kann gerne sofort zum Finger verschoben werden."
-    // So if we have an active interaction, and we move, we should probably start dragging.
-    
     if (totalMovement > SCROLL_THRESHOLD && wobblingIndexRef.current === null && !draggingIndex) {
-      // If this was a direct touch on the overlay, we might want to allow scroll.
-      // But if it was a proximity touch (container), maybe we prioritize drag?
-      // Actually, if we want "immediate drag", we should just start dragging here.
-      
-      // Cancel status menu timer - user is dragging
-      if (statusMenuTimerRef.current) {
-        clearTimeout(statusMenuTimerRef.current);
-        statusMenuTimerRef.current = null;
-      }
-
-      // Enter drag mode immediately
-      setHasMoved(true);
-      setDraggingIndex(index);
-      setWobblingIndex(null);
-      setLongPressIndex(null);
-
-      // Prevent scrolling now that we're dragging
-      if (e.cancelable) {
-        e.preventDefault();
-      }
+      clearInteractionTimers();
+      touchStartPosRef.current = null;
       return;
     }
 
@@ -1095,58 +998,15 @@ export default function ImageWithOverlays({
       setLongPressIndex(null);
 
       // Prevent scrolling now that we're dragging
-      if (e.cancelable) {
-        e.preventDefault();
-      }
+      e.preventDefault();
     }
 
     // Update drag position if already dragging
     if (draggingIndex === index) {
       setDragPosition({ x: clientX, y: clientY });
-      if (e.cancelable) {
-        e.preventDefault();
-      }
+      e.preventDefault();
     }
   }, [draggingIndex, clearInteractionTimers]);
-
-  // Handle container touch move to prevent scrolling when holding AND to update drag
-  const handleContainerTouchMove = useCallback((e: React.TouchEvent | TouchEvent) => {
-    // If we have an active interaction index, forward the move event
-    if (activeInteractionIndexRef.current !== null) {
-      handleInteractionMove(activeInteractionIndexRef.current, e);
-    }
-
-    // If we are in wobble mode (holding) or dragging, prevent scrolling
-    if (wobblingIndexRef.current !== null || draggingIndex !== null) {
-      if (e.cancelable) {
-        e.preventDefault();
-      }
-    }
-  }, [draggingIndex, handleInteractionMove]);
-
-  // Handle container touch end to clean up proximity interactions
-  const handleContainerTouchEnd = useCallback(() => {
-    if (activeInteractionIndexRef.current !== null) {
-      handleInteractionEnd(activeInteractionIndexRef.current);
-    }
-  }, [handleInteractionEnd]);
-
-  // Add non-passive touch listener to container for scroll prevention
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const onTouchMove = (e: TouchEvent) => {
-      handleContainerTouchMove(e);
-    };
-
-    // options: { passive: false } is CRITICAL for e.preventDefault() to work
-    container.addEventListener('touchmove', onTouchMove, { passive: false });
-    
-    return () => {
-      container.removeEventListener('touchmove', onTouchMove);
-    };
-  }, [handleContainerTouchMove]);
 
   // Handle touch/mouse end
   const handleInteractionEnd = useCallback((index: number) => {
@@ -1185,7 +1045,6 @@ export default function ImageWithOverlays({
     setWobblingIndex(null);
     setLongPressIndex(null);
     touchStartPosRef.current = null;
-    activeInteractionIndexRef.current = null; // Clear active index
     setHasMoved(false);
   }, [draggingIndex, clearInteractionTimers, handleOverlayClick]);
 
@@ -1634,8 +1493,6 @@ export default function ImageWithOverlays({
             e.preventDefault();
             return false;
           }}
-          onTouchStart={handleContainerTouchStart}
-          onTouchEnd={handleContainerTouchEnd}
         >
           <img
             ref={imageRef}
@@ -1744,7 +1601,7 @@ export default function ImageWithOverlays({
             return (
               <div
                 key={index}
-                className={`absolute cursor-grab transition-all duration-200 select-none ${
+                className={`absolute cursor-grab transition-all duration-200 select-none touch-none ${
                   isDragging ? 'opacity-0' : ''
                 } ${isDropTarget ? 'ring-4 ring-primary ring-offset-2 scale-125 z-40' : ''} ${
                   isFusingTarget ? 'animate-pulse ring-4 ring-green-500' : ''
@@ -1782,7 +1639,9 @@ export default function ImageWithOverlays({
                   }
                 }}
                 onTouchStart={(e) => {
-                  e.stopPropagation(); // Prevent container proximity logic
+                  // Prevent default to ensure no scrolling happens on any device
+                  // This is safe because we handle clicks manually in handleInteractionEnd
+                  if (e.cancelable) e.preventDefault();
                   handleInteractionStart(index, e);
                 }}
                 onTouchMove={(e) => {
@@ -1799,10 +1658,11 @@ export default function ImageWithOverlays({
               >
                 {/* Background box with rounded corners and border */}
                 <div
-                  className={`absolute inset-0 rounded transition-all duration-150 ${
+                  className={`absolute inset-0 rounded transition-all duration-150 touch-none ${
                     isDropTarget ? 'shadow-xl bg-primary/10' : ''
                   }`}
                   style={{
+                    touchAction: 'none',
                     backgroundColor: overlay.isDuplicate
                       ? colorConfig.duplicates.background
                       : overlay.isExisting
@@ -1822,8 +1682,9 @@ export default function ImageWithOverlays({
 
                 {/* Text container - extends horizontally to avoid rounded corner clipping */}
                 <div
-                  className="absolute inset-0 flex items-center justify-center"
+                  className="absolute inset-0 flex items-center justify-center touch-none"
                   style={{
+                    touchAction: 'none',
                     left: '-8px',
                     right: '-8px',
                     paddingLeft: '8px',
