@@ -1118,6 +1118,30 @@ export default function ImageWithOverlays({
     }
   }, [draggingIndex, handleInteractionMove]);
 
+  // Handle container touch end to clean up proximity interactions
+  const handleContainerTouchEnd = useCallback(() => {
+    if (activeInteractionIndexRef.current !== null) {
+      handleInteractionEnd(activeInteractionIndexRef.current);
+    }
+  }, [handleInteractionEnd]);
+
+  // Add non-passive touch listener to container for scroll prevention
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onTouchMove = (e: TouchEvent) => {
+      handleContainerTouchMove(e);
+    };
+
+    // options: { passive: false } is CRITICAL for e.preventDefault() to work
+    container.addEventListener('touchmove', onTouchMove, { passive: false });
+    
+    return () => {
+      container.removeEventListener('touchmove', onTouchMove);
+    };
+  }, [handleContainerTouchMove]);
+
   // Handle touch/mouse end
   const handleInteractionEnd = useCallback((index: number) => {
     clearInteractionTimers();
@@ -1605,7 +1629,7 @@ export default function ImageWithOverlays({
             return false;
           }}
           onTouchStart={handleContainerTouchStart}
-          onTouchMove={handleContainerTouchMove}
+          onTouchEnd={handleContainerTouchEnd}
         >
           <img
             ref={imageRef}
