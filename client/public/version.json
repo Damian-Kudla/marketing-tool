@@ -1,16 +1,16 @@
 {
-  "version": "2.8.11",
-  "buildTime": "2025-12-07T03:11:58.109Z",
-  "buildNumber": "build-1765077118109",
+  "version": "2.8.13",
+  "buildTime": "2025-12-07T03:51:50.871Z",
+  "buildNumber": "build-1765079510872",
   "features": [
-    "UX: Proximity Selection - Automatische Auswahl des nächstgelegenen Textfeldes bei Klick daneben",
-    "Fix: Scroll Prevention - Zuverlässiges Deaktivieren des Scrollens beim Halten (auch bei verfehlten Klicks)",
+    "Fix: Multi-Image Scroll - Scrollen deaktiviert auch bei mehreren Bildern zuverlässig",
     "UX: Touch Drag - Verbessertes Drag & Drop auf Touch-Geräten (Offset + Vergrößerung)",
-    "UX: Context Menu - Verzögerung auf 2 Sekunden erhöht für bessere Bedienbarkeit"
+    "UX: Context Menu - Verzögerung auf 2 Sekunden erhöht für bessere Bedienbarkeit",
+    "Fix: iOS Scrolling - Deaktivierung des Scrollens beim Verschieben von Overlays"
   ],
   "technicalDetails": [
-    "UI: Implemented nearest-neighbor search for touch events on container",
-    "UI: Added non-passive touchmove listener to prevent scrolling during interaction",
+    "UI: Added touch-none class and touchAction: none to all overlay elements",
+    "UI: Added e.preventDefault() on touchStart to enforce no-scroll",
     "UI: Added touchYOffset (80px) for visibility above finger",
     "UI: Increased scale to 1.5x during drag/hold"
   ],
