@@ -1316,20 +1316,23 @@ export default function ScannerPage() {
                       </div>
                       {/* ImageWithOverlays for this specific photo */}
                       {photo.imageSrc && photo.fullVisionResponse && (
-                        <ImageWithOverlays
-                          imageSrc={photo.imageSrc}
-                          fullVisionResponse={photo.fullVisionResponse}
-                          residentNames={photo.residentNames}
-                          existingCustomers={photo.existingCustomers}
-                          newProspects={photo.newProspects}
-                          allCustomersAtAddress={photo.allCustomersAtAddress}
-                          address={address}
-                          onNamesUpdated={(names) => handleNamesUpdated(names, photo.id)}
-                          editableResidents={editableResidents}
-                          onResidentsUpdated={setEditableResidents}
-                          currentDatasetId={currentDatasetId}
-                          onRequestDatasetCreation={handleRequestDatasetCreation}
-                        />
+                        <div className="relative">
+                          <MaximizeButton panel={`overlay-${photo.id}`} className="absolute top-2 right-2 z-10" />
+                          <ImageWithOverlays
+                            imageSrc={photo.imageSrc}
+                            fullVisionResponse={photo.fullVisionResponse}
+                            residentNames={photo.residentNames}
+                            existingCustomers={photo.existingCustomers}
+                            newProspects={photo.newProspects}
+                            allCustomersAtAddress={photo.allCustomersAtAddress}
+                            address={address}
+                            onNamesUpdated={(names) => handleNamesUpdated(names, photo.id)}
+                            editableResidents={editableResidents}
+                            onResidentsUpdated={setEditableResidents}
+                            currentDatasetId={currentDatasetId}
+                            onRequestDatasetCreation={handleRequestDatasetCreation}
+                          />
+                        </div>
                       )}
                     </div>
                   ))}
