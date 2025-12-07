@@ -1,11 +1,11 @@
 // Akquise-Tool PWA Service Worker
 // Optimized for performance with comprehensive caching strategies
-const VERSION = '2.8.16';
+const VERSION = '2.8.17';
 
-const CACHE_NAME = 'akquise-tool-v2.8.16';
-const STATIC_CACHE = 'static-cache-v2.8.16';
-const API_CACHE = 'api-cache-v2.8.16';
-const IMAGE_CACHE = 'image-cache-v2.8.16';
+const CACHE_NAME = 'akquise-tool-v2.8.17';
+const STATIC_CACHE = 'static-cache-v2.8.17';
+const API_CACHE = 'api-cache-v2.8.17';
+const IMAGE_CACHE = 'image-cache-v2.8.17';
 
 // Static assets to cache on install
 const STATIC_ASSETS = [
