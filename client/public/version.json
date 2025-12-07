@@ -1,12 +1,17 @@
 {
-  "version": "2.8.4",
-  "buildTime": "2025-12-07T01:38:21.877Z",
-  "buildNumber": "build-1765071501877",
+  "version": "2.8.5",
+  "buildTime": "2025-12-07T01:49:19.906Z",
+  "buildNumber": "build-1765072159909",
   "features": [
+    "Fix: iOS Scrolling - Deaktivierung des Scrollens beim Verschieben von Overlays",
+    "Fix: Local Network - White Screen Fix (GPS Error Handling)",
     "Fix: iOS Context Menu - Deaktivierung des System-Menüs bei Long-Press auf Overlays",
     "Fix: iOS Usability - Verbesserte Touch-Interaktion auf mobilen Geräten"
   ],
   "technicalDetails": [
+    "UI: Added touchAction: none to overlays",
+    "GPS: Added try-catch to navigator.geolocation.watchPosition",
+    "Vite: Added server.host: true",
     "UI: Added WebkitTouchCallout: none and userSelect: none",
     "UI: Added onContextMenu prevention for overlays"
   ],
