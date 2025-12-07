@@ -54,7 +54,7 @@ export function UserButton({ onDatasetLoad }: UserButtonProps) {
   const [showCallBacks, setShowCallBacks] = useState(false);
   const [showAppointments, setShowAppointments] = useState(false);
   const [showLeonFilter, setShowLeonFilter] = useState(false);
-  const [appVersion, setAppVersion] = useState('2.8.10');
+  const [appVersion, setAppVersion] = useState('2.8.11');
 
   // Load version from version.json
   useEffect(() => {

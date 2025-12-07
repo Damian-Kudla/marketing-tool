@@ -120,6 +120,125 @@ const calculateDuplicates = (names: string[], existingCustomerNames: string[] = 
   return duplicates;
 };
 
+// Calculate optimal font size for text to fit in box without truncation
+const calculateFontSize = (text: string, boxWidth: number, boxHeight: number): number => {
+  // Start with base font size in pixels
+  let fontSize = 12;
+  const minFontSize = 6;
+  
+  // Account for border (1px each side) and padding (1px each side) = 4px total
+  const availableWidth = boxWidth - 4;
+  const availableHeight = boxHeight - 4;
+  
+  // Conservative character width ratio
+  const avgCharWidthRatio = 0.65;
+  
+  // Calculate required width for text
+  const textLength = text.length;
+  
+  // Find optimal font size by reducing until it fits
+  while (fontSize > minFontSize) {
+    const estimatedWidth = textLength * fontSize * avgCharWidthRatio;
+    const estimatedHeight = fontSize * 1.2; // line height
+    
+    if (estimatedWidth <= availableWidth && estimatedHeight <= availableHeight) {
+      break;
+    }
+    fontSize -= 0.5;
+  }
+  
+  return Math.max(fontSize, minFontSize);
+};
+
+// Handle overlapping boxes by downscaling and offsetting
+const handleOverlaps = (boxes: OverlayBox[]): OverlayBox[] => {
+  const result = boxes.map(box => ({ ...box, xOffset: 0, yOffset: 0 }));
+  let iterations = 0;
+  const maxIterations = 10;
+
+  while (iterations < maxIterations) {
+    let hasOverlap = false;
+    iterations++;
+
+    for (let i = 0; i < result.length; i++) {
+      for (let j = i + 1; j < result.length; j++) {
+        const box1 = result[i];
+        const box2 = result[j];
+
+        // Calculate scaled dimensions and positions
+        const b1x = box1.x + (box1.xOffset || 0);
+        const b1y = box1.y + (box1.yOffset || 0);
+        const b1w = box1.width * box1.scale;
+        const b1h = box1.height * box1.scale;
+        
+        const b2x = box2.x + (box2.xOffset || 0);
+        const b2y = box2.y + (box2.yOffset || 0);
+        const b2w = box2.width * box2.scale;
+        const b2h = box2.height * box2.scale;
+
+        // Check for overlap using scaled dimensions
+        const overlap = !(
+          b1x + b1w <= b2x ||
+          b2x + b2w <= b1x ||
+          b1y + b1h <= b2y ||
+          b2y + b2h <= b1y
+        );
+
+        if (overlap) {
+          hasOverlap = true;
+          
+          // Calculate overlap amounts
+          const overlapX = Math.min(b1x + b1w, b2x + b2w) - Math.max(b1x, b2x);
+          const overlapY = Math.min(b1y + b1h, b2y + b2h) - Math.max(b1y, b2y);
+          
+          // If boxes are heavily overlapped (>70% in both directions), use offsets
+          if (overlapX > Math.min(b1w, b2w) * 0.7 && overlapY > Math.min(b1h, b2h) * 0.7) {
+            // Boxes are very overlapped, offset them vertically apart to fully separate
+            result[i] = { ...box1, yOffset: (box1.yOffset || 0) - (overlapY / 2 + 1) };
+            result[j] = { ...box2, yOffset: (box2.yOffset || 0) + (overlapY / 2 + 1) };
+          } else {
+            // Scale down each box independently from its own center
+            const newScale1 = box1.scale * 0.9;
+            const oldWidth1 = box1.width * box1.scale;
+            const oldHeight1 = box1.height * box1.scale;
+            const newWidth1 = box1.width * newScale1;
+            const newHeight1 = box1.height * newScale1;
+            const centerOffsetX1 = (oldWidth1 - newWidth1) / 2;
+            const centerOffsetY1 = (oldHeight1 - newHeight1) / 2;
+            
+            result[i] = { 
+              ...box1, 
+              scale: newScale1,
+              xOffset: (box1.xOffset || 0) + centerOffsetX1,
+              yOffset: (box1.yOffset || 0) + centerOffsetY1
+            };
+            
+            const newScale2 = box2.scale * 0.9;
+            const oldWidth2 = box2.width * box2.scale;
+            const oldHeight2 = box2.height * box2.scale;
+            const newWidth2 = box2.width * newScale2;
+            const newHeight2 = box2.height * newScale2;
+            const centerOffsetX2 = (oldWidth2 - newWidth2) / 2;
+            const centerOffsetY2 = (oldHeight2 - newHeight2) / 2;
+            
+            result[j] = { 
+              ...box2, 
+              scale: newScale2,
+              xOffset: (box2.xOffset || 0) + centerOffsetX2,
+              yOffset: (box2.yOffset || 0) + centerOffsetY2
+            };
+          }
+        }
+      }
+    }
+    
+    // If no overlap found in this iteration, we're done
+    if (!hasOverlap) break;
+  }
+
+  return result;
+};
+
 export default function ImageWithOverlays({
   imageSrc,
   fullVisionResponse,
@@ -532,35 +651,7 @@ export default function ImageWithOverlays({
     });
   }, [fullVisionResponse, residentNames, existingCustomers, newProspects, editableResidents]);
 
-  // Calculate optimal font size for text to fit in box without truncation
-  const calculateFontSize = (text: string, boxWidth: number, boxHeight: number): number => {
-    // Start with base font size in pixels
-    let fontSize = 12;
-    const minFontSize = 6;
-    
-    // Account for border (1px each side) and padding (1px each side) = 4px total
-    const availableWidth = boxWidth - 4;
-    const availableHeight = boxHeight - 4;
-    
-    // Conservative character width ratio
-    const avgCharWidthRatio = 0.65;
-    
-    // Calculate required width for text
-    const textLength = text.length;
-    
-    // Find optimal font size by reducing until it fits
-    while (fontSize > minFontSize) {
-      const estimatedWidth = textLength * fontSize * avgCharWidthRatio;
-      const estimatedHeight = fontSize * 1.2; // line height
-      
-      if (estimatedWidth <= availableWidth && estimatedHeight <= availableHeight) {
-        break;
-      }
-      fontSize -= 0.5;
-    }
-    
-    return Math.max(fontSize, minFontSize);
-  };
+
 
   // Update overlay properties when editableResidents changes (name, category, etc.)
   // Also REMOVE overlays whose corresponding resident was deleted (e.g., after fusion)
@@ -573,20 +664,20 @@ export default function ImageWithOverlays({
       const filteredOverlays = prevOverlays.filter(overlay => {
         // Try multiple matching strategies to find the corresponding resident
         // Strategy 1: Match by current displayed text
-        let matchingResident = editableResidents.find(r =>
+        let matchingResident = editableResidents?.find(r =>
           r.name.toLowerCase() === (overlay.editedText || overlay.text).toLowerCase()
         );
 
         // Strategy 2: Match by originalName if Strategy 1 failed
         if (!matchingResident) {
-          matchingResident = editableResidents.find(r =>
+          matchingResident = editableResidents?.find(r =>
             r.originalName?.toLowerCase() === overlay.originalName.toLowerCase()
           );
         }
 
         // Strategy 3: Match by original text if both failed
         if (!matchingResident) {
-          matchingResident = editableResidents.find(r =>
+          matchingResident = editableResidents?.find(r =>
             r.name.toLowerCase() === overlay.text.toLowerCase()
           );
         }
@@ -602,16 +693,16 @@ export default function ImageWithOverlays({
       // Then, update the remaining overlays
       return filteredOverlays.map(overlay => {
         // Find matching resident (we know it exists from the filter above)
-        let matchingResident = editableResidents.find(r =>
+        let matchingResident = editableResidents?.find(r =>
           r.name.toLowerCase() === (overlay.editedText || overlay.text).toLowerCase()
         );
         if (!matchingResident) {
-          matchingResident = editableResidents.find(r =>
+          matchingResident = editableResidents?.find(r =>
             r.originalName?.toLowerCase() === overlay.originalName.toLowerCase()
           );
         }
         if (!matchingResident) {
-          matchingResident = editableResidents.find(r =>
+          matchingResident = editableResidents?.find(r =>
             r.name.toLowerCase() === overlay.text.toLowerCase()
           );
         }
@@ -642,94 +733,7 @@ export default function ImageWithOverlays({
     });
   }, [editableResidents]);
 
-  // Handle overlapping boxes by downscaling and offsetting
-  const handleOverlaps = (boxes: OverlayBox[]): OverlayBox[] => {
-    const result = boxes.map(box => ({ ...box, xOffset: 0, yOffset: 0 }));
-    let iterations = 0;
-    const maxIterations = 10;
 
-    while (iterations < maxIterations) {
-      let hasOverlap = false;
-      iterations++;
-
-      for (let i = 0; i < result.length; i++) {
-        for (let j = i + 1; j < result.length; j++) {
-          const box1 = result[i];
-          const box2 = result[j];
-
-          // Calculate scaled dimensions and positions
-          const b1x = box1.x + (box1.xOffset || 0);
-          const b1y = box1.y + (box1.yOffset || 0);
-          const b1w = box1.width * box1.scale;
-          const b1h = box1.height * box1.scale;
-          
-          const b2x = box2.x + (box2.xOffset || 0);
-          const b2y = box2.y + (box2.yOffset || 0);
-          const b2w = box2.width * box2.scale;
-          const b2h = box2.height * box2.scale;
-
-          // Check for overlap using scaled dimensions
-          const overlap = !(
-            b1x + b1w <= b2x ||
-            b2x + b2w <= b1x ||
-            b1y + b1h <= b2y ||
-            b2y + b2h <= b1y
-          );
-
-          if (overlap) {
-            hasOverlap = true;
-            
-            // Calculate overlap amounts
-            const overlapX = Math.min(b1x + b1w, b2x + b2w) - Math.max(b1x, b2x);
-            const overlapY = Math.min(b1y + b1h, b2y + b2h) - Math.max(b1y, b2y);
-            
-            // If boxes are heavily overlapped (>70% in both directions), use offsets
-            if (overlapX > Math.min(b1w, b2w) * 0.7 && overlapY > Math.min(b1h, b2h) * 0.7) {
-              // Boxes are very overlapped, offset them vertically apart to fully separate
-              result[i] = { ...box1, yOffset: (box1.yOffset || 0) - (overlapY / 2 + 1) };
-              result[j] = { ...box2, yOffset: (box2.yOffset || 0) + (overlapY / 2 + 1) };
-            } else {
-              // Scale down each box independently from its own center
-              const newScale1 = box1.scale * 0.9;
-              const oldWidth1 = box1.width * box1.scale;
-              const oldHeight1 = box1.height * box1.scale;
-              const newWidth1 = box1.width * newScale1;
-              const newHeight1 = box1.height * newScale1;
-              const centerOffsetX1 = (oldWidth1 - newWidth1) / 2;
-              const centerOffsetY1 = (oldHeight1 - newHeight1) / 2;
-              
-              result[i] = { 
-                ...box1, 
-                scale: newScale1,
-                xOffset: (box1.xOffset || 0) + centerOffsetX1,
-                yOffset: (box1.yOffset || 0) + centerOffsetY1
-              };
-              
-              const newScale2 = box2.scale * 0.9;
-              const oldWidth2 = box2.width * box2.scale;
-              const oldHeight2 = box2.height * box2.scale;
-              const newWidth2 = box2.width * newScale2;
-              const newHeight2 = box2.height * newScale2;
-              const centerOffsetX2 = (oldWidth2 - newWidth2) / 2;
-              const centerOffsetY2 = (oldHeight2 - newHeight2) / 2;
-              
-              result[j] = { 
-                ...box2, 
-                scale: newScale2,
-                xOffset: (box2.xOffset || 0) + centerOffsetX2,
-                yOffset: (box2.yOffset || 0) + centerOffsetY2
-              };
-            }
-          }
-        }
-      }
-      
-      // If no overlap found in this iteration, we're done
-      if (!hasOverlap) break;
-    }
-
-    return result;
-  };
 
   // Calculate actual rendered image dimensions with object-fit: contain
   const calculateRenderedImageDimensions = (img: HTMLImageElement): { width: number; height: number; offsetX: number; offsetY: number } => {
