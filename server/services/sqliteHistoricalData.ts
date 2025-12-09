@@ -204,6 +204,10 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
       uniquePhotos: 0 // Initialize with 0, will be set later
     };
 
+    // Track seen resident statuses to count only ACTUAL changes, not repeated saves
+    // Key: "datasetId::residentName", Value: last known status
+    const seenResidentStatuses = new Map<string, string>();
+
     // Track unique photo hashes for deduplication (based on address)
     const seenPhotoHashes = new Set<string>();
 
@@ -470,21 +474,42 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
             userData.statusChanges.set(normalizedStatus, statusCount + 1);
           }
           
-          // 2. Bulk updates - residents array contains all status changes
-          // NOTE: These are NOT counted as separate 'status_change' actions!
-          // They are part of the bulk_residents_update action itself
+          // 2. Bulk updates - residents array contains status data
+          // FIX: Only count ACTUAL status changes, not repeated saves of the same status
+          // The frontend sends all residents on every save, so we need to track what we've seen
           if (actionType === 'bulk_residents_update' && actionData.residents && Array.isArray(actionData.residents)) {
+            const datasetId = actionData.datasetId || 'unknown';
+            
             actionData.residents.forEach((resident: any) => {
-              if (resident.status && typeof resident.status === 'string') {
+              if (resident.status && typeof resident.status === 'string' && resident.name) {
                 const normalizedStatus = normalizeStatusKey(resident.status);
-                const statusCount = userData.statusChanges.get(normalizedStatus) || 0;
-                userData.statusChanges.set(normalizedStatus, statusCount + 1);
+                const residentKey = `${datasetId}::${resident.name.toLowerCase().trim()}`;
+                
+                // Only count if this is the FIRST time we see this status for this resident
+                // OR if the status has actually changed from the previous value
+                const previousStatus = seenResidentStatuses.get(residentKey);
+                
+                if (previousStatus !== normalizedStatus) {
+                  // This is either a new resident or an actual status change
+                  const statusCount = userData.statusChanges.get(normalizedStatus) || 0;
+                  userData.statusChanges.set(normalizedStatus, statusCount + 1);
+                  
+                  // Update the tracked status
+                  seenResidentStatuses.set(residentKey, normalizedStatus);
+                }
+                // If previousStatus === normalizedStatus, this is just a repeated save - don't count
               }
             });
           }
           
           // 3. Legacy newProspects/existingCustomers fields (from Google Sheets era)
-          // WICHTIG: Daten können in logData ODER log.data sein
+          // NOTE: These are NOT status changes! They are just OCR scan results showing:
+          // - newProspects: Names that were NOT found in the customer database (potential new customers)
+          // - existingCustomers: Names that WERE found in the customer database (existing customers)
+          // The user hasn't assigned any status at this point - they just scanned a doorbell.
+          // Status changes only happen when the user explicitly sets a status like 'nicht_angetroffen', 'interessiert', etc.
+          // REMOVED: Don't count these as status changes anymore
+          /*
           const newProspectsLegacy = logData.newProspects || (log.data as any).newProspects || actionData.newProspects;
           const existingCustomersLegacy = logData.existingCustomers || (log.data as any).existingCustomers || actionData.existingCustomers;
           
@@ -498,6 +523,7 @@ async function reconstructDailyUserData(date: string, userId: string): Promise<D
             const writtenCount = userData.statusChanges.get('geschrieben') || 0;
             userData.statusChanges.set('geschrieben', writtenCount + existingCustomersLegacy.length);
           }
+          */
           break;
       }
 
