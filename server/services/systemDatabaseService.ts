@@ -1224,6 +1224,7 @@ export const systemSheetsSync = {
       });
 
       const sheetRows = response.data.values || [];
+      console.log(`[SystemSync] Found ${sheetRows.length} appointments in Sheets`);
       const localAppointments = appointmentsDB.getAll();
 
       // Build maps for intelligent merging
@@ -1393,23 +1394,51 @@ export const systemSheetsSync = {
   },
 
   /**
-   * Sync AuthLogs: Local → Sheets (nur Upload, kein Download - Logs sind append-only)
+   * Sync AuthLogs: Local ↔ Sheets (Bidirectional for recovery)
    */
   async syncAuthLogs(): Promise<{ synced: number; direction: string }> {
     try {
       const auth = await getGoogleAuth();
       const sheets = google.sheets({ version: 'v4', auth });
       
-      // Get latest timestamp from Sheets to avoid duplicates
+      // Get all data from Sheets
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: SYSTEM_SHEET_ID,
-        range: `${SHEET_NAMES.authLogs}!A2:A`
+        range: `${SHEET_NAMES.authLogs}!A2:F`
       });
       
-      const sheetTimestamps = new Set((response.data.values || []).map(r => r[0]));
-      const localLogs = authLogsDB.getAll(500); // Last 500
+      const sheetRows = response.data.values || [];
+      const localLogs = authLogsDB.getAll(5000); // Check last 5000 for sync
+      const localTimestamps = new Set(localLogs.map(l => l.timestamp));
       
-      // Only upload logs not in Sheets
+      let synced = 0;
+      let direction = 'none';
+
+      // Sheets → Local (Download missing logs)
+      const missingInLocal: any[] = [];
+      for (const row of sheetRows) {
+        const timestamp = row[0];
+        if (timestamp && !localTimestamps.has(timestamp)) {
+          missingInLocal.push({
+            timestamp: row[0],
+            ipAddress: row[1] || '',
+            success: row[2] === '1',
+            username: row[3] || undefined,
+            userId: row[4] || undefined,
+            reason: row[5] || undefined
+          });
+        }
+      }
+
+      if (missingInLocal.length > 0) {
+        authLogsDB.insertBatch(missingInLocal);
+        synced += missingInLocal.length;
+        direction = 'sheets→local';
+        console.log(`[SystemSync] Restored ${missingInLocal.length} auth logs from Sheets`);
+      }
+      
+      // Local → Sheets (Upload missing logs)
+      const sheetTimestamps = new Set(sheetRows.map(r => r[0]));
       const missingInSheets = localLogs.filter(l => !sheetTimestamps.has(l.timestamp));
       
       if (missingInSheets.length > 0) {
@@ -1429,10 +1458,11 @@ export const systemSheetsSync = {
           requestBody: { values: newRows }
         });
         
-        return { synced: missingInSheets.length, direction: 'local→sheets' };
+        synced += missingInSheets.length;
+        direction = direction === 'sheets→local' ? 'bidirectional' : 'local→sheets';
       }
       
-      return { synced: 0, direction: 'none' };
+      return { synced, direction };
     } catch (error) {
       console.error('[SystemSync] Error syncing auth logs:', error);
       return { synced: 0, direction: 'error' };
@@ -1440,22 +1470,53 @@ export const systemSheetsSync = {
   },
 
   /**
-   * Sync CategoryChanges: Local → Sheets (nur Upload, kein Download - Changes sind append-only)
+   * Sync CategoryChanges: Local ↔ Sheets (Bidirectional for recovery)
    */
   async syncCategoryChanges(): Promise<{ synced: number; direction: string }> {
     try {
       const auth = await getGoogleAuth();
       const sheets = google.sheets({ version: 'v4', auth });
       
-      // Get latest timestamp from Sheets
+      // Get all data from Sheets
       const response = await sheets.spreadsheets.values.get({
         spreadsheetId: SYSTEM_SHEET_ID,
-        range: `${SHEET_NAMES.categoryChanges}!A2:A`
+        range: `${SHEET_NAMES.categoryChanges}!A2:H`
       });
       
-      const sheetTimestamps = new Set((response.data.values || []).map(r => r[0]));
-      const localChanges = categoryChangesDB.getAll(500);
+      const sheetRows = response.data.values || [];
+      const localChanges = categoryChangesDB.getAll(5000);
+      const localTimestamps = new Set(localChanges.map(c => c.timestamp));
       
+      let synced = 0;
+      let direction = 'none';
+
+      // Sheets → Local (Download missing changes)
+      const missingInLocal: any[] = [];
+      for (const row of sheetRows) {
+        const timestamp = row[0];
+        if (timestamp && !localTimestamps.has(timestamp)) {
+          missingInLocal.push({
+            timestamp: row[0],
+            datasetId: row[1] || '',
+            residentOriginalName: row[2] || undefined,
+            residentCurrentName: row[3] || undefined,
+            oldCategory: row[4] || undefined,
+            newCategory: row[5] || undefined,
+            changedBy: row[6] || 'System',
+            addressSnapshot: row[7] || undefined
+          });
+        }
+      }
+
+      if (missingInLocal.length > 0) {
+        categoryChangesDB.insertBatch(missingInLocal);
+        synced += missingInLocal.length;
+        direction = 'sheets→local';
+        console.log(`[SystemSync] Restored ${missingInLocal.length} category changes from Sheets`);
+      }
+      
+      // Local → Sheets (Upload missing changes)
+      const sheetTimestamps = new Set(sheetRows.map(r => r[0]));
       const missingInSheets = localChanges.filter(c => !sheetTimestamps.has(c.timestamp));
       
       if (missingInSheets.length > 0) {
@@ -1477,10 +1538,11 @@ export const systemSheetsSync = {
           requestBody: { values: newRows }
         });
         
-        return { synced: missingInSheets.length, direction: 'local→sheets' };
+        synced += missingInSheets.length;
+        direction = direction === 'sheets→local' ? 'bidirectional' : 'local→sheets';
       }
       
-      return { synced: 0, direction: 'none' };
+      return { synced, direction };
     } catch (error) {
       console.error('[SystemSync] Error syncing category changes:', error);
       return { synced: 0, direction: 'error' };
@@ -1502,6 +1564,7 @@ export const systemSheetsSync = {
       });
 
       const sheetRows = response.data.values || [];
+      console.log(`[SystemSync] Found ${sheetRows.length} address datasets in Sheets`);
       const localDatasets = addressDatasetsDB.getAll();
 
       // Helper function to ensure value is a string (handles objects/JSON from bad data)
