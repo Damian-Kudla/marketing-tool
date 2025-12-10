@@ -131,6 +131,11 @@ export const egonOrdersDB = {
     return !!result;
   },
 
+  existsOrderNo: (orderNo: string): boolean => {
+    const result = db.prepare('SELECT 1 FROM egon_orders WHERE order_no = ?').get(orderNo);
+    return !!result;
+  },
+
   count: (): number => {
     const result = db.prepare('SELECT COUNT(*) as count FROM egon_orders').get() as { count: number };
     return result.count;
@@ -459,6 +464,14 @@ class EgonScraper {
         // Process each order
         for (const order of orders) {
           const orderNo = order.order_no;
+
+          // Optimization: Stop if order already exists
+          if (orderNo && egonOrdersDB.existsOrderNo(orderNo)) {
+            console.log(`[EgonScraper] Order ${orderNo} already exists in DB. Stopping incremental scrape.`);
+            shouldStop = true;
+            break;
+          }
+
           const contractDateStr = order.contract_date || '';
 
           // Check order date
