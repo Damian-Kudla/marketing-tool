@@ -1,239 +1,1001 @@
-2025-12-09T23:03:11.862603866Z [inf]  [UserAuthCache] Syncing user data from Google Sheets...
-2025-12-09T23:03:12.880754510Z [inf]  [UserAuthCache] Synced 36 users (8 with FollowMee devices)
-2025-12-09T23:03:14.311559115Z [inf]  [CronJobService] Running failed logs retry job...
-2025-12-09T23:03:14.311567802Z [inf]  [FollowMee] 8 users with FollowMee devices
-2025-12-09T23:03:14.311579307Z [inf]  [FollowMee Scheduler] Running PERIODIC SYNC...
-2025-12-09T23:03:14.311583643Z [inf]  [FollowMee] Fetching 24h history for all devices...
-2025-12-09T23:03:14.311587765Z [inf]  [RetryFailedLogs] No failed logs to retry
-2025-12-09T23:03:14.863784328Z [inf]  [FollowMee] Received 204 location points
-2025-12-09T23:03:14.863789449Z [inf]  [FollowMee Scheduler] ✅ Sync completed successfully
-2025-12-09T23:03:34.382042601Z [inf]  [Admin API] Fetching live dashboard data
-2025-12-09T23:03:34.382052697Z [inf]  [Admin API LIVE] 📝 Users with resellerNames:
-2025-12-09T23:03:34.382059481Z [inf]    - David (userId: a519d9e2) → resellerName: "David Rietberg"
-2025-12-09T23:03:34.382065483Z [inf]    - Imi (userId: 8fd1f6d0) → resellerName: "Imela Dias Castanheira"
-2025-12-09T23:03:34.382071028Z [inf]    - Stefan (userId: e9ef2d70) → resellerName: "Stefan Hoefer"
-2025-12-09T23:03:34.382080502Z [inf]    - Nic (userId: 8383c09c) → resellerName: "Nicolas Grandezka"
-2025-12-09T23:03:34.382089874Z [inf]    - Julie (userId: 97fd5efe) → resellerName: "Julie Sasse"
-2025-12-09T23:03:34.382099861Z [inf]    - Lisandra (userId: 341b10db) → resellerName: "Lisandra Emma Maria Gundlach"
-2025-12-09T23:03:34.382106117Z [inf]    - Kiri (userId: 89a6bb94) → resellerName: "Kirillos Hatziathanassiadis"
-2025-12-09T23:03:34.382112127Z [inf]    - Nadine (userId: 19338314) → resellerName: "Nadine Kilic"
-2025-12-09T23:03:34.382118010Z [inf]    - Danyal (userId: e8973b81) → resellerName: "Danyal Tahir"
-2025-12-09T23:03:34.382126657Z [inf]    - Manuel (userId: 2a688562) → resellerName: "Jose-Manuel Ferrer"
-2025-12-09T23:03:34.382132445Z [inf]    - Kevin (userId: 1a4abbb8) → resellerName: "Kevin Pfaff"
-2025-12-09T23:03:34.382138137Z [inf]    - Raphael (userId: f0c3d9ad) → resellerName: "Raphael Rainer Birkner"
-2025-12-09T23:03:34.382143781Z [inf]    - Sarafina (userId: 76fd2558) → resellerName: "Sarafina Zawadi Arlanda"
-2025-12-09T23:03:34.382149654Z [inf]    - Letizia (userId: 1e68b479) → resellerName: "Letizia Pellegrino"
-2025-12-09T23:03:34.382155761Z [inf]    - Bernhard Schauff Artist (userId: ccf1578f) → resellerName: "Bernhard Schauff"
-2025-12-09T23:03:34.382161112Z [inf]    - Maryna (userId: 2cf8c8f7) → resellerName: "Maryna Bondarevska"
-2025-12-09T23:03:34.382166557Z [inf]    - Eva (userId: d28ec53d) → resellerName: "Eva Klostermann"
-2025-12-09T23:03:34.383662643Z [inf]    - Kai (userId: bf04c166) → resellerName: "Kai Külgen"
-2025-12-09T23:03:34.383668944Z [inf]    - Maurice (userId: 4cc03b2b) → resellerName: "Tijan Maurice Darboe"
-2025-12-09T23:03:34.383673389Z [inf]    - Mohamed Kanazoe (userId: 7fbb099f) → resellerName: "Mohamed Kanazoe"
-2025-12-09T23:03:34.383677428Z [inf]    - Marcel Gattung (userId: 33f26f68) → resellerName: "Marcel Gattung"
-2025-12-09T23:03:34.383681221Z [inf]  [Admin API LIVE] 📝 EGON contract counts from DB:
-2025-12-09T23:03:34.383685234Z [inf]  [Admin API LIVE] 📝 EGON contracts loaded: 0 resellers with contracts, 10.12.2025
-2025-12-09T23:04:04.383577780Z [inf]  [Admin API] Fetching live dashboard data
-2025-12-09T23:04:04.383589878Z [inf]  [Admin API LIVE] 📝 Users with resellerNames:
-2025-12-09T23:04:04.383597794Z [inf]    - David (userId: a519d9e2) → resellerName: "David Rietberg"
-2025-12-09T23:04:04.383605142Z [inf]    - Imi (userId: 8fd1f6d0) → resellerName: "Imela Dias Castanheira"
-2025-12-09T23:04:04.383615922Z [inf]    - Stefan (userId: e9ef2d70) → resellerName: "Stefan Hoefer"
-2025-12-09T23:04:04.383623317Z [inf]    - Raphael (userId: f0c3d9ad) → resellerName: "Raphael Rainer Birkner"
-2025-12-09T23:04:04.383623901Z [inf]    - Nic (userId: 8383c09c) → resellerName: "Nicolas Grandezka"
-2025-12-09T23:04:04.383630814Z [inf]    - Julie (userId: 97fd5efe) → resellerName: "Julie Sasse"
-2025-12-09T23:04:04.383631149Z [inf]    - Sarafina (userId: 76fd2558) → resellerName: "Sarafina Zawadi Arlanda"
-2025-12-09T23:04:04.383636899Z [inf]    - Letizia (userId: 1e68b479) → resellerName: "Letizia Pellegrino"
-2025-12-09T23:04:04.383637317Z [inf]    - Lisandra (userId: 341b10db) → resellerName: "Lisandra Emma Maria Gundlach"
-2025-12-09T23:04:04.383641885Z [inf]    - Bernhard Schauff Artist (userId: ccf1578f) → resellerName: "Bernhard Schauff"
-2025-12-09T23:04:04.383643954Z [inf]    - Kiri (userId: 89a6bb94) → resellerName: "Kirillos Hatziathanassiadis"
-2025-12-09T23:04:04.383647181Z [inf]    - Maryna (userId: 2cf8c8f7) → resellerName: "Maryna Bondarevska"
-2025-12-09T23:04:04.383651175Z [inf]    - Nadine (userId: 19338314) → resellerName: "Nadine Kilic"
-2025-12-09T23:04:04.383655255Z [inf]    - Eva (userId: d28ec53d) → resellerName: "Eva Klostermann"
-2025-12-09T23:04:04.383658484Z [inf]    - Danyal (userId: e8973b81) → resellerName: "Danyal Tahir"
-2025-12-09T23:04:04.383663059Z [inf]    - Manuel (userId: 2a688562) → resellerName: "Jose-Manuel Ferrer"
-2025-12-09T23:04:04.383667863Z [inf]    - Kevin (userId: 1a4abbb8) → resellerName: "Kevin Pfaff"
-2025-12-09T23:04:04.386355944Z [inf]    - Kai (userId: bf04c166) → resellerName: "Kai Külgen"
-2025-12-09T23:04:04.386411944Z [inf]    - Maurice (userId: 4cc03b2b) → resellerName: "Tijan Maurice Darboe"
-2025-12-09T23:04:04.386417350Z [inf]    - Mohamed Kanazoe (userId: 7fbb099f) → resellerName: "Mohamed Kanazoe"
-2025-12-09T23:04:04.386422974Z [inf]    - Marcel Gattung (userId: 33f26f68) → resellerName: "Marcel Gattung"
-2025-12-09T23:04:04.386428020Z [inf]  [Admin API LIVE] 📝 EGON contract counts from DB:
-2025-12-09T23:04:04.386433522Z [inf]  [Admin API LIVE] 📝 EGON contracts loaded: 0 resellers with contracts, 10.12.2025
-2025-12-09T23:04:34.386789365Z [inf]  [Admin API] Fetching live dashboard data
-2025-12-09T23:04:34.386794017Z [inf]  [Admin API LIVE] 📝 Users with resellerNames:
-2025-12-09T23:04:34.386798133Z [inf]    - David (userId: a519d9e2) → resellerName: "David Rietberg"
-2025-12-09T23:04:34.386802630Z [inf]    - Imi (userId: 8fd1f6d0) → resellerName: "Imela Dias Castanheira"
-2025-12-09T23:04:34.386806898Z [inf]    - Stefan (userId: e9ef2d70) → resellerName: "Stefan Hoefer"
-2025-12-09T23:04:34.386812839Z [inf]    - Nic (userId: 8383c09c) → resellerName: "Nicolas Grandezka"
-2025-12-09T23:04:34.386817253Z [inf]    - Julie (userId: 97fd5efe) → resellerName: "Julie Sasse"
-2025-12-09T23:04:34.386821310Z [inf]    - Lisandra (userId: 341b10db) → resellerName: "Lisandra Emma Maria Gundlach"
-2025-12-09T23:04:34.386825139Z [inf]    - Kiri (userId: 89a6bb94) → resellerName: "Kirillos Hatziathanassiadis"
-2025-12-09T23:04:34.386829457Z [inf]    - Nadine (userId: 19338314) → resellerName: "Nadine Kilic"
-2025-12-09T23:04:34.386833598Z [inf]    - Danyal (userId: e8973b81) → resellerName: "Danyal Tahir"
-2025-12-09T23:04:34.386837287Z [inf]    - Manuel (userId: 2a688562) → resellerName: "Jose-Manuel Ferrer"
-2025-12-09T23:04:34.386840933Z [inf]    - Kevin (userId: 1a4abbb8) → resellerName: "Kevin Pfaff"
-2025-12-09T23:04:34.386844695Z [inf]    - Raphael (userId: f0c3d9ad) → resellerName: "Raphael Rainer Birkner"
-2025-12-09T23:04:34.386849098Z [inf]    - Sarafina (userId: 76fd2558) → resellerName: "Sarafina Zawadi Arlanda"
-2025-12-09T23:04:34.386852998Z [inf]    - Letizia (userId: 1e68b479) → resellerName: "Letizia Pellegrino"
-2025-12-09T23:04:34.386858300Z [inf]    - Bernhard Schauff Artist (userId: ccf1578f) → resellerName: "Bernhard Schauff"
-2025-12-09T23:04:34.386862241Z [inf]    - Maryna (userId: 2cf8c8f7) → resellerName: "Maryna Bondarevska"
-2025-12-09T23:04:34.386866359Z [inf]    - Eva (userId: d28ec53d) → resellerName: "Eva Klostermann"
-2025-12-09T23:04:34.388727092Z [inf]    - Kai (userId: bf04c166) → resellerName: "Kai Külgen"
-2025-12-09T23:04:34.388734197Z [inf]    - Maurice (userId: 4cc03b2b) → resellerName: "Tijan Maurice Darboe"
-2025-12-09T23:04:34.388739002Z [inf]    - Mohamed Kanazoe (userId: 7fbb099f) → resellerName: "Mohamed Kanazoe"
-2025-12-09T23:04:34.388744434Z [inf]    - Marcel Gattung (userId: 33f26f68) → resellerName: "Marcel Gattung"
-2025-12-09T23:04:34.388748379Z [inf]  [Admin API LIVE] 📝 EGON contract counts from DB:
-2025-12-09T23:04:34.388752584Z [inf]  [Admin API LIVE] 📝 EGON contracts loaded: 0 resellers with contracts, 10.12.2025
-2025-12-09T23:05:04.390682809Z [inf]  [Admin API] Fetching live dashboard data
-2025-12-09T23:05:04.390682909Z [inf]    - Danyal (userId: e8973b81) → resellerName: "Danyal Tahir"
-2025-12-09T23:05:04.390692249Z [inf]  [Admin API LIVE] 📝 Users with resellerNames:
-2025-12-09T23:05:04.390692460Z [inf]    - Manuel (userId: 2a688562) → resellerName: "Jose-Manuel Ferrer"
-2025-12-09T23:05:04.390698300Z [inf]    - David (userId: a519d9e2) → resellerName: "David Rietberg"
-2025-12-09T23:05:04.390702188Z [inf]    - Kevin (userId: 1a4abbb8) → resellerName: "Kevin Pfaff"
-2025-12-09T23:05:04.390704187Z [inf]    - Imi (userId: 8fd1f6d0) → resellerName: "Imela Dias Castanheira"
-2025-12-09T23:05:04.390709531Z [inf]    - Stefan (userId: e9ef2d70) → resellerName: "Stefan Hoefer"
-2025-12-09T23:05:04.390713297Z [inf]    - Raphael (userId: f0c3d9ad) → resellerName: "Raphael Rainer Birkner"
-2025-12-09T23:05:04.390716679Z [inf]    - Nic (userId: 8383c09c) → resellerName: "Nicolas Grandezka"
-2025-12-09T23:05:04.390719814Z [inf]    - Sarafina (userId: 76fd2558) → resellerName: "Sarafina Zawadi Arlanda"
-2025-12-09T23:05:04.390723157Z [inf]    - Julie (userId: 97fd5efe) → resellerName: "Julie Sasse"
-2025-12-09T23:05:04.390725975Z [inf]    - Letizia (userId: 1e68b479) → resellerName: "Letizia Pellegrino"
-2025-12-09T23:05:04.390728165Z [inf]    - Lisandra (userId: 341b10db) → resellerName: "Lisandra Emma Maria Gundlach"
-2025-12-09T23:05:04.390731797Z [inf]    - Bernhard Schauff Artist (userId: ccf1578f) → resellerName: "Bernhard Schauff"
-2025-12-09T23:05:04.390733636Z [inf]    - Kiri (userId: 89a6bb94) → resellerName: "Kirillos Hatziathanassiadis"
-2025-12-09T23:05:04.390738010Z [inf]    - Maryna (userId: 2cf8c8f7) → resellerName: "Maryna Bondarevska"
-2025-12-09T23:05:04.390739828Z [inf]    - Nadine (userId: 19338314) → resellerName: "Nadine Kilic"
-2025-12-09T23:05:04.390745505Z [inf]    - Eva (userId: d28ec53d) → resellerName: "Eva Klostermann"
-2025-12-09T23:05:04.393299740Z [inf]    - endpoint from log.data: "/api/ocr"
-2025-12-09T23:05:04.393312719Z [inf]    - newProspects from logData: ["000000","gündüz","wiche","blessed amissah","lucke","jammali","aboulkor","wicher","fromme","hecker walther","schmidt","wronski","kesim","dunker","schneyer","ibrahim ihsan","fuad albayati","kücük","kirschey","lebon","kizilkaya","schütt","barutcuoglu","müller","ebelhäuser"]
-2025-12-09T23:05:04.393330196Z [inf]    - Kai (userId: bf04c166) → resellerName: "Kai Külgen"
-2025-12-09T23:05:04.393337599Z [inf]    - Maurice (userId: 4cc03b2b) → resellerName: "Tijan Maurice Darboe"
-2025-12-09T23:05:04.393344425Z [inf]    - Mohamed Kanazoe (userId: 7fbb099f) → resellerName: "Mohamed Kanazoe"
-2025-12-09T23:05:04.393351633Z [inf]    - Marcel Gattung (userId: 33f26f68) → resellerName: "Marcel Gattung"
-2025-12-09T23:05:04.393358011Z [inf]  [Admin API LIVE] 📝 EGON contract counts from DB:
-2025-12-09T23:05:04.393364254Z [inf]  [Admin API LIVE] 📝 EGON contracts loaded: 0 resellers with contracts, 10.12.2025
-2025-12-09T23:05:04.393370522Z [inf]  [DailyReportCron] Generating final daily report for 2025-12-09
-2025-12-09T23:05:04.393376968Z [inf]  [DailyReport] Generating final report for 2025-12-09
-2025-12-09T23:05:04.393382888Z [inf]  [SQLiteHistorical] Loading data for 2025-12-09...
-2025-12-09T23:05:04.393389125Z [inf]  [SQLiteHistorical] Found 7 user(s) for 2025-12-09
-2025-12-09T23:05:04.393393847Z [inf]  [Photo Count] Kevin: 0 unique photos (from 0 total OCR uploads)
-2025-12-09T23:05:04.393398812Z [inf]  [SQLiteHistorical] Kevin activeTime: 0min (no native GPS or session data)
-2025-12-09T23:05:04.393404475Z [inf]  [SQLiteHistorical] Reconstructed Kevin: 0 actions, 204 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
-2025-12-09T23:05:04.393410819Z [inf]  [Photo Debug] First /api/ocr found for Lisandra:
-2025-12-09T23:05:04.393416005Z [inf]    - endpoint from logData: "/api/ocr"
-2025-12-09T23:05:04.395630720Z [inf]  [Photo Count] Lisandra: 40 unique photos (from 40 total OCR uploads)
-2025-12-09T23:05:04.395633521Z [inf]  [SQLiteHistorical] Lisandra activeTime: 243min (total span: 484min, breaks: 241min from 657 native GPS points)
-2025-12-09T23:05:04.395640827Z [inf]  [SQLiteHistorical] Lisandra finalStatuses: [
-2025-12-09T23:05:04.395642649Z [inf]  [SQLiteHistorical] Reconstructed Lisandra: 174 actions, 657 GPS (657 native), 40 photos, 80 status changes, 4.49km, 243min active
-2025-12-09T23:05:04.395648717Z [inf]    [ 'nicht_angetroffen', 63 ],
-2025-12-09T23:05:04.395656353Z [inf]    [ 'nicht_interessiert', 6 ],
-2025-12-09T23:05:04.395666785Z [inf]    [ 'interessiert', 5 ],
-2025-12-09T23:05:04.395677498Z [inf]    [ 'geschrieben', 1 ]
-2025-12-09T23:05:04.395682314Z [inf]    interest_later_to_written: 0,
-2025-12-09T23:05:04.395689171Z [inf]  ]
-2025-12-09T23:05:04.395702006Z [inf]  [SQLiteHistorical] Lisandra conversions: {
-2025-12-09T23:05:04.395703366Z [inf]    interest_later_to_no_interest: 0,
-2025-12-09T23:05:04.395711960Z [inf]    interest_later_to_appointment: 0,
-2025-12-09T23:05:04.395719968Z [inf]    interest_later_to_not_reached: 0,
-2025-12-09T23:05:04.395726376Z [inf]    interest_later_total: 6
-2025-12-09T23:05:04.395734800Z [inf]  }
-2025-12-09T23:05:04.395735767Z [inf]    - newProspects from log.data: ["000000","gündüz","wiche","blessed amissah","lucke","jammali","aboulkor","wicher","fromme","hecker walther","schmidt","wronski","kesim","dunker","schneyer","ibrahim ihsan","fuad albayati","kücük","kirschey","lebon","kizilkaya","schütt","barutcuoglu","müller","ebelhäuser"]
-2025-12-09T23:05:04.395743434Z [inf]    - existingCustomers from logData: []
-2025-12-09T23:05:04.395750968Z [inf]    - existingCustomers from log.data: []
-2025-12-09T23:05:04.395758674Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
-2025-12-09T23:05:04.395765419Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
-2025-12-09T23:05:04.399271003Z [inf]  [Photo Count] Imi: 0 unique photos (from 0 total OCR uploads)
-2025-12-09T23:05:04.399284753Z [inf]  [SQLiteHistorical] Imi activeTime: 0min (only 1 native GPS point)
-2025-12-09T23:05:04.399289889Z [inf]  [SQLiteHistorical] Reconstructed Imi: 0 actions, 1 GPS (1 native), 0 photos, 0 status changes, 0.00km, 0min active
-2025-12-09T23:05:04.399294235Z [inf]  [Photo Count] Ibrahim Yilmaz: 0 unique photos (from 0 total OCR uploads)
-2025-12-09T23:05:04.399299100Z [inf]  [SQLiteHistorical] Ibrahim Yilmaz activeTime: 651min (total span: 1356min, breaks: 704min from 1682 native GPS points)
-2025-12-09T23:05:04.399304168Z [inf]  [SQLiteHistorical] Reconstructed Ibrahim Yilmaz: 0 actions, 1682 GPS (1682 native), 0 photos, 0 status changes, 0.07km, 651min active
-2025-12-09T23:05:04.399310911Z [inf]  [Photo Count] Eva: 0 unique photos (from 0 total OCR uploads)
-2025-12-09T23:05:04.399315857Z [inf]  [SQLiteHistorical] Eva activeTime: 1min (total span: 1min, breaks: 0min from 5 native GPS points)
-2025-12-09T23:05:04.399320345Z [inf]  [SQLiteHistorical] Reconstructed Eva: 0 actions, 5 GPS (5 native), 0 photos, 0 status changes, 0.04km, 1min active
-2025-12-09T23:05:04.399324489Z [inf]  [Photo Debug] First /api/ocr found for Leon:
-2025-12-09T23:05:04.399328707Z [inf]    - endpoint from logData: "/api/ocr"
-2025-12-09T23:05:04.399333278Z [inf]    - endpoint from log.data: "/api/ocr"
-2025-12-09T23:05:04.399337428Z [inf]    - newProspects from logData: ["cholewa mathias","dündar","eluvungal viswambharan","kunhikannan ranjini"]
-2025-12-09T23:05:04.399342885Z [inf]    - newProspects from log.data: ["cholewa mathias","dündar","eluvungal viswambharan","kunhikannan ranjini"]
-2025-12-09T23:05:04.399347325Z [inf]    - existingCustomers from logData: []
-2025-12-09T23:05:04.399351504Z [inf]    - existingCustomers from log.data: []
-2025-12-09T23:05:04.399355849Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
-2025-12-09T23:05:04.401683966Z [inf]    [ 'interessiert', 2 ],
-2025-12-09T23:05:04.401685392Z [inf]    - existingCustomers from logData: [{"id":"e32e3176-4053-4ff8-9dec-ca8fe39dda1b","name":"körsgen","street":"Auf dem Streitacker","houseNumber":"47","postalCode":"51149","isExisting":true,"contractType":null},{"id":"d7519a6a-6c90-41ac-99f1-202059ab39c1","name":"köhler","street":"Auf dem Streitacker","houseNumber":"47","postalCode":"51149","isExisting":true,"contractType":null},{"id":"7bb18967-e9e5-4d5a-8189-66ec995f175b","name":"esch","street":"Auf dem Streitacker","houseNumber":"47","postalCode":"51149","isExisting":true,"contractType":null}]
-2025-12-09T23:05:04.401695451Z [inf]    [ 'termin_vereinbart', 1 ]
-2025-12-09T23:05:04.401701659Z [inf]  ]
-2025-12-09T23:05:04.401707738Z [inf]  [SQLiteHistorical] Leon conversions: {
-2025-12-09T23:05:04.401715018Z [inf]    interest_later_to_written: 0,
-2025-12-09T23:05:04.401722133Z [inf]    interest_later_to_no_interest: 0,
-2025-12-09T23:05:04.401725165Z [inf]  [SQLiteHistorical] Reconstructed Leon: 137 actions, 460 GPS (460 native), 16 photos, 51 status changes, 12.55km, 328min active
-2025-12-09T23:05:04.401730128Z [inf]    interest_later_to_appointment: 0,
-2025-12-09T23:05:04.401737149Z [inf]  [Photo Debug] First /api/ocr found for Raphael:
-2025-12-09T23:05:04.401738545Z [inf]    interest_later_to_not_reached: 1,
-2025-12-09T23:05:04.401745559Z [inf]    - endpoint from logData: "/api/ocr"
-2025-12-09T23:05:04.401746421Z [inf]    interest_later_total: 7
-2025-12-09T23:05:04.401753884Z [inf]    - endpoint from log.data: "/api/ocr"
-2025-12-09T23:05:04.401757649Z [inf]  }
-2025-12-09T23:05:04.401760505Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
-2025-12-09T23:05:04.401765627Z [inf]    - newProspects from logData: ["fam jovanovic"]
-2025-12-09T23:05:04.401771421Z [inf]  [Photo Count] Leon: 16 unique photos (from 16 total OCR uploads)
-2025-12-09T23:05:04.401771629Z [inf]  [SQLiteHistorical] Leon activeTime: 328min (total span: 534min, breaks: 205min from 460 native GPS points)
-2025-12-09T23:05:04.401777717Z [inf]    - newProspects from log.data: ["fam jovanovic"]
-2025-12-09T23:05:04.401783586Z [inf]  [SQLiteHistorical] Leon finalStatuses: [
-2025-12-09T23:05:04.401789766Z [inf]    [ 'nicht_angetroffen', 34 ],
-2025-12-09T23:05:04.401795165Z [inf]    [ 'nicht_interessiert', 7 ],
-2025-12-09T23:05:04.403451807Z [inf]    - existingCustomers from log.data: [{"id":"e32e3176-4053-4ff8-9dec-ca8fe39dda1b","name":"körsgen","street":"Auf dem Streitacker","houseNumber":"47","postalCode":"51149","isExisting":true,"contractType":null},{"id":"d7519a6a-6c90-41ac-99f1-202059ab39c1","name":"köhler","street":"Auf dem Streitacker","houseNumber":"47","postalCode":"51149","isExisting":true,"contractType":null},{"id":"7bb18967-e9e5-4d5a-8189-66ec995f175b","name":"esch","street":"Auf dem Streitacker","houseNumber":"47","postalCode":"51149","isExisting":true,"contractType":null}]
-2025-12-09T23:05:04.403459963Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
-2025-12-09T23:05:04.403470351Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
-2025-12-09T23:05:04.403475798Z [inf]  [Photo Count] Raphael: 26 unique photos (from 26 total OCR uploads)
-2025-12-09T23:05:04.403481515Z [inf]  [SQLiteHistorical] Raphael finalStatuses: [
-2025-12-09T23:05:04.403487427Z [inf]    [ 'nicht_interessiert', 17 ],
-2025-12-09T23:05:04.403493553Z [inf]    [ 'nicht_angetroffen', 42 ],
-2025-12-09T23:05:04.403499680Z [inf]    [ 'geschrieben', 1 ],
-2025-12-09T23:05:04.403504500Z [inf]    [ 'termin_vereinbart', 1 ]
-2025-12-09T23:05:04.403508898Z [inf]  ]
-2025-12-09T23:05:04.403513535Z [inf]  [SQLiteHistorical] Raphael activeTime: 183min (total span: 1519min, breaks: 1336min from 513 native GPS points)
-2025-12-09T23:05:04.403518180Z [inf]  [SQLiteHistorical] Reconstructed Raphael: 141 actions, 513 GPS (513 native), 26 photos, 63 status changes, 2.93km, 183min active
-2025-12-09T23:05:04.403522275Z [inf]  [SQLiteHistorical] ✅ Loaded 7 users for 2025-12-09
-2025-12-09T23:05:04.403526112Z [inf]  [DailyReport] Lisandra: 7 pauses → 0 unique locations (POI lookup)
-2025-12-09T23:05:04.403530749Z [inf]  [DailyReport] Ibrahim Yilmaz: 22 pauses → 0 unique locations (POI lookup)
-2025-12-09T23:05:04.406060077Z [inf]  [DailyReport] Creating new report: daily-report-2025-12-09.json
-2025-12-09T23:05:04.406068806Z [inf]  [DailyReport] Report for 2025-12-09 (final) uploaded successfully
-2025-12-09T23:05:04.406074703Z [inf]  [DailyReportCron] ✅ Final report for 2025-12-09 created successfully
-2025-12-09T23:05:04.406089858Z [inf]  [DailyReport] Eva: 0 pauses → 0 unique locations (POI lookup)
-2025-12-09T23:05:04.406096945Z [inf]  [DailyReport] Leon: 5 pauses → 0 unique locations (POI lookup)
-2025-12-09T23:05:04.406103193Z [inf]  [DailyReport] Raphael: 5 pauses → 0 unique locations (POI lookup)
-2025-12-09T23:05:04.406109732Z [inf]  [DailyReport] POI Cache Performance: {
-2025-12-09T23:05:04.406115768Z [inf]    cacheSize: 127,
-2025-12-09T23:05:04.406121860Z [inf]    initialized: true,
-2025-12-09T23:05:04.406127079Z [inf]    hits: 134,
-2025-12-09T23:05:04.406133086Z [inf]    misses: 562,
-2025-12-09T23:05:04.406137627Z [inf]    hitRate: '19.3%',
-2025-12-09T23:05:04.406142746Z [inf]    apiCalls: 562,
-2025-12-09T23:05:04.406147544Z [inf]    savedPOIs: 12,
-2025-12-09T23:05:04.406151932Z [inf]    estimatedCost: '$9.55'
-2025-12-09T23:05:04.406156534Z [inf]  }
-2025-12-09T23:05:04.406161295Z [err]  The `credentials` option is deprecated. Please use the `auth` object constructor instead. For more details, see https://cloud.google.com/docs/authentication/external/externally-sourced-credentials.
-2025-12-09T23:05:04.406165594Z [err]  The `fromJSON` method is deprecated. Please use the `JWT` constructor instead. For more details, see https://cloud.google.com/docs/authentication/external/externally-sourced-credentials.
-2025-12-09T23:05:34.413303844Z [inf]  [Admin API] Fetching live dashboard data
-2025-12-09T23:05:34.413311099Z [inf]  [Admin API LIVE] 📝 Users with resellerNames:
-2025-12-09T23:05:34.413316983Z [inf]    - David (userId: a519d9e2) → resellerName: "David Rietberg"
-2025-12-09T23:05:34.413321889Z [inf]    - Imi (userId: 8fd1f6d0) → resellerName: "Imela Dias Castanheira"
-2025-12-09T23:05:34.413326476Z [inf]    - Stefan (userId: e9ef2d70) → resellerName: "Stefan Hoefer"
-2025-12-09T23:05:34.413331124Z [inf]    - Nic (userId: 8383c09c) → resellerName: "Nicolas Grandezka"
-2025-12-09T23:05:34.413335893Z [inf]    - Julie (userId: 97fd5efe) → resellerName: "Julie Sasse"
-2025-12-09T23:05:34.413340995Z [inf]    - Lisandra (userId: 341b10db) → resellerName: "Lisandra Emma Maria Gundlach"
-2025-12-09T23:05:34.413345194Z [inf]    - Kiri (userId: 89a6bb94) → resellerName: "Kirillos Hatziathanassiadis"
-2025-12-09T23:05:34.413351578Z [inf]    - Nadine (userId: 19338314) → resellerName: "Nadine Kilic"
-2025-12-09T23:05:34.413356158Z [inf]    - Danyal (userId: e8973b81) → resellerName: "Danyal Tahir"
-2025-12-09T23:05:34.413360493Z [inf]    - Manuel (userId: 2a688562) → resellerName: "Jose-Manuel Ferrer"
-2025-12-09T23:05:34.413365105Z [inf]    - Kevin (userId: 1a4abbb8) → resellerName: "Kevin Pfaff"
-2025-12-09T23:05:34.413369521Z [inf]    - Raphael (userId: f0c3d9ad) → resellerName: "Raphael Rainer Birkner"
-2025-12-09T23:05:34.413373869Z [inf]    - Sarafina (userId: 76fd2558) → resellerName: "Sarafina Zawadi Arlanda"
-2025-12-09T23:05:34.413378187Z [inf]    - Letizia (userId: 1e68b479) → resellerName: "Letizia Pellegrino"
-2025-12-09T23:05:34.413382341Z [inf]    - Bernhard Schauff Artist (userId: ccf1578f) → resellerName: "Bernhard Schauff"
-2025-12-09T23:05:34.413388836Z [inf]    - Maryna (userId: 2cf8c8f7) → resellerName: "Maryna Bondarevska"
-2025-12-09T23:05:34.413393783Z [inf]    - Eva (userId: d28ec53d) → resellerName: "Eva Klostermann"
-2025-12-09T23:05:34.415171676Z [inf]    - Kai (userId: bf04c166) → resellerName: "Kai Külgen"
-2025-12-09T23:05:34.415177967Z [inf]    - Maurice (userId: 4cc03b2b) → resellerName: "Tijan Maurice Darboe"
-2025-12-09T23:05:34.415185002Z [inf]    - Mohamed Kanazoe (userId: 7fbb099f) → resellerName: "Mohamed Kanazoe"
-2025-12-09T23:05:34.415189329Z [inf]    - Marcel Gattung (userId: 33f26f68) → resellerName: "Marcel Gattung"
-2025-12-09T23:05:34.415193381Z [inf]  [Admin API LIVE] 📝 EGON contract counts from DB:
-2025-12-09T23:05:34.415198822Z [inf]  [Admin API LIVE] 📝 EGON contracts loaded: 0 resellers with contracts, 10.12.2025
+2025-12-10T01:09:52.510518959Z [inf]  [SQLiteHistorical] Kiri activeTime: 0min (no native GPS or session data)
+2025-12-10T01:09:52.510526901Z [inf]  [SQLiteHistorical] Reconstructed Kiri: 0 actions, 7418 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:09:52.513352375Z [inf]  [Photo Debug] First /api/ocr found for Imi:
+2025-12-10T01:09:52.513358009Z [inf]  [SQLiteHistorical] Imi activeTime: 16min (total span: 16min, breaks: 0min from 53 native GPS points)
+2025-12-10T01:09:52.513360489Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:09:52.513367468Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:09:52.513370100Z [inf]  [SQLiteHistorical] Reconstructed Imi: 57 actions, 53 GPS (53 native), 2 photos, 14 status changes, 0.33km, 16min active
+2025-12-10T01:09:52.513374071Z [inf]    - newProspects from logData: "adamczyk kaiser, kesseler, kesseler, brauns, engels funken, burscheidt"
+2025-12-10T01:09:52.513379864Z [inf]    - newProspects from log.data: "adamczyk kaiser, kesseler, kesseler, brauns, engels funken, burscheidt"
+2025-12-10T01:09:52.513385259Z [inf]    - existingCustomers from logData: "grünenwald (97ef9109-cfbc-483f-8557-54c39793f63c), hofmann (b64e4947-521b-4c84-8e37-2faa618a3c44), zierden (8bfb929b-25e4-4d54-a6d9-f2e17dbe8a00)"
+2025-12-10T01:09:52.513391204Z [inf]    - existingCustomers from log.data: "grünenwald (97ef9109-cfbc-483f-8557-54c39793f63c), hofmann (b64e4947-521b-4c84-8e37-2faa618a3c44), zierden (8bfb929b-25e4-4d54-a6d9-f2e17dbe8a00)"
+2025-12-10T01:09:52.513396156Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:09:52.513401069Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:09:52.513406649Z [inf]  [Photo Count] Imi: 2 unique photos (from 2 total OCR uploads)
+2025-12-10T01:09:52.513411928Z [inf]  [SQLiteHistorical] Imi finalStatuses: [ [ 'nicht_angetroffen', 10 ], [ 'nicht_interessiert', 3 ] ]
+2025-12-10T01:09:52.537209245Z [inf]  [Photo Debug] First /api/ocr found for Ibrahim Yilmaz:
+2025-12-10T01:09:52.537224128Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:09:52.537233311Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:09:52.537254267Z [inf]    - newProspects from logData: ["hildweinu","aleksieleva","myronovia","sorina","kozok","abdylda eva","antap"]
+2025-12-10T01:09:52.537267033Z [inf]    - newProspects from log.data: ["hildweinu","aleksieleva","myronovia","sorina","kozok","abdylda eva","antap"]
+2025-12-10T01:09:52.537275502Z [inf]    - existingCustomers from logData: [{"id":"1bd89a58-43d9-4c32-826b-89cd2a4845e1","name":"lewosinski","street":"Rheinfährstr.","houseNumber":"117 D","postalCode":"41468","isExisting":true,"contractType":null}]
+2025-12-10T01:09:52.537283816Z [inf]    - existingCustomers from log.data: [{"id":"1bd89a58-43d9-4c32-826b-89cd2a4845e1","name":"lewosinski","street":"Rheinfährstr.","houseNumber":"117 D","postalCode":"41468","isExisting":true,"contractType":null}]
+2025-12-10T01:09:52.537294204Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:09:52.537302753Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:09:52.539472663Z [inf]  [Photo Count] Ibrahim Yilmaz: 2 unique photos (from 2 total OCR uploads)
+2025-12-10T01:09:52.539484250Z [inf]  [SQLiteHistorical] Ibrahim Yilmaz finalStatuses: [ [ 'nicht_angetroffen', 30 ], [ 'nicht_interessiert', 24 ] ]
+2025-12-10T01:09:52.539492833Z [inf]  [SQLiteHistorical] Ibrahim Yilmaz conversions: {
+2025-12-10T01:09:52.539499895Z [inf]    interest_later_to_written: 0,
+2025-12-10T01:09:52.539507669Z [inf]    interest_later_to_no_interest: 0,
+2025-12-10T01:09:52.539515279Z [inf]    interest_later_to_appointment: 0,
+2025-12-10T01:09:52.539523521Z [inf]    interest_later_to_not_reached: 1,
+2025-12-10T01:09:52.539530629Z [inf]    interest_later_total: 1
+2025-12-10T01:09:52.539538741Z [inf]  }
+2025-12-10T01:09:52.539545969Z [inf]  [SQLiteHistorical] Ibrahim Yilmaz activeTime: 476min (total span: 948min, breaks: 472min from 843 native GPS points)
+2025-12-10T01:09:52.539553177Z [inf]  [SQLiteHistorical] Reconstructed Ibrahim Yilmaz: 258 actions, 843 GPS (843 native), 2 photos, 64 status changes, 4.33km, 476min active
+2025-12-10T01:09:52.770085517Z [inf]  [Photo Count] Julie: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:09:52.774808306Z [inf]  [SQLiteHistorical] Julie activeTime: 0min (no native GPS or session data)
+2025-12-10T01:09:52.774814956Z [inf]  [SQLiteHistorical] Reconstructed Julie: 0 actions, 18288 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:09:52.789959226Z [inf]  [Photo Debug] First /api/ocr found for David:
+2025-12-10T01:09:52.789967969Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:09:52.789976014Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:09:52.789982128Z [inf]    - newProspects from logData: ["öncel","dziurdzinksi"]
+2025-12-10T01:09:52.789987881Z [inf]    - newProspects from log.data: ["öncel","dziurdzinksi"]
+2025-12-10T01:09:52.789994134Z [inf]    - existingCustomers from logData: [{"id":"b6ad01c2-257f-42a7-b8e2-da7ae5855e99","name":"lessmann","street":"Steinstr.","houseNumber":"53","postalCode":"41468","isExisting":true,"contractType":null},{"id":"e94e1cec-e062-4a02-a39e-7a0c5f279605","name":"hoffmann","street":"Steinstr.","houseNumber":"53","postalCode":"41468","isExisting":true,"contractType":null},{"id":"4d7f57a3-8436-4e4a-96ab-059396264bd6","name":"schmitz","street":"Steinstr.","houseNumber":"53","postalCode":"41468","isExisting":true,"contractType":null},{"id":"f7eacd2a-3773-48cf-835a-db3a467fed7f","name":"messina kracht","street":"Steinstr.","houseNumber":"53","postalCode":"41468","isExisting":true,"contractType":null},{"id":"dab5aade-b0d5-4d62-bd84-8acd6be995bb","name":"tomina","street":"Steinstr.","houseNumber":"53","postalCode":"41468","isExisting":true,"contractType":null},{"id":"0ca0092a-3166-4aa9-9a2d-38d2d3afecbf","name":"bayer happich","street":"Steinstr.","houseNumber":"53","postalCode":"41468","isExisting":true,"contractType":null},{"id":"d75bb12b-876c-4bf6-b9c0-9e0b7493d612","name":"wagner","street":"Steinstr.","houseNumber":"53","postalCode":"41468","isExisting":true,"contractType":null}]
+2025-12-10T01:09:52.789999490Z [inf]    - existingCustomers from log.data: [{"id":"b6ad01c2-257f-42a7-b8e2-da7ae5855e99","name":"lessmann","street":"Steinstr.","houseNumber":"53","postalCode":"41468","isExisting":true,"contractType":null},{"id":"e94e1cec-e062-4a02-a39e-7a0c5f279605","name":"hoffmann","street":"Steinstr.","houseNumber":"53","postalCode":"41468","isExisting":true,"contractType":null},{"id":"4d7f57a3-8436-4e4a-96ab-059396264bd6","name":"schmitz","street":"Steinstr.","houseNumber":"53","postalCode":"41468","isExisting":true,"contractType":null},{"id":"f7eacd2a-3773-48cf-835a-db3a467fed7f","name":"messina kracht","street":"Steinstr.","houseNumber":"53","postalCode":"41468","isExisting":true,"contractType":null},{"id":"dab5aade-b0d5-4d62-bd84-8acd6be995bb","name":"tomina","street":"Steinstr.","houseNumber":"53","postalCode":"41468","isExisting":true,"contractType":null},{"id":"0ca0092a-3166-4aa9-9a2d-38d2d3afecbf","name":"bayer happich","street":"Steinstr.","houseNumber":"53","postalCode":"41468","isExisting":true,"contractType":null},{"id":"d75bb12b-876c-4bf6-b9c0-9e0b7493d612","name":"wagner","street":"Steinstr.","houseNumber":"53","postalCode":"41468","isExisting":true,"contractType":null}]
+2025-12-10T01:09:52.792238564Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:09:52.792252686Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:09:52.792261380Z [inf]  [Photo Count] David: 26 unique photos (from 30 total OCR uploads)
+2025-12-10T01:09:52.792269150Z [inf]  [SQLiteHistorical] David finalStatuses: [
+2025-12-10T01:09:52.792276052Z [inf]    [ 'nicht_angetroffen', 27 ],
+2025-12-10T01:09:52.792284698Z [inf]    [ 'termin_vereinbart', 1 ],
+2025-12-10T01:09:52.792295027Z [inf]    [ 'nicht_interessiert', 2 ],
+2025-12-10T01:09:52.792303087Z [inf]    [ 'interessiert', 2 ]
+2025-12-10T01:09:52.792310734Z [inf]  ]
+2025-12-10T01:09:52.792318113Z [inf]  [SQLiteHistorical] David activeTime: 185min (total span: 395min, breaks: 210min from 528 native GPS points)
+2025-12-10T01:09:52.792325266Z [inf]  [SQLiteHistorical] Reconstructed David: 169 actions, 717 GPS (528 native), 30 photos, 32 status changes, 3.83km, 185min active
+2025-12-10T01:09:52.801286482Z [inf]  [Photo Count] Bernhard Schauff Artist: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:09:52.801296140Z [inf]  [SQLiteHistorical] Bernhard Schauff Artist activeTime: 0min (no native GPS or session data)
+2025-12-10T01:09:52.801303139Z [inf]  [SQLiteHistorical] Reconstructed Bernhard Schauff Artist: 0 actions, 675 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:09:53.327503977Z [inf]  [Photo Debug] First /api/ocr found for Eva:
+2025-12-10T01:09:53.327509632Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:09:53.327515078Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:09:53.327520364Z [inf]    - newProspects from logData: ["ezzagnouni","nail","reiners wegner","wegner","wegner","reiners wegner","skrzypek","yilmaz"]
+2025-12-10T01:09:53.327524893Z [inf]    - newProspects from log.data: ["ezzagnouni","nail","reiners wegner","wegner","wegner","reiners wegner","skrzypek","yilmaz"]
+2025-12-10T01:09:53.327530198Z [inf]    - existingCustomers from logData: [{"id":"031adaa8-b999-41d6-81e4-a394063a184a","name":"memedi","street":"Stüttgener Str.","houseNumber":"66","postalCode":"41468","isExisting":true,"contractType":null},{"id":"4621ca06-0edb-4420-9e47-4b8bb1832919","name":"warnke","street":"Stüttgener Str.","houseNumber":"66","postalCode":"41468","isExisting":true,"contractType":null}]
+2025-12-10T01:09:53.327535314Z [inf]    - existingCustomers from log.data: [{"id":"031adaa8-b999-41d6-81e4-a394063a184a","name":"memedi","street":"Stüttgener Str.","houseNumber":"66","postalCode":"41468","isExisting":true,"contractType":null},{"id":"4621ca06-0edb-4420-9e47-4b8bb1832919","name":"warnke","street":"Stüttgener Str.","houseNumber":"66","postalCode":"41468","isExisting":true,"contractType":null}]
+2025-12-10T01:09:53.327540926Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:09:53.327545753Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:09:53.327550000Z [inf]  [Photo Count] Eva: 3 unique photos (from 3 total OCR uploads)
+2025-12-10T01:09:53.327554853Z [inf]  [SQLiteHistorical] Eva finalStatuses: [
+2025-12-10T01:09:53.327558908Z [inf]    [ 'termin_vereinbart', 5 ],
+2025-12-10T01:09:53.327564524Z [inf]    [ 'nicht_angetroffen', 29 ],
+2025-12-10T01:09:53.327569182Z [inf]    [ 'nicht_interessiert', 4 ],
+2025-12-10T01:09:53.330025626Z [inf]    [ 'interessiert', 2 ]
+2025-12-10T01:09:53.330035597Z [inf]  ]
+2025-12-10T01:09:53.330042376Z [inf]  [SQLiteHistorical] Eva conversions: {
+2025-12-10T01:09:53.330048995Z [inf]    interest_later_to_written: 0,
+2025-12-10T01:09:53.330054635Z [inf]    interest_later_to_no_interest: 0,
+2025-12-10T01:09:53.330061132Z [inf]    interest_later_to_appointment: 0,
+2025-12-10T01:09:53.330067984Z [inf]    interest_later_to_not_reached: 1,
+2025-12-10T01:09:53.330074203Z [inf]    interest_later_total: 1
+2025-12-10T01:09:53.330080345Z [inf]  }
+2025-12-10T01:09:53.330087052Z [inf]  [SQLiteHistorical] Eva activeTime: 395min (total span: 500min, breaks: 104min from 308 native GPS points)
+2025-12-10T01:09:53.330092929Z [inf]  [SQLiteHistorical] Reconstructed Eva: 163 actions, 16150 GPS (308 native), 3 photos, 46 status changes, 3.78km, 395min active
+2025-12-10T01:09:53.330099689Z [inf]  [Photo Count] Pia: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:09:53.330106281Z [inf]  [SQLiteHistorical] Pia activeTime: 0min (no native GPS or session data)
+2025-12-10T01:09:53.330113237Z [inf]  [SQLiteHistorical] Reconstructed Pia: 0 actions, 20532 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:09:53.330119146Z [inf]  [Photo Debug] First /api/ocr found for Leon:
+2025-12-10T01:09:53.330125149Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:09:53.330131536Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:09:53.330138825Z [inf]    - newProspects from logData: ["willmann eck","surma","cetin","werheid kather","ostonal demir","rath skibicki","kenar","schnerch","wadwa","wadhwa","von czarnetzkl","wadwa","schreiner","kratel michels","abazovski","wandelt","werheld","tkach","heller","viecens","alard","nohrbass","yurtsever balye","ramershoven","schmitz","krapivna","krapivny","bajal sarmad","satar zadeb","emin taher beg","wilhelmy","bathija","khenousse khomsi","khudaynatov","giesbrecht","storto salm","rick","gabiger","preuß","dementew","soltanian","jar yar","kaur singh","buhler","burek sztube","faust","ajdarevic vidanovic","shcherbatov","ritscher","huseynzade","rosa","salem","akhondradeh","sabouri","wyszecki","gehlen","dauvermann","henschke","said mokher","müller","görres","khodade all","schliewe","salam khider","stellch","quasem","weickert","sejdic","niemand","berendes","sahak","abassi belhay","inan gamze tas","poya joya"]
+2025-12-10T01:09:53.330990798Z [inf]    - newProspects from log.data: ["willmann eck","surma","cetin","werheid kather","ostonal demir","rath skibicki","kenar","schnerch","wadwa","wadhwa","von czarnetzkl","wadwa","schreiner","kratel michels","abazovski","wandelt","werheld","tkach","heller","viecens","alard","nohrbass","yurtsever balye","ramershoven","schmitz","krapivna","krapivny","bajal sarmad","satar zadeb","emin taher beg","wilhelmy","bathija","khenousse khomsi","khudaynatov","giesbrecht","storto salm","rick","gabiger","preuß","dementew","soltanian","jar yar","kaur singh","buhler","burek sztube","faust","ajdarevic vidanovic","shcherbatov","ritscher","huseynzade","rosa","salem","akhondradeh","sabouri","wyszecki","gehlen","dauvermann","henschke","said mokher","müller","görres","khodade all","schliewe","salam khider","stellch","quasem","weickert","sejdic","niemand","berendes","sahak","abassi belhay","inan gamze tas","poya joya"]
+2025-12-10T01:09:53.332672049Z [inf]    - existingCustomers from logData: [{"id":"1ec43078-acc5-4b96-b404-908c3b360b16","name":"klemps","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"826be4a9-9bd1-4d89-adba-3f05bf253cbb","name":"schneider","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"d2736d4c-3800-45b6-815d-6aa9b51ab191","name":"brungs","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"65199bd8-8750-4e69-823d-57bcde602f73","name":"huber","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"ee239dc0-5608-4a86-89f2-57ad225ab24f","name":"calaras","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"287682e7-471f-470e-95be-421586368f07","name":"hoffmann","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"208a67c8-f018-47d2-95f1-6cd934cca1a9","name":"pütz","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"500ff8ea-b3ec-4ac5-96d9-e771c0254e59","name":"körsgen","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"d663de7f-8f4f-49f0-b11c-2f41ddd7560a","name":"acar","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"729d8598-db60-4798-8545-4000c49b9926","name":"pieper","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"2bf40065-7efa-43d4-bf77-81dd1af2ed26","name":"panjabi","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"4a81bad6-a0b7-4af4-8014-02a2811e8ed2","name":"klefisch vojdani","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"90b53960-2c90-48c4-b118-5dd414fe4a0d","name":"babenhauserheide","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"5887785b-0431-4978-be1c-c87892c88a34","name":"hodorogea","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"3e6edbf6-7f3c-43c3-a05e-466ea9d1b42b","name":"gabriel","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"c7bdaad4-36c9-4a66-b910-db095c1b04ae","name":"moritz","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"13d82786-7712-4ca3-8d06-e8cfbe36ab71","name":"tanchelson","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"e1e5a918-75f4-40d3-8b8c-70efbb592c61","name":"wurmbach","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"127dc3e0-6233-451c-8835-e5bd75c248e9","name":"hamacher adolf","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"20b876e9-2ad4-4e05-9710-107a00286aab","name":"gienger","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"22a8c789-3d9a-42b2-9c32-ccd35aa16b6f","name":"hecht","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"0439b953-3237-43cf-b46d-db98abe8efad","name":"oragaz","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"e9c4953d-517a-4159-9987-ff36c5c0e44f","name":"glanch kivi","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"f2035b5e-0a67-4a40-a573-0ec0bcaf802f","name":"steffens bohr","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"b205b4f0-5cee-4db6-8892-449457dc6668","name":"marksteller","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"1a0fe10f-7dc6-47e4-8d02-eab4111025fe","name":"neumann","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"940e1702-da1f-4d4d-b724-fd3807ea588c","name":"orminski","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"636448e2-6451-44b6-a661-da03a92ffa92","name":"susczyk","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"3333dfa3-ce5e-4e16-a1dd-8a0bb9b6697a","name":"chugh","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"76097057-503d-4a1d-a198-7e9b79949d7d","name":"regneri","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"6f777dd8-b796-462c-a757-073572030a2e","name":"nadir numan rashe","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"36155c78-341f-4679-ac9c-e0d91c634adb","name":"möllerbernd","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"d9fa8f4d-f941-40af-951c-21d2ac57f656","name":"longert","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"14908e73-912f-45d7-9ab8-58f64fe6c345","name":"hille lüpsch","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"370c6141-f538-4df5-be4c-dbf834558a0d","name":"patt taube","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"041b55d3-3ead-4286-b08b-ce04bf048d28","name":"kivani safarzadeh","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"20fba453-4fe9-43c8-b287-f5177904afe5","name":"rasoli","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"8aef35d7-97e6-4912-a9aa-0ff855de0ded","name":"brechtingen","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"e547088b-b8ef-4376-83dc-474313b44c0a","name":"köktas","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"600ad8e5-160d-43f0-a85d-ae5439a3632e","name":"simon","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"c04aee02-e5ac-4e58-b138-08473b84f398","name":"stavermann tschom","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"2ba39d92-c2e2-4f13-a49e-6c9fa8e09376","name":"sundari","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"d4d7c365-015a-4dcd-8e67-fca030105e1b","name":"ramm","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"9b031d46-72ba-4754-9d22-dd4f83e1885b","name":"hartung","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"4f40bcfc-325f-4e6d-8281-56cdbf5719cf","name":"hillesheim","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"5d2bfdba-3f41-4bee-b953-d70f47f38fe3","name":"barsch","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"7462e0be-55f8-485c-b554-9382f63751b5","name":"tiefenthal","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"1c1f8cd8-36e1-45de-afc8-f2e6f2176520","name":"genc nacar","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"d2ea665f-54e3-4b6a-8f5c-3af063395b55","name":"gavrilenko krapivin","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"4929ddeb-dcbb-4fb9-8300-0fd0e43cc228","name":"warkentin","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"4dd7d281-af6f-4add-933e-db2b7fd97118","name":"dawood","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"6519699a-4c9a-45eb-9641-1002ccfa7883","name":"shabani","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"c87add18-d1f0-4a3b-a29b-473798a0a772","name":"merkens","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"7ef37e4a-1ea0-452d-8d95-96534b869bc0","name":"ronic sejdic","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"d208c212-50a7-455c-8637-9acd420be8d5","name":"ronic sejdic","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"2a104ae5-ebb5-4f60-937d-206741a9fde4","name":"stiller","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-10T01:09:53.334455036Z [inf]    - existingCustomers from log.data: [{"id":"1ec43078-acc5-4b96-b404-908c3b360b16","name":"klemps","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"826be4a9-9bd1-4d89-adba-3f05bf253cbb","name":"schneider","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"d2736d4c-3800-45b6-815d-6aa9b51ab191","name":"brungs","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"65199bd8-8750-4e69-823d-57bcde602f73","name":"huber","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"ee239dc0-5608-4a86-89f2-57ad225ab24f","name":"calaras","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"287682e7-471f-470e-95be-421586368f07","name":"hoffmann","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"208a67c8-f018-47d2-95f1-6cd934cca1a9","name":"pütz","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"500ff8ea-b3ec-4ac5-96d9-e771c0254e59","name":"körsgen","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"d663de7f-8f4f-49f0-b11c-2f41ddd7560a","name":"acar","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"729d8598-db60-4798-8545-4000c49b9926","name":"pieper","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"2bf40065-7efa-43d4-bf77-81dd1af2ed26","name":"panjabi","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"4a81bad6-a0b7-4af4-8014-02a2811e8ed2","name":"klefisch vojdani","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"90b53960-2c90-48c4-b118-5dd414fe4a0d","name":"babenhauserheide","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"5887785b-0431-4978-be1c-c87892c88a34","name":"hodorogea","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"3e6edbf6-7f3c-43c3-a05e-466ea9d1b42b","name":"gabriel","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"c7bdaad4-36c9-4a66-b910-db095c1b04ae","name":"moritz","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"13d82786-7712-4ca3-8d06-e8cfbe36ab71","name":"tanchelson","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"e1e5a918-75f4-40d3-8b8c-70efbb592c61","name":"wurmbach","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"127dc3e0-6233-451c-8835-e5bd75c248e9","name":"hamacher adolf","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"20b876e9-2ad4-4e05-9710-107a00286aab","name":"gienger","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"22a8c789-3d9a-42b2-9c32-ccd35aa16b6f","name":"hecht","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"0439b953-3237-43cf-b46d-db98abe8efad","name":"oragaz","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"e9c4953d-517a-4159-9987-ff36c5c0e44f","name":"glanch kivi","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"f2035b5e-0a67-4a40-a573-0ec0bcaf802f","name":"steffens bohr","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"b205b4f0-5cee-4db6-8892-449457dc6668","name":"marksteller","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"1a0fe10f-7dc6-47e4-8d02-eab4111025fe","name":"neumann","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"940e1702-da1f-4d4d-b724-fd3807ea588c","name":"orminski","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"636448e2-6451-44b6-a661-da03a92ffa92","name":"susczyk","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"3333dfa3-ce5e-4e16-a1dd-8a0bb9b6697a","name":"chugh","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"76097057-503d-4a1d-a198-7e9b79949d7d","name":"regneri","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"6f777dd8-b796-462c-a757-073572030a2e","name":"nadir numan rashe","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"36155c78-341f-4679-ac9c-e0d91c634adb","name":"möllerbernd","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"d9fa8f4d-f941-40af-951c-21d2ac57f656","name":"longert","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"14908e73-912f-45d7-9ab8-58f64fe6c345","name":"hille lüpsch","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"370c6141-f538-4df5-be4c-dbf834558a0d","name":"patt taube","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"041b55d3-3ead-4286-b08b-ce04bf048d28","name":"kivani safarzadeh","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"20fba453-4fe9-43c8-b287-f5177904afe5","name":"rasoli","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"8aef35d7-97e6-4912-a9aa-0ff855de0ded","name":"brechtingen","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"e547088b-b8ef-4376-83dc-474313b44c0a","name":"köktas","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"600ad8e5-160d-43f0-a85d-ae5439a3632e","name":"simon","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"c04aee02-e5ac-4e58-b138-08473b84f398","name":"stavermann tschom","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"2ba39d92-c2e2-4f13-a49e-6c9fa8e09376","name":"sundari","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"d4d7c365-015a-4dcd-8e67-fca030105e1b","name":"ramm","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"9b031d46-72ba-4754-9d22-dd4f83e1885b","name":"hartung","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"4f40bcfc-325f-4e6d-8281-56cdbf5719cf","name":"hillesheim","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"5d2bfdba-3f41-4bee-b953-d70f47f38fe3","name":"barsch","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"7462e0be-55f8-485c-b554-9382f63751b5","name":"tiefenthal","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"1c1f8cd8-36e1-45de-afc8-f2e6f2176520","name":"genc nacar","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"d2ea665f-54e3-4b6a-8f5c-3af063395b55","name":"gavrilenko krapivin","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"4929ddeb-dcbb-4fb9-8300-0fd0e43cc228","name":"warkentin","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"4dd7d281-af6f-4add-933e-db2b7fd97118","name":"dawood","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"6519699a-4c9a-45eb-9641-1002ccfa7883","name":"shabani","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"c87add18-d1f0-4a3b-a29b-473798a0a772","name":"merkens","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"7ef37e4a-1ea0-452d-8d95-96534b869bc0","name":"ronic sejdic","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"d208c212-50a7-455c-8637-9acd420be8d5","name":"ronic sejdic","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null},{"id":"2a104ae5-ebb5-4f60-937d-206741a9fde4","name":"stiller","street":"Str.esemannstr.","houseNumber":"5","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-10T01:09:53.334461792Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:09:53.334479405Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:09:53.334494269Z [inf]  [Photo Count] Leon: 1 unique photos (from 2 total OCR uploads)
+2025-12-10T01:09:53.334501801Z [inf]  [SQLiteHistorical] Leon finalStatuses: [
+2025-12-10T01:09:53.334508317Z [inf]    [ 'nicht_angetroffen', 29 ],
+2025-12-10T01:09:53.334514647Z [inf]    [ 'termin_vereinbart', 6 ],
+2025-12-10T01:09:53.334521063Z [inf]    [ 'interessiert', 3 ],
+2025-12-10T01:09:53.334529456Z [inf]    [ 'nicht_interessiert', 16 ]
+2025-12-10T01:09:53.336695649Z [inf]  ]
+2025-12-10T01:09:53.336699496Z [inf]  [SQLiteHistorical] Leon conversions: {
+2025-12-10T01:09:53.336704481Z [inf]    interest_later_to_written: 0,
+2025-12-10T01:09:53.336709757Z [inf]    interest_later_to_no_interest: 0,
+2025-12-10T01:09:53.336714352Z [inf]    interest_later_to_appointment: 1,
+2025-12-10T01:09:53.336718171Z [inf]    interest_later_to_not_reached: 0,
+2025-12-10T01:09:53.336721982Z [inf]    interest_later_total: 109
+2025-12-10T01:09:53.336727047Z [inf]  }
+2025-12-10T01:09:53.336732169Z [inf]  [SQLiteHistorical] Leon activeTime: 383min (total span: 833min, breaks: 450min from 877 native GPS points)
+2025-12-10T01:09:53.336736293Z [inf]  [SQLiteHistorical] Reconstructed Leon: 108 actions, 877 GPS (877 native), 2 photos, 56 status changes, 4.11km, 383min active
+2025-12-10T01:09:53.336740508Z [inf]  [Photo Count] Danyal: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:09:53.336746002Z [inf]  [SQLiteHistorical] Danyal activeTime: 0min (no native GPS or session data)
+2025-12-10T01:09:53.336750974Z [inf]  [SQLiteHistorical] Reconstructed Danyal: 0 actions, 2895 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:09:53.336755947Z [inf]  [Photo Debug] First /api/ocr found for Stefan:
+2025-12-10T01:09:53.336760471Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:09:53.336764620Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:09:53.336768666Z [inf]    - newProspects from logData: ["iwantej","alhamad","we52","sleman dlzar","we58","senan dino hamo","kryvano","sulaiman fidaa","inam avdel","dawod","nadya mirza","jalalhaji","mihaly","marder","pikus","wanc","jihan jawer","khidir","we49","ali scharo"]
+2025-12-10T01:09:53.336773019Z [inf]    - newProspects from log.data: ["iwantej","alhamad","we52","sleman dlzar","we58","senan dino hamo","kryvano","sulaiman fidaa","inam avdel","dawod","nadya mirza","jalalhaji","mihaly","marder","pikus","wanc","jihan jawer","khidir","we49","ali scharo"]
+2025-12-10T01:09:53.338495406Z [inf]    - existingCustomers from logData: [{"id":"19225204-56f6-49d6-bd77-94a8635e2643","name":"kawa","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"06d48e52-c296-408e-92a9-745129f753f8","name":"kawa","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"19225204-56f6-49d6-bd77-94a8635e2643","name":"jangier","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"06d48e52-c296-408e-92a9-745129f753f8","name":"jangier","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"ad7dc2d6-4819-4bbf-abef-e979194617c3","name":"suleiman","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"ad7dc2d6-4819-4bbf-abef-e979194617c3","name":"namer","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"05160795-1cdf-423a-a2c4-bc477035d2bb","name":"akram shaheen","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"05160795-1cdf-423a-a2c4-bc477035d2bb","name":"mohammadi khalaf","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"b6591c44-aa9b-4740-ba9d-19b8472e1799","name":"schmidt","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"031a7d4a-81b7-4624-abb5-afad899f84bc","name":"yusif yusif","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"923b19d0-8eff-498e-a0fb-7002079a9229","name":"yusif yusif","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"031a7d4a-81b7-4624-abb5-afad899f84bc","name":"sadik kalo","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"923b19d0-8eff-498e-a0fb-7002079a9229","name":"sadik kalo","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"031a7d4a-81b7-4624-abb5-afad899f84bc","name":"arwan kalo","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"923b19d0-8eff-498e-a0fb-7002079a9229","name":"arwan kalo","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"84196c6f-d1b9-4714-b47d-64a4b2a748a9","name":"senad","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"84196c6f-d1b9-4714-b47d-64a4b2a748a9","name":"ahmetovic","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"93331bd8-9e3e-4ddf-a568-7184785849be","name":"haji","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"93331bd8-9e3e-4ddf-a568-7184785849be","name":"shamo","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"2843c595-bb32-4d0a-930e-29cc53cb437a","name":"sabri","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"2843c595-bb32-4d0a-930e-29cc53cb437a","name":"darwish","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"19225204-56f6-49d6-bd77-94a8635e2643","name":"kawa jangier","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"06d48e52-c296-408e-92a9-745129f753f8","name":"kawa jangier","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"06d48e52-c296-408e-92a9-745129f753f8","name":"ridor","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"19225204-56f6-49d6-bd77-94a8635e2643","name":"slo jangier","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"06d48e52-c296-408e-92a9-745129f753f8","name":"slo jangier","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"5fb4b762-a0a5-4cf7-a644-9dbfe60b0d3b","name":"gado siso","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"d8e34439-1eed-4733-b751-91c4d83407ce","name":"ghiser","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"2ced7129-f40d-4645-82fd-a52d007a7784","name":"ibrahim","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"08e946e0-b46c-4ad9-926b-21aae1436548","name":"rau","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"2ced7129-f40d-4645-82fd-a52d007a7784","name":"khudhur","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"75df21b3-95cc-479a-8961-26b9265b0050","name":"gro","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"013c60cb-e480-4076-8c44-20b9fbf9afb2","name":"ketschan","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"013c60cb-e480-4076-8c44-20b9fbf9afb2","name":"ismail","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-10T01:09:53.340307061Z [inf]    - existingCustomers from log.data: [{"id":"19225204-56f6-49d6-bd77-94a8635e2643","name":"kawa","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"06d48e52-c296-408e-92a9-745129f753f8","name":"kawa","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"19225204-56f6-49d6-bd77-94a8635e2643","name":"jangier","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"06d48e52-c296-408e-92a9-745129f753f8","name":"jangier","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"ad7dc2d6-4819-4bbf-abef-e979194617c3","name":"suleiman","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"ad7dc2d6-4819-4bbf-abef-e979194617c3","name":"namer","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"05160795-1cdf-423a-a2c4-bc477035d2bb","name":"akram shaheen","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"05160795-1cdf-423a-a2c4-bc477035d2bb","name":"mohammadi khalaf","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"b6591c44-aa9b-4740-ba9d-19b8472e1799","name":"schmidt","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"031a7d4a-81b7-4624-abb5-afad899f84bc","name":"yusif yusif","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"923b19d0-8eff-498e-a0fb-7002079a9229","name":"yusif yusif","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"031a7d4a-81b7-4624-abb5-afad899f84bc","name":"sadik kalo","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"923b19d0-8eff-498e-a0fb-7002079a9229","name":"sadik kalo","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"031a7d4a-81b7-4624-abb5-afad899f84bc","name":"arwan kalo","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"923b19d0-8eff-498e-a0fb-7002079a9229","name":"arwan kalo","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"84196c6f-d1b9-4714-b47d-64a4b2a748a9","name":"senad","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"84196c6f-d1b9-4714-b47d-64a4b2a748a9","name":"ahmetovic","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"93331bd8-9e3e-4ddf-a568-7184785849be","name":"haji","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"93331bd8-9e3e-4ddf-a568-7184785849be","name":"shamo","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"2843c595-bb32-4d0a-930e-29cc53cb437a","name":"sabri","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"2843c595-bb32-4d0a-930e-29cc53cb437a","name":"darwish","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"19225204-56f6-49d6-bd77-94a8635e2643","name":"kawa jangier","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"06d48e52-c296-408e-92a9-745129f753f8","name":"kawa jangier","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"06d48e52-c296-408e-92a9-745129f753f8","name":"ridor","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"19225204-56f6-49d6-bd77-94a8635e2643","name":"slo jangier","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"06d48e52-c296-408e-92a9-745129f753f8","name":"slo jangier","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"5fb4b762-a0a5-4cf7-a644-9dbfe60b0d3b","name":"gado siso","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"d8e34439-1eed-4733-b751-91c4d83407ce","name":"ghiser","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"2ced7129-f40d-4645-82fd-a52d007a7784","name":"ibrahim","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"08e946e0-b46c-4ad9-926b-21aae1436548","name":"rau","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"2ced7129-f40d-4645-82fd-a52d007a7784","name":"khudhur","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"75df21b3-95cc-479a-8961-26b9265b0050","name":"gro","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"013c60cb-e480-4076-8c44-20b9fbf9afb2","name":"ketschan","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null},{"id":"013c60cb-e480-4076-8c44-20b9fbf9afb2","name":"ismail","street":"Brüsseler Str.","houseNumber":"10","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-10T01:09:53.341943250Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:09:53.341949893Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:09:53.341955732Z [inf]  [Photo Count] Stefan: 4 unique photos (from 4 total OCR uploads)
+2025-12-10T01:09:53.341961637Z [inf]  [SQLiteHistorical] Stefan finalStatuses: [
+2025-12-10T01:09:53.341966841Z [inf]    [ 'nicht_interessiert', 12 ],
+2025-12-10T01:09:53.341972012Z [inf]    [ 'geschrieben', 2 ],
+2025-12-10T01:09:53.341976276Z [inf]    [ 'interessiert', 1 ],
+2025-12-10T01:09:53.341981708Z [inf]    [ 'nicht_angetroffen', 17 ]
+2025-12-10T01:09:53.341988501Z [inf]  ]
+2025-12-10T01:09:53.341992496Z [inf]  [SQLiteHistorical] Stefan activeTime: 104min (total span: 1438min, breaks: 1334min from 232 native GPS points)
+2025-12-10T01:09:53.341997325Z [inf]  [SQLiteHistorical] Reconstructed Stefan: 158 actions, 232 GPS (232 native), 4 photos, 33 status changes, 2.13km, 104min active
+2025-12-10T01:09:53.342001920Z [inf]  [Photo Debug] First /api/ocr found for Raphael:
+2025-12-10T01:09:53.342007140Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:09:53.342012952Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:09:53.342017514Z [inf]    - newProspects from logData: ["gulii","mancini"]
+2025-12-10T01:09:53.342022417Z [inf]    - newProspects from log.data: ["gulii","mancini"]
+2025-12-10T01:09:53.342026859Z [inf]    - existingCustomers from logData: [{"id":"283feceb-9fb1-4601-97d3-91e20fbccb70","name":"molov","street":"Hohenstaufenstr.","houseNumber":"13","postalCode":"51149","isExisting":true,"contractType":null},{"id":"2c411485-4fb5-4a6b-ba32-b8e33e6184a0","name":"afraz","street":"Hohenstaufenstr.","houseNumber":"13","postalCode":"51149","isExisting":true,"contractType":null},{"id":"9bb9636f-b47a-4575-a26e-4de65eb3fe65","name":"vullo","street":"Hohenstaufenstr.","houseNumber":"13","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-10T01:09:53.343417469Z [inf]    - existingCustomers from log.data: [{"id":"283feceb-9fb1-4601-97d3-91e20fbccb70","name":"molov","street":"Hohenstaufenstr.","houseNumber":"13","postalCode":"51149","isExisting":true,"contractType":null},{"id":"2c411485-4fb5-4a6b-ba32-b8e33e6184a0","name":"afraz","street":"Hohenstaufenstr.","houseNumber":"13","postalCode":"51149","isExisting":true,"contractType":null},{"id":"9bb9636f-b47a-4575-a26e-4de65eb3fe65","name":"vullo","street":"Hohenstaufenstr.","houseNumber":"13","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-10T01:09:53.343423104Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:09:53.343428213Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:09:53.343432209Z [inf]  [Photo Count] Raphael: 4 unique photos (from 4 total OCR uploads)
+2025-12-10T01:09:53.343436660Z [inf]  [SQLiteHistorical] Raphael finalStatuses: [
+2025-12-10T01:09:53.343441047Z [inf]    [ 'nicht_interessiert', 13 ],
+2025-12-10T01:09:53.343445668Z [inf]    [ 'termin_vereinbart', 3 ],
+2025-12-10T01:09:53.343462376Z [inf]    [ 'nicht_angetroffen', 11 ],
+2025-12-10T01:09:53.343477018Z [inf]    [ 'geschrieben', 1 ]
+2025-12-10T01:09:53.343487897Z [inf]  ]
+2025-12-10T01:09:53.343498590Z [inf]  [SQLiteHistorical] Raphael activeTime: 1053min (total span: 1944min, breaks: 890min from 1456 native GPS points)
+2025-12-10T01:09:53.343504266Z [inf]  [SQLiteHistorical] Reconstructed Raphael: 522 actions, 1456 GPS (1456 native), 4 photos, 29 status changes, 1.41km, 1053min active
+2025-12-10T01:09:53.343511861Z [inf]  [SQLiteHistorical] ✅ Loaded 21 users for 2025-12-04
+2025-12-10T01:09:53.343518713Z [inf]  [DailyReport] Nadine: 6 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:09:54.385384954Z [inf]  [DailyReport] Sarafina: 2 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:09:54.385390555Z [inf]  [DailyReport] Mohamed Kanazoe: 11 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:09:54.509934670Z [inf]  [DailyReport] Nic: 4 pauses → 4 unique locations (POI lookup)
+2025-12-10T01:09:54.509949948Z [inf]  [PauseLocationCache] Found nearby POI: Spielplatz Kasterstraße at 7m
+2025-12-10T01:09:54.509958284Z [inf]  [PauseLocationCache] Cache HIT: Spielplatz Kasterstraße (7m) | Hit rate: 78.5%
+2025-12-10T01:09:54.509965160Z [inf]  [PauseLocationCache] Cache MISS (15) | Hit rate: 77.3%
+2025-12-10T01:09:54.509973679Z [inf]  [PauseLocationCache] Places API request for 51.180690327712036, 6.736938388400157 (Total: 15)
+2025-12-10T01:09:54.849587487Z [inf]  [PauseLocationCache] No POIs found for location
+2025-12-10T01:09:54.849594973Z [inf]  [PauseLocationCache] Found nearby POI: Pflege und Betreuung mit Herz at 10m
+2025-12-10T01:09:54.849600046Z [inf]  [PauseLocationCache] Cache HIT: Pflege und Betreuung mit Herz (10m) | Hit rate: 77.6%
+2025-12-10T01:09:54.849605672Z [inf]  [PauseLocationCache] Found nearby POI: Online Marketing - Werkier at 26m
+2025-12-10T01:09:54.849610666Z [inf]  [PauseLocationCache] Cache HIT: Online Marketing - Werkier (26m) | Hit rate: 77.9%
+2025-12-10T01:09:57.469830660Z [inf]  [DailyReport] Imi: 7 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:09:57.483341585Z [inf]  [DailyReport] Ibrahim Yilmaz: 13 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:09:59.361824079Z [inf]  [DailyReport] David: 2 pauses → 1 unique locations (POI lookup)
+2025-12-10T01:09:59.361833977Z [inf]  [PauseLocationCache] Found nearby POI: Kocher U. at 12m
+2025-12-10T01:09:59.361841543Z [inf]  [PauseLocationCache] Cache HIT: Kocher U. (12m) | Hit rate: 78.3%
+2025-12-10T01:09:59.443468245Z [inf]  [DailyReport] Eva: 3 pauses → 2 unique locations (POI lookup)
+2025-12-10T01:09:59.443479694Z [inf]  [PauseLocationCache] Cache MISS (16) | Hit rate: 77.1%
+2025-12-10T01:09:59.443487373Z [inf]  [PauseLocationCache] Places API request for 51.16053454189132, 6.780884698362307 (Total: 16)
+2025-12-10T01:10:00.512010874Z [inf]  [PauseLocationCache] No POIs found for location
+2025-12-10T01:10:00.512014254Z [inf]  [PauseLocationCache] Found nearby POI: Rauhhaarteckeln von der Magna Kybele at 26m
+2025-12-10T01:10:00.512031809Z [inf]  [PauseLocationCache] Cache HIT: Rauhhaarteckeln von der Magna Kybele (26m) | Hit rate: 77.5%
+2025-12-10T01:10:03.357283081Z [inf]  [DailyReport] Leon: 7 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:10:03.603376602Z [inf]  [DailyReport] Stefan: 4 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:10:03.667768218Z [inf]  [DailyReport] Raphael: 9 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:10:04.332337441Z [inf]    estimatedCost: '$0.27'
+2025-12-10T01:10:04.332348234Z [inf]  }
+2025-12-10T01:10:04.332442159Z [inf]  [DailyReport] POI Cache Performance: {
+2025-12-10T01:10:04.332454920Z [inf]    cacheSize: 139,
+2025-12-10T01:10:04.332463066Z [inf]    initialized: true,
+2025-12-10T01:10:04.332469521Z [inf]    hits: 55,
+2025-12-10T01:10:04.332475962Z [inf]    misses: 16,
+2025-12-10T01:10:04.332486855Z [inf]    hitRate: '77.5%',
+2025-12-10T01:10:04.332492684Z [inf]    apiCalls: 16,
+2025-12-10T01:10:04.332499412Z [inf]    savedPOIs: 0,
+2025-12-10T01:10:04.864300630Z [err]  [DailyStore] Rejected GPS from wrong date: 2025-12-09 (today: 2025-12-10), user: Ibrahim Yilmaz
+2025-12-10T01:10:04.868046784Z [inf]  [BatchLogger] Flushed 3 logs from 1 queue(s)
+2025-12-10T01:10:05.366042365Z [inf]  [DailyReport] Updating existing report: daily-report-2025-12-04.json
+2025-12-10T01:10:06.872132292Z [inf]  [DailyReport] Report for 2025-12-04 (final) uploaded successfully
+2025-12-10T01:10:06.872139523Z [inf]  [DailyReportCron] ✅ Created missing report for 2025-12-04
+2025-12-10T01:10:06.872143831Z [inf]  [DailyReport] Generating final report for 2025-12-05
+2025-12-10T01:10:06.872148607Z [inf]  [SQLiteHistorical] Loading data for 2025-12-05...
+2025-12-10T01:10:06.875367516Z [inf]  [SQLiteHistorical] Found 19 user(s) for 2025-12-05
+2025-12-10T01:10:06.875379466Z [inf]  [Photo Debug] First /api/ocr found for Nadine:
+2025-12-10T01:10:06.875388165Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:06.875395845Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:06.875403644Z [inf]    - newProspects from logData: "sir, klütsch kuhn, dürscheidt, hammer fritsch, kebel"
+2025-12-10T01:10:06.875411500Z [inf]    - newProspects from log.data: "sir, klütsch kuhn, dürscheidt, hammer fritsch, kebel"
+2025-12-10T01:10:06.875418296Z [inf]    - existingCustomers from logData: "preuße (f766090a-0918-4ecb-90ff-2a8c54edea06), lochmann (c9eaa891-fe9e-45e1-a2d3-f08fc0ed9127)"
+2025-12-10T01:10:06.875423743Z [inf]    - existingCustomers from log.data: "preuße (f766090a-0918-4ecb-90ff-2a8c54edea06), lochmann (c9eaa891-fe9e-45e1-a2d3-f08fc0ed9127)"
+2025-12-10T01:10:06.875430802Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:06.875438391Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:06.875444537Z [inf]  [Photo Count] Nadine: 1 unique photos (from 1 total OCR uploads)
+2025-12-10T01:10:06.875526869Z [inf]  [SQLiteHistorical] Nadine activeTime: 5min (total span: 5min, breaks: 0min from 20 native GPS points)
+2025-12-10T01:10:06.875536503Z [inf]  [SQLiteHistorical] Reconstructed Nadine: 15 actions, 20 GPS (20 native), 1 photos, 0 status changes, 0.20km, 5min active
+2025-12-10T01:10:06.877557421Z [inf]  [Photo Count] Kevin: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:10:06.877567189Z [inf]  [SQLiteHistorical] Kevin activeTime: 0min (no native GPS or session data)
+2025-12-10T01:10:06.877574534Z [inf]  [SQLiteHistorical] Reconstructed Kevin: 0 actions, 363 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:10:07.354724257Z [inf]  [Photo Count] Stephan: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:10:07.354729083Z [inf]  [SQLiteHistorical] Stephan activeTime: 0min (no native GPS or session data)
+2025-12-10T01:10:07.354733367Z [inf]  [SQLiteHistorical] Reconstructed Stephan: 0 actions, 2749 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:10:07.354737348Z [inf]  [Photo Count] Marcel Gattung: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:10:07.354741968Z [inf]  [SQLiteHistorical] Marcel Gattung activeTime: 0min (no native GPS or session data)
+2025-12-10T01:10:07.354745878Z [inf]  [SQLiteHistorical] Reconstructed Marcel Gattung: 0 actions, 379 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:10:07.354749565Z [inf]  [Photo Debug] First /api/ocr found for Lisandra:
+2025-12-10T01:10:07.354754120Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:07.354758437Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:07.354763608Z [inf]    - newProspects from logData: ["bayer walser bayer","siamo gbr","hoegen schirmer","gofra","lukasewitz","köppel ladwig","311","hanf","1111","hoffmann perronace"]
+2025-12-10T01:10:07.354767765Z [inf]    - newProspects from log.data: ["bayer walser bayer","siamo gbr","hoegen schirmer","gofra","lukasewitz","köppel ladwig","311","hanf","1111","hoffmann perronace"]
+2025-12-10T01:10:07.354772263Z [inf]    - existingCustomers from logData: [{"id":"a43b79e4-e025-4609-a688-4ca41948337a","name":"adl","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"432c1596-dbc7-4878-9656-e707417e336e","name":"pigulla","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"0d1784f0-b10d-44d5-9ec7-45cff8c970a2","name":"kramkowski","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"85cb5e2d-a5f1-4e15-86d3-7cc0515936c1","name":"angelova denkov","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"992aaf20-143f-4d3a-87f6-ed47a7aaff19","name":"arambasic","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"32782e9a-39d5-49f1-90bf-e55cb2408c11","name":"werner","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"40a30035-46a6-4d13-b9ed-cf27ae700453","name":"meghrazi badri","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"78e10a4d-b030-4377-aa3e-0f484de950a6","name":"bilgi terzi","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"57fc3ac2-31d6-46b5-a4be-221610a11e66","name":"grota fuchs","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"1d587cd2-cb74-418c-93be-81754c0a5a67","name":"cieslik","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-10T01:10:07.355971659Z [inf]  [Photo Count] Lisandra: 34 unique photos (from 40 total OCR uploads)
+2025-12-10T01:10:07.356010584Z [inf]    - existingCustomers from log.data: [{"id":"a43b79e4-e025-4609-a688-4ca41948337a","name":"adl","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"432c1596-dbc7-4878-9656-e707417e336e","name":"pigulla","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"0d1784f0-b10d-44d5-9ec7-45cff8c970a2","name":"kramkowski","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"85cb5e2d-a5f1-4e15-86d3-7cc0515936c1","name":"angelova denkov","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"992aaf20-143f-4d3a-87f6-ed47a7aaff19","name":"arambasic","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"32782e9a-39d5-49f1-90bf-e55cb2408c11","name":"werner","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"40a30035-46a6-4d13-b9ed-cf27ae700453","name":"meghrazi badri","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"78e10a4d-b030-4377-aa3e-0f484de950a6","name":"bilgi terzi","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"57fc3ac2-31d6-46b5-a4be-221610a11e66","name":"grota fuchs","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"1d587cd2-cb74-418c-93be-81754c0a5a67","name":"cieslik","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-10T01:10:07.356019335Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:07.356025948Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:07.357622766Z [inf]    [ 'nicht_interessiert', 20 ],
+2025-12-10T01:10:07.357633070Z [inf]    [ 'geschrieben', 2 ],
+2025-12-10T01:10:07.357638822Z [inf]    [ 'interessiert', 7 ]
+2025-12-10T01:10:07.357644622Z [inf]  ]
+2025-12-10T01:10:07.357653075Z [inf]  [SQLiteHistorical] Lisandra conversions: {
+2025-12-10T01:10:07.357659173Z [inf]    interest_later_to_written: 0,
+2025-12-10T01:10:07.357667763Z [inf]    interest_later_to_no_interest: 1,
+2025-12-10T01:10:07.357672634Z [inf]  [SQLiteHistorical] Reconstructed Lisandra: 189 actions, 3136 GPS (780 native), 40 photos, 124 status changes, 4.82km, 328min active
+2025-12-10T01:10:07.357673726Z [inf]  [SQLiteHistorical] Lisandra finalStatuses: [
+2025-12-10T01:10:07.357679323Z [inf]    interest_later_to_appointment: 0,
+2025-12-10T01:10:07.357689986Z [inf]    [ 'nicht_angetroffen', 90 ],
+2025-12-10T01:10:07.357694272Z [inf]  [Photo Count] Damian: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:10:07.357695782Z [inf]    interest_later_to_not_reached: 0,
+2025-12-10T01:10:07.357705904Z [inf]    interest_later_total: 42
+2025-12-10T01:10:07.357715266Z [inf]  [SQLiteHistorical] Damian finalStatuses: [ [ 'interessiert', 2 ] ]
+2025-12-10T01:10:07.357715608Z [inf]    interest_later_total: 4
+2025-12-10T01:10:07.357718400Z [inf]  }
+2025-12-10T01:10:07.357730083Z [inf]  }
+2025-12-10T01:10:07.357733677Z [inf]  [SQLiteHistorical] Damian conversions: {
+2025-12-10T01:10:07.357736194Z [inf]  [SQLiteHistorical] Lisandra activeTime: 328min (total span: 399min, breaks: 71min from 780 native GPS points)
+2025-12-10T01:10:07.357744631Z [inf]  [SQLiteHistorical] Damian activeTime: 55min (total span: 84min, breaks: 29min from 444 native GPS points)
+2025-12-10T01:10:07.357746001Z [inf]    interest_later_to_written: 0,
+2025-12-10T01:10:07.357754923Z [inf]    interest_later_to_no_interest: 0,
+2025-12-10T01:10:07.357763339Z [inf]    interest_later_to_appointment: 0,
+2025-12-10T01:10:07.357771351Z [inf]    interest_later_to_not_reached: 0,
+2025-12-10T01:10:07.359077677Z [inf]  [SQLiteHistorical] Damian_Admin activeTime: 0min (no native GPS or session data)
+2025-12-10T01:10:07.359084646Z [inf]  [SQLiteHistorical] Reconstructed Damian_Admin: 0 actions, 0 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:10:07.359090740Z [inf]  [Photo Debug] First /api/ocr found for Sarafina:
+2025-12-10T01:10:07.359097002Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:07.359103485Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:07.359111248Z [inf]  [SQLiteHistorical] Reconstructed Damian: 308 actions, 444 GPS (444 native), 0 photos, 2 status changes, 0.08km, 55min active
+2025-12-10T01:10:07.359113780Z [inf]    - newProspects from logData: ["karimi hosseinzadeh"]
+2025-12-10T01:10:07.359123359Z [inf]    - newProspects from log.data: ["karimi hosseinzadeh"]
+2025-12-10T01:10:07.359130604Z [inf]  [Photo Count] Damian_Admin: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:10:07.359134390Z [inf]    - existingCustomers from logData: [{"id":"f86bf2cc-243b-4a90-b9fb-1e53d5dee3e9","name":"hüttebräucker","street":"Mathildenstr.","houseNumber":"18","postalCode":"51149","isExisting":true,"contractType":null},{"id":"8e20143f-0c47-4b2b-b37b-7e6daebb3b8a","name":"hammers","street":"Mathildenstr.","houseNumber":"18","postalCode":"51149","isExisting":true,"contractType":null},{"id":"075d37f7-c63f-4eea-aab0-836fc4745764","name":"kasapoglu","street":"Mathildenstr.","houseNumber":"18","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-10T01:10:07.359141350Z [inf]    - existingCustomers from log.data: [{"id":"f86bf2cc-243b-4a90-b9fb-1e53d5dee3e9","name":"hüttebräucker","street":"Mathildenstr.","houseNumber":"18","postalCode":"51149","isExisting":true,"contractType":null},{"id":"8e20143f-0c47-4b2b-b37b-7e6daebb3b8a","name":"hammers","street":"Mathildenstr.","houseNumber":"18","postalCode":"51149","isExisting":true,"contractType":null},{"id":"075d37f7-c63f-4eea-aab0-836fc4745764","name":"kasapoglu","street":"Mathildenstr.","houseNumber":"18","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-10T01:10:07.360799245Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:07.360806722Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:07.360814147Z [inf]  [Photo Count] Sarafina: 8 unique photos (from 8 total OCR uploads)
+2025-12-10T01:10:07.360823018Z [inf]  [SQLiteHistorical] Sarafina finalStatuses: [
+2025-12-10T01:10:07.360831176Z [inf]    [ 'nicht_interessiert', 15 ],
+2025-12-10T01:10:07.360839146Z [inf]    [ 'nicht_angetroffen', 38 ],
+2025-12-10T01:10:07.360849036Z [inf]    [ 'interessiert', 1 ],
+2025-12-10T01:10:07.360854785Z [inf]  }
+2025-12-10T01:10:07.360855305Z [inf]    - newProspects from logData: ["briefe","sylvia heckenbach","robin vorm walde"]
+2025-12-10T01:10:07.360863589Z [inf]    [ 'geschrieben', 2 ],
+2025-12-10T01:10:07.360867867Z [inf]  [SQLiteHistorical] Sarafina activeTime: 112min (total span: 1434min, breaks: 1322min from 256 native GPS points)
+2025-12-10T01:10:07.360876229Z [inf]    [ 'termin_vereinbart', 1 ]
+2025-12-10T01:10:07.360884460Z [inf]  ]
+2025-12-10T01:10:07.360893575Z [inf]  [SQLiteHistorical] Reconstructed Sarafina: 122 actions, 256 GPS (256 native), 8 photos, 60 status changes, 11.54km, 112min active
+2025-12-10T01:10:07.360897057Z [inf]  [SQLiteHistorical] Sarafina conversions: {
+2025-12-10T01:10:07.360902575Z [inf]  [Photo Debug] First /api/ocr found for Nic:
+2025-12-10T01:10:07.360910513Z [inf]    interest_later_to_written: 0,
+2025-12-10T01:10:07.360913007Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:07.360921974Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:07.360925302Z [inf]    interest_later_to_no_interest: 0,
+2025-12-10T01:10:07.360933435Z [inf]    interest_later_to_appointment: 0,
+2025-12-10T01:10:07.360939479Z [inf]    interest_later_to_not_reached: 0,
+2025-12-10T01:10:07.360946310Z [inf]    interest_later_total: 4
+2025-12-10T01:10:07.368883571Z [inf]    - newProspects from log.data: ["briefe","sylvia heckenbach","robin vorm walde"]
+2025-12-10T01:10:07.368892464Z [inf]    - existingCustomers from logData: []
+2025-12-10T01:10:07.368897376Z [inf]    - existingCustomers from log.data: []
+2025-12-10T01:10:07.368902139Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:07.368908915Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:07.368916784Z [inf]  [Photo Count] Nic: 64 unique photos (from 64 total OCR uploads)
+2025-12-10T01:10:07.368924097Z [inf]  [SQLiteHistorical] Nic finalStatuses: [
+2025-12-10T01:10:07.368930317Z [inf]    [ 'nicht_interessiert', 30 ],
+2025-12-10T01:10:07.368930334Z [inf]    interest_later_to_appointment: 0,
+2025-12-10T01:10:07.368937088Z [inf]    [ 'interessiert', 7 ],
+2025-12-10T01:10:07.368944609Z [inf]    [ 'nicht_angetroffen', 65 ]
+2025-12-10T01:10:07.368951918Z [inf]  ]
+2025-12-10T01:10:07.368958350Z [inf]    interest_later_to_not_reached: 0,
+2025-12-10T01:10:07.368961404Z [inf]  [SQLiteHistorical] Nic conversions: {
+2025-12-10T01:10:07.368970154Z [inf]    interest_later_to_written: 0,
+2025-12-10T01:10:07.368972549Z [inf]    interest_later_total: 10
+2025-12-10T01:10:07.368979100Z [inf]    interest_later_to_no_interest: 0,
+2025-12-10T01:10:07.368984814Z [inf]  }
+2025-12-10T01:10:07.368992038Z [inf]  [SQLiteHistorical] Nic activeTime: 252min (total span: 355min, breaks: 103min from 1714 native GPS points)
+2025-12-10T01:10:07.369003851Z [inf]  [SQLiteHistorical] Reconstructed Nic: 1488 actions, 5894 GPS (1714 native), 64 photos, 132 status changes, 3.57km, 252min active
+2025-12-10T01:10:07.369012507Z [inf]  [Photo Count] Kiri: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:10:07.369020890Z [inf]  [SQLiteHistorical] Kiri activeTime: 0min (no native GPS or session data)
+2025-12-10T01:10:07.372284513Z [inf]  [SQLiteHistorical] Reconstructed Kiri: 0 actions, 151 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:10:07.372294771Z [inf]  [Photo Debug] First /api/ocr found for Imi:
+2025-12-10T01:10:07.372300329Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:07.372306065Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:07.372311609Z [inf]    - newProspects from logData: ["preuß thormanr","cusse","esso"]
+2025-12-10T01:10:07.372321522Z [inf]    - newProspects from log.data: ["preuß thormanr","cusse","esso"]
+2025-12-10T01:10:07.372330882Z [inf]    - existingCustomers from logData: [{"id":"c779183e-7d69-4f33-a572-fcc86acac306","name":"schmidt","street":"Am Westhover Berg","houseNumber":"11","postalCode":"51149","isExisting":true,"contractType":null},{"id":"19b777c3-15ae-4730-9566-eecef8e89d9d","name":"menge","street":"Am Westhover Berg","houseNumber":"11","postalCode":"51149","isExisting":true,"contractType":null},{"id":"74d9eaff-554d-44aa-b579-dc3a4bd3846b","name":"guillaume","street":"Am Westhover Berg","houseNumber":"11","postalCode":"51149","isExisting":true,"contractType":null},{"id":"c779183e-7d69-4f33-a572-fcc86acac306","name":"martini schmidt","street":"Am Westhover Berg","houseNumber":"11","postalCode":"51149","isExisting":true,"contractType":null},{"id":"637f0aa4-dec1-450c-8f94-bfb06a3ad64d","name":"marquardt","street":"Am Westhover Berg","houseNumber":"11","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-10T01:10:07.372337726Z [inf]    - existingCustomers from log.data: [{"id":"c779183e-7d69-4f33-a572-fcc86acac306","name":"schmidt","street":"Am Westhover Berg","houseNumber":"11","postalCode":"51149","isExisting":true,"contractType":null},{"id":"19b777c3-15ae-4730-9566-eecef8e89d9d","name":"menge","street":"Am Westhover Berg","houseNumber":"11","postalCode":"51149","isExisting":true,"contractType":null},{"id":"74d9eaff-554d-44aa-b579-dc3a4bd3846b","name":"guillaume","street":"Am Westhover Berg","houseNumber":"11","postalCode":"51149","isExisting":true,"contractType":null},{"id":"c779183e-7d69-4f33-a572-fcc86acac306","name":"martini schmidt","street":"Am Westhover Berg","houseNumber":"11","postalCode":"51149","isExisting":true,"contractType":null},{"id":"637f0aa4-dec1-450c-8f94-bfb06a3ad64d","name":"marquardt","street":"Am Westhover Berg","houseNumber":"11","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-10T01:10:07.377469866Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:07.377477893Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:07.377482770Z [inf]  [Photo Count] Imi: 10 unique photos (from 10 total OCR uploads)
+2025-12-10T01:10:07.377504891Z [inf]  [SQLiteHistorical] Imi finalStatuses: [
+2025-12-10T01:10:07.377511856Z [inf]    [ 'nicht_angetroffen', 13 ],
+2025-12-10T01:10:07.377516150Z [inf]    [ 'nicht_interessiert', 13 ],
+2025-12-10T01:10:07.377520411Z [inf]    [ 'geschrieben', 2 ],
+2025-12-10T01:10:07.377524745Z [inf]    [ 'interessiert', 1 ]
+2025-12-10T01:10:07.377529314Z [inf]  ]
+2025-12-10T01:10:07.377534664Z [inf]  [SQLiteHistorical] Imi conversions: {
+2025-12-10T01:10:07.377540724Z [inf]    interest_later_to_written: 1,
+2025-12-10T01:10:07.377545197Z [inf]    interest_later_to_no_interest: 0,
+2025-12-10T01:10:07.377550227Z [inf]    interest_later_to_appointment: 0,
+2025-12-10T01:10:07.377554530Z [inf]    interest_later_to_not_reached: 0,
+2025-12-10T01:10:07.377562348Z [inf]    interest_later_total: 2
+2025-12-10T01:10:07.377567342Z [inf]  }
+2025-12-10T01:10:07.377571643Z [inf]  [SQLiteHistorical] Imi activeTime: 118min (total span: 228min, breaks: 110min from 398 native GPS points)
+2025-12-10T01:10:07.377576200Z [inf]  [SQLiteHistorical] Reconstructed Imi: 483 actions, 398 GPS (398 native), 10 photos, 54 status changes, 1.36km, 118min active
+2025-12-10T01:10:07.377580801Z [inf]  [Photo Debug] First /api/ocr found for Ibrahim Yilmaz:
+2025-12-10T01:10:07.377585188Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:07.377594841Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:07.377599417Z [inf]    - newProspects from logData: ["lauriello rasc","heur","galinskiy","prastalo","hartje weidemann","rosenthal asan"]
+2025-12-10T01:10:07.382807179Z [inf]    - newProspects from log.data: ["lauriello rasc","heur","galinskiy","prastalo","hartje weidemann","rosenthal asan"]
+2025-12-10T01:10:07.382818820Z [inf]    - existingCustomers from logData: [{"id":"6e9093eb-eb04-4509-b24b-31a6e8eabdb3","name":"brünen hansen","street":"Konstantinstr.","houseNumber":"25","postalCode":"41468","isExisting":true,"contractType":null},{"id":"be2e73e2-e54d-440a-a112-1e1349d71430","name":"wittkopf","street":"Konstantinstr.","houseNumber":"25","postalCode":"41468","isExisting":true,"contractType":null},{"id":"3735758e-10dc-44e2-b257-5bd7ae699028","name":"duisberg","street":"Konstantinstr.","houseNumber":"25","postalCode":"41468","isExisting":true,"contractType":null}]
+2025-12-10T01:10:07.382827453Z [inf]    - existingCustomers from log.data: [{"id":"6e9093eb-eb04-4509-b24b-31a6e8eabdb3","name":"brünen hansen","street":"Konstantinstr.","houseNumber":"25","postalCode":"41468","isExisting":true,"contractType":null},{"id":"be2e73e2-e54d-440a-a112-1e1349d71430","name":"wittkopf","street":"Konstantinstr.","houseNumber":"25","postalCode":"41468","isExisting":true,"contractType":null},{"id":"3735758e-10dc-44e2-b257-5bd7ae699028","name":"duisberg","street":"Konstantinstr.","houseNumber":"25","postalCode":"41468","isExisting":true,"contractType":null}]
+2025-12-10T01:10:07.382833542Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:07.382839962Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:07.382851862Z [inf]  [Photo Count] Ibrahim Yilmaz: 5 unique photos (from 6 total OCR uploads)
+2025-12-10T01:10:07.382859236Z [inf]  [SQLiteHistorical] Ibrahim Yilmaz finalStatuses: [
+2025-12-10T01:10:07.382864839Z [inf]    [ 'nicht_interessiert', 14 ],
+2025-12-10T01:10:07.382871584Z [inf]    [ 'nicht_angetroffen', 17 ],
+2025-12-10T01:10:07.382878356Z [inf]    [ 'interessiert', 2 ],
+2025-12-10T01:10:07.384910499Z [inf]    [ 'geschrieben', 1 ]
+2025-12-10T01:10:07.384918454Z [inf]  ]
+2025-12-10T01:10:07.384935028Z [inf]  [SQLiteHistorical] Ibrahim Yilmaz conversions: {
+2025-12-10T01:10:07.384942258Z [inf]    interest_later_to_written: 0,
+2025-12-10T01:10:07.384948051Z [inf]    interest_later_to_no_interest: 0,
+2025-12-10T01:10:07.384954271Z [inf]    interest_later_to_appointment: 0,
+2025-12-10T01:10:07.384960530Z [inf]    interest_later_to_not_reached: 0,
+2025-12-10T01:10:07.384967320Z [inf]    interest_later_total: 4
+2025-12-10T01:10:07.384976206Z [inf]  }
+2025-12-10T01:10:07.384982572Z [inf]  [SQLiteHistorical] Ibrahim Yilmaz activeTime: 1109min (total span: 1405min, breaks: 295min from 2596 native GPS points)
+2025-12-10T01:10:07.384990064Z [inf]  [SQLiteHistorical] Reconstructed Ibrahim Yilmaz: 1513 actions, 2596 GPS (2596 native), 6 photos, 74 status changes, 3.81km, 1109min active
+2025-12-10T01:10:07.384995831Z [inf]  [Photo Count] David: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:10:07.385001002Z [inf]  [SQLiteHistorical] David activeTime: 1min (total span: 1min, breaks: 0min from 5 native GPS points)
+2025-12-10T01:10:07.385007787Z [inf]  [SQLiteHistorical] Reconstructed David: 3 actions, 3429 GPS (5 native), 0 photos, 0 status changes, 0.00km, 1min active
+2025-12-10T01:10:07.385015351Z [inf]  [Photo Count] Bernhard Schauff Artist: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:10:07.385022112Z [inf]  [SQLiteHistorical] Bernhard Schauff Artist activeTime: 0min (no native GPS or session data)
+2025-12-10T01:10:07.385029400Z [inf]  [SQLiteHistorical] Reconstructed Bernhard Schauff Artist: 0 actions, 154 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:10:07.385037747Z [inf]  [Photo Debug] First /api/ocr found for Eva:
+2025-12-10T01:10:07.385044531Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:07.385055505Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:07.389299551Z [inf]    - newProspects from logData: ["speicher","kaps thieme","kunstaspekte","graf","oehler"]
+2025-12-10T01:10:07.389313575Z [inf]    - newProspects from log.data: ["speicher","kaps thieme","kunstaspekte","graf","oehler"]
+2025-12-10T01:10:07.389322602Z [inf]    - existingCustomers from logData: [{"id":"82a77966-9b77-4037-8f0f-877be40b5b0b","name":"schultz","street":"Matthiasstr.","houseNumber":"2","postalCode":"41468","isExisting":true,"contractType":null},{"id":"a48b0564-e120-4e95-854c-9983d1b07eff","name":"thalmann","street":"Matthiasstr.","houseNumber":"2","postalCode":"41468","isExisting":true,"contractType":null}]
+2025-12-10T01:10:07.389331807Z [inf]    - existingCustomers from log.data: [{"id":"82a77966-9b77-4037-8f0f-877be40b5b0b","name":"schultz","street":"Matthiasstr.","houseNumber":"2","postalCode":"41468","isExisting":true,"contractType":null},{"id":"a48b0564-e120-4e95-854c-9983d1b07eff","name":"thalmann","street":"Matthiasstr.","houseNumber":"2","postalCode":"41468","isExisting":true,"contractType":null}]
+2025-12-10T01:10:07.389339419Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:07.389347708Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:07.389355532Z [inf]  [Photo Count] Eva: 5 unique photos (from 5 total OCR uploads)
+2025-12-10T01:10:07.389365651Z [inf]  [SQLiteHistorical] Eva finalStatuses: [
+2025-12-10T01:10:07.389373302Z [inf]    [ 'nicht_angetroffen', 46 ],
+2025-12-10T01:10:07.389380806Z [inf]    [ 'nicht_interessiert', 2 ],
+2025-12-10T01:10:07.389387987Z [inf]    [ 'interessiert', 3 ]
+2025-12-10T01:10:07.389395072Z [inf]  ]
+2025-12-10T01:10:07.389403151Z [inf]  [SQLiteHistorical] Eva conversions: {
+2025-12-10T01:10:07.389410794Z [inf]    interest_later_to_written: 0,
+2025-12-10T01:10:07.389417813Z [inf]    interest_later_to_no_interest: 0,
+2025-12-10T01:10:07.390855093Z [inf]    interest_later_to_appointment: 0,
+2025-12-10T01:10:07.390862018Z [inf]    interest_later_to_not_reached: 0,
+2025-12-10T01:10:07.390866667Z [inf]    interest_later_total: 1
+2025-12-10T01:10:07.390872603Z [inf]  }
+2025-12-10T01:10:07.390878288Z [inf]  [SQLiteHistorical] Eva activeTime: 277min (total span: 2951min, breaks: 2673min from 525 native GPS points)
+2025-12-10T01:10:07.390883082Z [inf]  [SQLiteHistorical] Reconstructed Eva: 782 actions, 660 GPS (525 native), 5 photos, 63 status changes, 2.56km, 277min active
+2025-12-10T01:10:07.390890020Z [inf]  [Photo Count] Leon: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:10:07.390895125Z [inf]  [SQLiteHistorical] Leon activeTime: 650min (total span: 698min, breaks: 47min from 1386 native GPS points)
+2025-12-10T01:10:07.390899742Z [inf]  [SQLiteHistorical] Reconstructed Leon: 726 actions, 1386 GPS (1386 native), 0 photos, 0 status changes, 0.16km, 650min active
+2025-12-10T01:10:07.390905196Z [inf]  [Photo Count] Danyal: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:10:07.390911316Z [inf]  [SQLiteHistorical] Danyal activeTime: 0min (no native GPS or session data)
+2025-12-10T01:10:07.390915677Z [inf]  [SQLiteHistorical] Reconstructed Danyal: 0 actions, 2942 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:10:07.390920694Z [inf]  [Photo Debug] First /api/ocr found for Stefan:
+2025-12-10T01:10:07.390924820Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:07.390931622Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:07.390937828Z [inf]    - newProspects from logData: ["arakelyan","salman","alsheikh haidar","dujimic","chirilia"]
+2025-12-10T01:10:07.390943084Z [inf]    - newProspects from log.data: ["arakelyan","salman","alsheikh haidar","dujimic","chirilia"]
+2025-12-10T01:10:07.390947973Z [inf]    - existingCustomers from logData: [{"id":"844a0a0c-6f27-40c5-abfc-c67eea8fc727","name":"santagkidis","street":"Amsterdamer Str.","houseNumber":"37","postalCode":"51149","isExisting":true,"contractType":null},{"id":"056b6f36-e734-42d4-a1b8-05909068e7e6","name":"berno","street":"Amsterdamer Str.","houseNumber":"37","postalCode":"51149","isExisting":true,"contractType":null},{"id":"f2259043-dddb-4f24-95e6-2d77eafd7444","name":"darwish","street":"Amsterdamer Str.","houseNumber":"37","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-10T01:10:07.393101196Z [inf]    - existingCustomers from log.data: [{"id":"844a0a0c-6f27-40c5-abfc-c67eea8fc727","name":"santagkidis","street":"Amsterdamer Str.","houseNumber":"37","postalCode":"51149","isExisting":true,"contractType":null},{"id":"056b6f36-e734-42d4-a1b8-05909068e7e6","name":"berno","street":"Amsterdamer Str.","houseNumber":"37","postalCode":"51149","isExisting":true,"contractType":null},{"id":"f2259043-dddb-4f24-95e6-2d77eafd7444","name":"darwish","street":"Amsterdamer Str.","houseNumber":"37","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-10T01:10:07.393112289Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:07.393119037Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:07.393126539Z [inf]  [Photo Count] Stefan: 3 unique photos (from 3 total OCR uploads)
+2025-12-10T01:10:07.393132889Z [inf]  [SQLiteHistorical] Stefan finalStatuses: [
+2025-12-10T01:10:07.393139584Z [inf]    [ 'nicht_angetroffen', 45 ],
+2025-12-10T01:10:07.393147505Z [inf]    [ 'nicht_interessiert', 19 ],
+2025-12-10T01:10:07.393157261Z [inf]    [ 'interessiert', 1 ]
+2025-12-10T01:10:07.393162479Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:07.393168794Z [inf]  ]
+2025-12-10T01:10:07.393178966Z [inf]  [SQLiteHistorical] Stefan activeTime: 224min (total span: 397min, breaks: 173min from 816 native GPS points)
+2025-12-10T01:10:07.393182791Z [inf]    - newProspects from logData: ["elsheshtawy","jelenkovic narducci"]
+2025-12-10T01:10:07.393188633Z [inf]  [SQLiteHistorical] Reconstructed Stefan: 924 actions, 980 GPS (816 native), 3 photos, 68 status changes, 4.98km, 224min active
+2025-12-10T01:10:07.393198869Z [inf]    - newProspects from log.data: ["elsheshtawy","jelenkovic narducci"]
+2025-12-10T01:10:07.393199026Z [inf]  [Photo Debug] First /api/ocr found for Raphael:
+2025-12-10T01:10:07.393210935Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:07.401978093Z [inf]    - existingCustomers from logData: [{"id":"44fdb1c6-9246-4d1c-a89a-38dadfeef96a","name":"daoud","street":"Hohenstaufenstr.","houseNumber":"66","postalCode":"51149","isExisting":true,"contractType":null},{"id":"08ed71bb-8694-4d9e-930a-9ae209b29fb7","name":"proserpio","street":"Hohenstaufenstr.","houseNumber":"66","postalCode":"51149","isExisting":true,"contractType":null},{"id":"557c56c4-8aa7-4f08-a0b9-97fdd86e9140","name":"izci","street":"Hohenstaufenstr.","houseNumber":"66","postalCode":"51149","isExisting":true,"contractType":null},{"id":"2e41b031-bd11-4fb5-92df-3aec17f8ca45","name":"osmani","street":"Hohenstaufenstr.","houseNumber":"66","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-10T01:10:07.401989302Z [inf]    - existingCustomers from log.data: [{"id":"44fdb1c6-9246-4d1c-a89a-38dadfeef96a","name":"daoud","street":"Hohenstaufenstr.","houseNumber":"66","postalCode":"51149","isExisting":true,"contractType":null},{"id":"08ed71bb-8694-4d9e-930a-9ae209b29fb7","name":"proserpio","street":"Hohenstaufenstr.","houseNumber":"66","postalCode":"51149","isExisting":true,"contractType":null},{"id":"557c56c4-8aa7-4f08-a0b9-97fdd86e9140","name":"izci","street":"Hohenstaufenstr.","houseNumber":"66","postalCode":"51149","isExisting":true,"contractType":null},{"id":"2e41b031-bd11-4fb5-92df-3aec17f8ca45","name":"osmani","street":"Hohenstaufenstr.","houseNumber":"66","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-10T01:10:07.401996136Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:07.402002399Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:07.402008738Z [inf]  [Photo Count] Raphael: 28 unique photos (from 29 total OCR uploads)
+2025-12-10T01:10:07.402014195Z [inf]  [SQLiteHistorical] Raphael finalStatuses: [
+2025-12-10T01:10:07.402018900Z [inf]    [ 'geschrieben', 3 ],
+2025-12-10T01:10:07.406736203Z [inf]    [ 'nicht_interessiert', 17 ],
+2025-12-10T01:10:07.406747389Z [inf]    [ 'nicht_angetroffen', 48 ],
+2025-12-10T01:10:07.406753620Z [inf]    [ 'termin_vereinbart', 2 ]
+2025-12-10T01:10:07.406759520Z [inf]  ]
+2025-12-10T01:10:07.406768249Z [inf]  [SQLiteHistorical] Raphael activeTime: 866min (total span: 921min, breaks: 55min from 2447 native GPS points)
+2025-12-10T01:10:07.406773632Z [inf]  [SQLiteHistorical] Reconstructed Raphael: 1670 actions, 2447 GPS (2447 native), 29 photos, 110 status changes, 3.59km, 866min active
+2025-12-10T01:10:07.406780333Z [inf]  [SQLiteHistorical] ✅ Loaded 19 users for 2025-12-05
+2025-12-10T01:10:07.406786906Z [inf]  [DailyReport] Nadine: 0 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:10:07.513479639Z [inf]  [DailyReport] Lisandra: 1 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:10:07.797611086Z [inf]  [DailyReport] Damian: 1 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:10:08.351564880Z [inf]  [DailyReport] Sarafina: 5 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:10:08.351572367Z [inf]  [DailyReport] Nic: 2 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:10:08.462641276Z [inf]  [DailyReport] Imi: 3 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:10:08.702927550Z [inf]  [DailyReport] Ibrahim Yilmaz: 8 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:10:09.362805305Z [inf]  [DailyReport] David: 0 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:10:09.362810681Z [inf]  [DailyReport] Eva: 4 pauses → 1 unique locations (POI lookup)
+2025-12-10T01:10:09.362817837Z [inf]  [PauseLocationCache] Cache MISS (17) | Hit rate: 76.4%
+2025-12-10T01:10:09.362823100Z [inf]  [PauseLocationCache] Places API request for 51.16040229797363, 6.779563403112608 (Total: 17)
+2025-12-10T01:10:09.772378835Z [inf]  [PauseLocationCache] No POIs found for location
+2025-12-10T01:10:10.353366163Z [inf]  [DailyReport] Stefan: 5 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:10:10.353549479Z [inf]  [DailyReport] Leon: 2 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:10:10.477529252Z [inf]  [DailyReport] Raphael: 2 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:10:10.829293913Z [inf]  [DailyReport] POI Cache Performance: {
+2025-12-10T01:10:10.829305162Z [inf]    cacheSize: 139,
+2025-12-10T01:10:10.829315498Z [inf]    initialized: true,
+2025-12-10T01:10:10.829323068Z [inf]    hits: 55,
+2025-12-10T01:10:10.829328766Z [inf]    misses: 17,
+2025-12-10T01:10:10.829334367Z [inf]    hitRate: '76.4%',
+2025-12-10T01:10:10.829340024Z [inf]    apiCalls: 17,
+2025-12-10T01:10:10.829346106Z [inf]    savedPOIs: 0,
+2025-12-10T01:10:10.829356569Z [inf]    estimatedCost: '$0.29'
+2025-12-10T01:10:10.829362697Z [inf]  }
+2025-12-10T01:10:11.638425539Z [inf]  [DailyReport] Updating existing report: daily-report-2025-12-05.json
+2025-12-10T01:10:13.371917471Z [inf]  [DailyReport] Report for 2025-12-05 (final) uploaded successfully
+2025-12-10T01:10:13.371924024Z [inf]  [DailyReportCron] ✅ Created missing report for 2025-12-05
+2025-12-10T01:10:13.371932004Z [inf]  [DailyReport] Generating final report for 2025-12-06
+2025-12-10T01:10:13.371939296Z [inf]  [SQLiteHistorical] Loading data for 2025-12-06...
+2025-12-10T01:10:13.371945902Z [inf]  [SQLiteHistorical] Found 5 user(s) for 2025-12-06
+2025-12-10T01:10:13.371952794Z [inf]  [Photo Count] Kevin: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:10:13.371965479Z [inf]  [SQLiteHistorical] Kevin activeTime: 0min (no native GPS or session data)
+2025-12-10T01:10:13.371972281Z [inf]  [SQLiteHistorical] Reconstructed Kevin: 0 actions, 123 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:10:13.376434709Z [inf]  [Photo Debug] First /api/ocr found for Damian:
+2025-12-10T01:10:13.376441525Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:13.376448364Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:13.376454353Z [inf]    - newProspects from logData: "wulcan, qazi, kolb haake, krause, derungs, bircher, köttl, neudorfer, pasci, gander"
+2025-12-10T01:10:13.376460950Z [inf]    - newProspects from log.data: "wulcan, qazi, kolb haake, krause, derungs, bircher, köttl, neudorfer, pasci, gander"
+2025-12-10T01:10:13.376471339Z [inf]    - existingCustomers from logData: ""
+2025-12-10T01:10:13.376478560Z [inf]    - existingCustomers from log.data: ""
+2025-12-10T01:10:13.376485322Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:13.376492227Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:13.376498278Z [inf]  [Photo Count] Damian: 4 unique photos (from 58 total OCR uploads)
+2025-12-10T01:10:13.377631948Z [inf]  [SQLiteHistorical] Damian finalStatuses: [ [ 'interessiert', 1 ] ]
+2025-12-10T01:10:13.377636220Z [inf]    - existingCustomers from logData: []
+2025-12-10T01:10:13.377642399Z [inf]  [SQLiteHistorical] Damian conversions: {
+2025-12-10T01:10:13.377649591Z [inf]    interest_later_to_written: 0,
+2025-12-10T01:10:13.377655309Z [inf]    interest_later_to_no_interest: 0,
+2025-12-10T01:10:13.377660108Z [inf]    interest_later_to_appointment: 0,
+2025-12-10T01:10:13.377664531Z [inf]    interest_later_to_not_reached: 0,
+2025-12-10T01:10:13.377670047Z [inf]    interest_later_total: 3
+2025-12-10T01:10:13.377674862Z [inf]  }
+2025-12-10T01:10:13.377679471Z [inf]  [SQLiteHistorical] Damian activeTime: 8min (from session data, no native GPS)
+2025-12-10T01:10:13.377684232Z [inf]  [SQLiteHistorical] Reconstructed Damian: 401 actions, 0 GPS (0 native), 58 photos, 1 status changes, 0.00km, 8min active
+2025-12-10T01:10:13.377688684Z [inf]  [Photo Debug] First /api/ocr found for Damian_Admin:
+2025-12-10T01:10:13.377693967Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:13.377699796Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:13.377705327Z [inf]    - newProspects from logData: ["zimmermann","gümüs","akbulut","ottovordemgentschen","felde","kleinekathöfer","kiprotich","hanswillemenke","schmidt brüggenthis","wixforth","akay","müllerrensmann","ogur"]
+2025-12-10T01:10:13.377712379Z [inf]    - newProspects from log.data: ["zimmermann","gümüs","akbulut","ottovordemgentschen","felde","kleinekathöfer","kiprotich","hanswillemenke","schmidt brüggenthis","wixforth","akay","müllerrensmann","ogur"]
+2025-12-10T01:10:13.377773711Z [inf]    - existingCustomers from log.data: []
+2025-12-10T01:10:13.377786058Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:13.377841567Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:13.380173343Z [inf]  [Photo Count] Damian_Admin: 2 unique photos (from 8 total OCR uploads)
+2025-12-10T01:10:13.380184578Z [inf]  [SQLiteHistorical] Damian_Admin activeTime: 0min (no native GPS or session data)
+2025-12-10T01:10:13.380191794Z [inf]  [SQLiteHistorical] Reconstructed Damian_Admin: 8 actions, 0 GPS (0 native), 8 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:10:13.380200031Z [inf]  [Photo Count] Nic: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:10:13.380208263Z [inf]  [SQLiteHistorical] Nic activeTime: 0min (no native GPS or session data)
+2025-12-10T01:10:13.380215058Z [inf]  [SQLiteHistorical] Reconstructed Nic: 0 actions, 2 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:10:13.382455106Z [inf]  [Photo Count] Ibrahim Yilmaz: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:10:13.382463419Z [inf]  [SQLiteHistorical] Ibrahim Yilmaz activeTime: 515min (total span: 1341min, breaks: 826min from 297 native GPS points)
+2025-12-10T01:10:13.382468983Z [inf]  [SQLiteHistorical] Reconstructed Ibrahim Yilmaz: 156 actions, 297 GPS (297 native), 0 photos, 0 status changes, 0.00km, 515min active
+2025-12-10T01:10:13.382474661Z [inf]  [SQLiteHistorical] ✅ Loaded 5 users for 2025-12-06
+2025-12-10T01:10:13.565466504Z [inf]  [DailyReport] Ibrahim Yilmaz: 29 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:10:13.622915983Z [inf]  [DailyReport] POI Cache Performance: {
+2025-12-10T01:10:13.622929449Z [inf]    cacheSize: 139,
+2025-12-10T01:10:13.622938074Z [inf]    initialized: true,
+2025-12-10T01:10:13.622948529Z [inf]    hits: 55,
+2025-12-10T01:10:13.622954042Z [inf]    misses: 17,
+2025-12-10T01:10:13.622960972Z [inf]    hitRate: '76.4%',
+2025-12-10T01:10:13.622967287Z [inf]    apiCalls: 17,
+2025-12-10T01:10:13.622973464Z [inf]    savedPOIs: 0,
+2025-12-10T01:10:13.622979044Z [inf]    estimatedCost: '$0.29'
+2025-12-10T01:10:13.622985377Z [inf]  }
+2025-12-10T01:10:14.390736369Z [inf]  [DailyReport] Updating existing report: daily-report-2025-12-06.json
+2025-12-10T01:10:15.803397812Z [inf]  [DailyReport] Report for 2025-12-06 (final) uploaded successfully
+2025-12-10T01:10:15.803406118Z [inf]  [DailyReportCron] ✅ Created missing report for 2025-12-06
+2025-12-10T01:10:15.803413213Z [inf]  [DailyReport] Generating final report for 2025-12-07
+2025-12-10T01:10:15.803418447Z [inf]  [SQLiteHistorical] Loading data for 2025-12-07...
+2025-12-10T01:10:15.810627118Z [inf]  [SQLiteHistorical] Found 5 user(s) for 2025-12-07
+2025-12-10T01:10:15.810640965Z [inf]  [Photo Count] Kevin: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:10:15.810653153Z [inf]  [SQLiteHistorical] Kevin activeTime: 0min (no native GPS or session data)
+2025-12-10T01:10:15.810660592Z [inf]  [SQLiteHistorical] Reconstructed Kevin: 0 actions, 2 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:10:15.824637344Z [inf]  [Photo Debug] First /api/ocr found for Damian:
+2025-12-10T01:10:15.824650439Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:15.824659975Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:15.824667593Z [inf]    - newProspects from logData: "zimmermann, gümüs, akbulut, ottovordemgentschen, felde, kleinekathöfer, kiprotich, hanswillemenke, schmidt brüggenthis, wixforth, akay, müllerrensmann, ogur"
+2025-12-10T01:10:15.824675377Z [inf]    - newProspects from log.data: "zimmermann, gümüs, akbulut, ottovordemgentschen, felde, kleinekathöfer, kiprotich, hanswillemenke, schmidt brüggenthis, wixforth, akay, müllerrensmann, ogur"
+2025-12-10T01:10:15.824683107Z [inf]    - existingCustomers from logData: ""
+2025-12-10T01:10:15.824691029Z [inf]    - existingCustomers from log.data: ""
+2025-12-10T01:10:15.824698450Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:15.824705590Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:15.826576197Z [inf]  [Photo Count] Damian: 4 unique photos (from 28 total OCR uploads)
+2025-12-10T01:10:15.826583840Z [inf]  [SQLiteHistorical] Damian activeTime: 276min (total span: 1226min, breaks: 950min from 735 native GPS points)
+2025-12-10T01:10:15.826589632Z [inf]  [SQLiteHistorical] Reconstructed Damian: 530 actions, 735 GPS (735 native), 28 photos, 0 status changes, 1.74km, 276min active
+2025-12-10T01:10:15.829337492Z [inf]  [Photo Debug] First /api/ocr found for Damian_Admin:
+2025-12-10T01:10:15.829348281Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:15.829355543Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:15.829361211Z [inf]    - newProspects from logData: ["zimmermann","gümüs","akbulut","ottovordemgentschen","felde","kleinekathöfer","kiprotich","hanswillemenke","schmidt brüggenthis","wixforth","akay","müllerrensmann","ogur"]
+2025-12-10T01:10:15.829366925Z [inf]    - newProspects from log.data: ["zimmermann","gümüs","akbulut","ottovordemgentschen","felde","kleinekathöfer","kiprotich","hanswillemenke","schmidt brüggenthis","wixforth","akay","müllerrensmann","ogur"]
+2025-12-10T01:10:15.829372158Z [inf]    - existingCustomers from logData: []
+2025-12-10T01:10:15.829378236Z [inf]    - existingCustomers from log.data: []
+2025-12-10T01:10:15.829383180Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:15.829387861Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:15.829392388Z [inf]  [Photo Count] Damian_Admin: 1 unique photos (from 3 total OCR uploads)
+2025-12-10T01:10:15.829397936Z [inf]  [SQLiteHistorical] Damian_Admin activeTime: 0min (no native GPS or session data)
+2025-12-10T01:10:15.829404017Z [inf]  [SQLiteHistorical] Reconstructed Damian_Admin: 3 actions, 0 GPS (0 native), 3 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:10:15.829408764Z [inf]  [Photo Count] Nic: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:10:15.829413746Z [inf]  [SQLiteHistorical] Nic activeTime: 0min (no native GPS or session data)
+2025-12-10T01:10:15.829418843Z [inf]  [SQLiteHistorical] Reconstructed Nic: 0 actions, 63 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:10:15.834758494Z [inf]  [Photo Count] Ibrahim Yilmaz: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:10:15.834765716Z [inf]  [SQLiteHistorical] Ibrahim Yilmaz activeTime: 376min (from session data, no native GPS)
+2025-12-10T01:10:15.834773245Z [inf]  [SQLiteHistorical] Reconstructed Ibrahim Yilmaz: 252 actions, 0 GPS (0 native), 0 photos, 0 status changes, 0.00km, 376min active
+2025-12-10T01:10:15.834779466Z [inf]  [SQLiteHistorical] ✅ Loaded 5 users for 2025-12-07
+2025-12-10T01:10:15.834785135Z [inf]  [DailyReport] Damian: 5 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:10:16.378764006Z [inf]  [DailyReport] POI Cache Performance: {
+2025-12-10T01:10:16.378771904Z [inf]    cacheSize: 139,
+2025-12-10T01:10:16.378779585Z [inf]    initialized: true,
+2025-12-10T01:10:16.378788501Z [inf]    hits: 55,
+2025-12-10T01:10:16.378797725Z [inf]    misses: 17,
+2025-12-10T01:10:16.378805147Z [inf]    hitRate: '76.4%',
+2025-12-10T01:10:16.378812891Z [inf]    apiCalls: 17,
+2025-12-10T01:10:16.378820109Z [inf]    savedPOIs: 0,
+2025-12-10T01:10:16.378827997Z [inf]    estimatedCost: '$0.29'
+2025-12-10T01:10:16.378835014Z [inf]  }
+2025-12-10T01:10:16.401693493Z [inf]  [DailyReport] Updating existing report: daily-report-2025-12-07.json
+2025-12-10T01:10:18.393581224Z [inf]  [SQLiteHistorical] Loading data for 2025-12-08...
+2025-12-10T01:10:18.393603801Z [inf]  [SQLiteHistorical] Found 8 user(s) for 2025-12-08
+2025-12-10T01:10:18.393612298Z [inf]  [Photo Count] Maryna: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:10:18.393619914Z [inf]  [SQLiteHistorical] Maryna activeTime: 0min (no native GPS or session data)
+2025-12-10T01:10:18.393627908Z [inf]  [SQLiteHistorical] Reconstructed Maryna: 0 actions, 15879 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:10:18.393630586Z [err]  [DailyStore] Rejected session update from wrong date: 2025-12-09 (today: 2025-12-10), user: Ibrahim Yilmaz
+2025-12-10T01:10:18.393635587Z [inf]  [DailyReport] Report for 2025-12-07 (final) uploaded successfully
+2025-12-10T01:10:18.393640167Z [inf]  [DailyReportCron] ✅ Created missing report for 2025-12-07
+2025-12-10T01:10:18.393644613Z [inf]  [DailyReport] Generating final report for 2025-12-08
+2025-12-10T01:10:18.495594676Z [inf]  [Photo Debug] First /api/ocr found for Marcel Gattung:
+2025-12-10T01:10:18.495617035Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:18.495627130Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:18.495634615Z [inf]    - newProspects from logData: []
+2025-12-10T01:10:18.495642414Z [inf]    - newProspects from log.data: []
+2025-12-10T01:10:18.495649334Z [inf]    - existingCustomers from logData: [{"id":"276e0c2b-a0f2-466b-80bb-820c76f3515e","name":"schenda","street":"Mittelstr.","houseNumber":"3","postalCode":"51149","isExisting":true,"contractType":null},{"id":"37939fce-8eab-4262-bd1d-34db9feacc49","name":"sefidrodi masenga","street":"Mittelstr.","houseNumber":"3","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-10T01:10:18.495656058Z [inf]    - existingCustomers from log.data: [{"id":"276e0c2b-a0f2-466b-80bb-820c76f3515e","name":"schenda","street":"Mittelstr.","houseNumber":"3","postalCode":"51149","isExisting":true,"contractType":null},{"id":"37939fce-8eab-4262-bd1d-34db9feacc49","name":"sefidrodi masenga","street":"Mittelstr.","houseNumber":"3","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-10T01:10:18.495663084Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:18.495676142Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:18.509942884Z [inf]  [Photo Count] Marcel Gattung: 46 unique photos (from 52 total OCR uploads)
+2025-12-10T01:10:18.513117154Z [inf]    interest_later_to_not_reached: 0,
+2025-12-10T01:10:18.513127341Z [inf]    interest_later_total: 8
+2025-12-10T01:10:18.513138469Z [inf]  }
+2025-12-10T01:10:18.513184720Z [inf]  [SQLiteHistorical] Marcel Gattung finalStatuses: [
+2025-12-10T01:10:18.513195421Z [inf]    [ 'nicht_interessiert', 7 ],
+2025-12-10T01:10:18.513202702Z [inf]    [ 'nicht_angetroffen', 47 ],
+2025-12-10T01:10:18.513211338Z [inf]    [ 'interessiert', 5 ],
+2025-12-10T01:10:18.513219844Z [inf]    [ 'termin_vereinbart', 1 ]
+2025-12-10T01:10:18.513226741Z [inf]  ]
+2025-12-10T01:10:18.513233243Z [inf]  [SQLiteHistorical] Marcel Gattung conversions: {
+2025-12-10T01:10:18.513239730Z [inf]    interest_later_to_written: 0,
+2025-12-10T01:10:18.513246776Z [inf]    interest_later_to_no_interest: 0,
+2025-12-10T01:10:18.513253958Z [inf]    interest_later_to_appointment: 0,
+2025-12-10T01:10:18.517899818Z [inf]  [SQLiteHistorical] Marcel Gattung activeTime: 206min (total span: 286min, breaks: 80min from 541 native GPS points)
+2025-12-10T01:10:18.517907184Z [inf]  [SQLiteHistorical] Reconstructed Marcel Gattung: 513 actions, 27352 GPS (541 native), 52 photos, 60 status changes, 3.09km, 206min active
+2025-12-10T01:10:18.517912306Z [inf]  [Photo Debug] First /api/ocr found for Maurice:
+2025-12-10T01:10:18.517917807Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:18.517923157Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:18.517928487Z [inf]    - newProspects from logData: ["dickmeis","goeschu gmbh","binder alam ayhan"]
+2025-12-10T01:10:18.517934304Z [inf]    - newProspects from log.data: ["dickmeis","goeschu gmbh","binder alam ayhan"]
+2025-12-10T01:10:18.517941444Z [inf]    - existingCustomers from logData: [{"id":"931e2ecd-e349-48e1-85b6-ff3f75eb34c3","name":"gehrke","street":"Mathildenstr.","houseNumber":"1","postalCode":"51149","isExisting":true,"contractType":null},{"id":"6f33b715-e2fa-4aa8-a553-752a7cc399ce","name":"rosewig ventker","street":"Mathildenstr.","houseNumber":"1","postalCode":"51149","isExisting":true,"contractType":null},{"id":"524d3c61-ae68-4dd0-bd0f-24811dfcf90d","name":"zilligen","street":"Mathildenstr.","houseNumber":"1","postalCode":"51149","isExisting":true,"contractType":null},{"id":"c3d83580-97d1-43fa-9cf3-9cf2cb6112df","name":"wieland","street":"Mathildenstr.","houseNumber":"1","postalCode":"51149","isExisting":true,"contractType":null},{"id":"e1a53820-c9e3-424c-8785-7b22a787689b","name":"schreiner","street":"Mathildenstr.","houseNumber":"1","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-10T01:10:18.517946883Z [inf]    - existingCustomers from log.data: [{"id":"931e2ecd-e349-48e1-85b6-ff3f75eb34c3","name":"gehrke","street":"Mathildenstr.","houseNumber":"1","postalCode":"51149","isExisting":true,"contractType":null},{"id":"6f33b715-e2fa-4aa8-a553-752a7cc399ce","name":"rosewig ventker","street":"Mathildenstr.","houseNumber":"1","postalCode":"51149","isExisting":true,"contractType":null},{"id":"524d3c61-ae68-4dd0-bd0f-24811dfcf90d","name":"zilligen","street":"Mathildenstr.","houseNumber":"1","postalCode":"51149","isExisting":true,"contractType":null},{"id":"c3d83580-97d1-43fa-9cf3-9cf2cb6112df","name":"wieland","street":"Mathildenstr.","houseNumber":"1","postalCode":"51149","isExisting":true,"contractType":null},{"id":"e1a53820-c9e3-424c-8785-7b22a787689b","name":"schreiner","street":"Mathildenstr.","houseNumber":"1","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-10T01:10:18.519874836Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:18.519885241Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:18.519892674Z [inf]  [Photo Count] Maurice: 1 unique photos (from 1 total OCR uploads)
+2025-12-10T01:10:18.519899125Z [inf]  [SQLiteHistorical] Maurice finalStatuses: [ [ 'nicht_angetroffen', 1 ] ]
+2025-12-10T01:10:18.519905988Z [inf]  [SQLiteHistorical] Maurice activeTime: 2min (total span: 2min, breaks: 0min from 9 native GPS points)
+2025-12-10T01:10:18.519913709Z [inf]  [SQLiteHistorical] Reconstructed Maurice: 3 actions, 45 GPS (9 native), 1 photos, 1 status changes, 0.07km, 2min active
+2025-12-10T01:10:18.587916238Z [err]  [SQLiteHistorical] ⚠️ CORRUPTED GPS COORDINATE DETECTED for Nic:
+2025-12-10T01:10:18.587928132Z [err]  [SQLiteHistorical]   lat=50.92236328125 (valid: true), lng=7.8466117e-315 (valid: false)
+2025-12-10T01:10:18.587935919Z [err]  [SQLiteHistorical]   Raw log data: {"latitude":50.92236328125,"longitude":7.8466117e-315,"timestamp":"2025-12-08T07:55:30.507Z","source":"external_app","receivedAt":"2025-12-08T07:55:30.581Z","appVersion":"1.3.0"}
+2025-12-10T01:10:18.587948691Z [err]  [SQLiteHistorical] ⚠️ CORRUPTED GPS COORDINATE DETECTED for Nic:
+2025-12-10T01:10:18.587956020Z [err]  [SQLiteHistorical]   Raw log data: {"latitude":51.02593994140625,"longitude":2.3844219e-316,"timestamp":"2025-12-08T08:30:04.503Z","source":"external_app","receivedAt":"2025-12-08T08:30:04.584Z","appVersion":"1.3.0"}
+2025-12-10T01:10:18.587959613Z [err]  [SQLiteHistorical]   lat=51.001739501953125 (valid: true), lng=5.15389277e-316 (valid: false)
+2025-12-10T01:10:18.587970836Z [err]  [SQLiteHistorical]   Raw log data: {"latitude":51.001739501953125,"longitude":5.15389277e-316,"timestamp":"2025-12-08T08:28:13.260Z","source":"external_app","receivedAt":"2025-12-08T08:28:13.320Z","appVersion":"1.3.0"}
+2025-12-10T01:10:18.587976909Z [err]  [SQLiteHistorical] ⚠️ CORRUPTED GPS COORDINATE DETECTED for Nic:
+2025-12-10T01:10:18.587983206Z [err]  [SQLiteHistorical] ⚠️ CORRUPTED GPS COORDINATE DETECTED for Nic:
+2025-12-10T01:10:18.587988650Z [err]  [SQLiteHistorical]   lat=0 (valid: false), lng=6.748350142966956 (valid: true)
+2025-12-10T01:10:18.587994729Z [err]  [SQLiteHistorical]   lat=51.02593994140625 (valid: true), lng=2.3844219e-316 (valid: false)
+2025-12-10T01:10:18.587999861Z [err]  [SQLiteHistorical]   Raw log data: {"latitude":0,"longitude":6.748350142966956,"timestamp":"2025-12-08T08:39:20.346Z","source":"external_app","receivedAt":"2025-12-08T08:39:20.446Z","appVersion":"1.3.0"}
+2025-12-10T01:10:18.588009831Z [err]  [SQLiteHistorical] ⚠️ Rejected corrupted GPS (action): lat=0, lng=6.748350142966956 for Nic
+2025-12-10T01:10:18.589907152Z [err]  [SQLiteHistorical] ⚠️ CORRUPTED GPS COORDINATE DETECTED for Nic:
+2025-12-10T01:10:18.589919770Z [err]  [SQLiteHistorical]   lat=0 (valid: false), lng=6.697126388084143 (valid: true)
+2025-12-10T01:10:18.589929516Z [err]  [SQLiteHistorical]   Raw log data: {"latitude":0,"longitude":6.697126388084143,"timestamp":"2025-12-08T09:03:46.793Z","source":"external_app","receivedAt":"2025-12-08T09:03:46.865Z","appVersion":"1.3.0"}
+2025-12-10T01:10:18.589936481Z [err]  [SQLiteHistorical] ⚠️ Rejected corrupted GPS (action): lat=0, lng=6.697126388084143 for Nic
+2025-12-10T01:10:18.589944046Z [err]  [SQLiteHistorical] ⚠️ CORRUPTED GPS COORDINATE DETECTED for Nic:
+2025-12-10T01:10:18.589952377Z [err]  [SQLiteHistorical]   lat=51.15667724609375 (valid: true), lng=1.1529190455e-314 (valid: false)
+2025-12-10T01:10:18.589959248Z [err]  [SQLiteHistorical]   Raw log data: {"latitude":51.15667724609375,"longitude":1.1529190455e-314,"timestamp":"2025-12-08T09:13:49.405Z","source":"external_app","receivedAt":"2025-12-08T09:13:49.473Z","appVersion":"1.3.0"}
+2025-12-10T01:10:18.589966358Z [err]  [SQLiteHistorical] ⚠️ CORRUPTED GPS COORDINATE DETECTED for Nic:
+2025-12-10T01:10:18.589973409Z [err]  [SQLiteHistorical]   lat=51.15667724609375 (valid: true), lng=1.3315995963e-314 (valid: false)
+2025-12-10T01:10:18.589980987Z [err]  [SQLiteHistorical]   Raw log data: {"latitude":51.15667724609375,"longitude":1.3315995963e-314,"timestamp":"2025-12-08T09:14:27.513Z","source":"external_app","receivedAt":"2025-12-08T09:14:27.593Z","appVersion":"1.3.0"}
+2025-12-10T01:10:18.589987744Z [err]  [SQLiteHistorical] ⚠️ CORRUPTED GPS COORDINATE DETECTED for Nic:
+2025-12-10T01:10:18.589995683Z [err]  [SQLiteHistorical]   lat=0 (valid: false), lng=6.695470809470862 (valid: true)
+2025-12-10T01:10:18.590002221Z [err]  [SQLiteHistorical]   Raw log data: {"latitude":0,"longitude":6.695470809470862,"timestamp":"2025-12-08T09:48:58.319Z","source":"external_app","receivedAt":"2025-12-08T09:48:58.460Z","appVersion":"1.3.0"}
+2025-12-10T01:10:18.591622393Z [inf]    - existingCustomers from logData: [{"id":"928b0e25-63d0-4b8e-a488-e3fa7089e475","name":"eickeler hübner","street":"Hoistener Str.","houseNumber":"13A","postalCode":"41466","isExisting":true,"contractType":null},{"id":"4843e6a7-b6c6-4152-9db4-9e4936315f15","name":"mertens seifert","street":"Hoistener Str.","houseNumber":"13a","postalCode":"41466","isExisting":true,"contractType":null},{"id":"c869c441-6a09-4d85-b9d7-e732d90fd0b6","name":"greven","street":"Hoistener Str.","houseNumber":"13a","postalCode":"41466","isExisting":true,"contractType":null}]
+2025-12-10T01:10:18.591647883Z [inf]    - existingCustomers from log.data: [{"id":"928b0e25-63d0-4b8e-a488-e3fa7089e475","name":"eickeler hübner","street":"Hoistener Str.","houseNumber":"13A","postalCode":"41466","isExisting":true,"contractType":null},{"id":"4843e6a7-b6c6-4152-9db4-9e4936315f15","name":"mertens seifert","street":"Hoistener Str.","houseNumber":"13a","postalCode":"41466","isExisting":true,"contractType":null},{"id":"c869c441-6a09-4d85-b9d7-e732d90fd0b6","name":"greven","street":"Hoistener Str.","houseNumber":"13a","postalCode":"41466","isExisting":true,"contractType":null}]
+2025-12-10T01:10:18.591651387Z [err]  [SQLiteHistorical] ⚠️ Rejected corrupted GPS (action): lat=0, lng=6.695470809470862 for Nic
+2025-12-10T01:10:18.591667956Z [err]  [SQLiteHistorical] ⚠️ CORRUPTED GPS COORDINATE DETECTED for Nic:
+2025-12-10T01:10:18.591674816Z [err]  [SQLiteHistorical]   lat=0 (valid: false), lng=6.695470809470862 (valid: true)
+2025-12-10T01:10:18.591682943Z [err]  [SQLiteHistorical]   Raw log data: {"latitude":0,"longitude":6.695470809470862,"timestamp":"2025-12-08T09:49:00.124Z","source":"external_app","receivedAt":"2025-12-08T09:49:00.187Z","appVersion":"1.3.0"}
+2025-12-10T01:10:18.591688964Z [err]  [SQLiteHistorical] ⚠️ Rejected corrupted GPS (action): lat=0, lng=6.695470809470862 for Nic
+2025-12-10T01:10:18.591705516Z [inf]  [Photo Debug] First /api/ocr found for Nic:
+2025-12-10T01:10:18.591712050Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:18.591720334Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:18.591734454Z [inf]    - newProspects from logData: ["brandt duhn","doll","raspels"]
+2025-12-10T01:10:18.591742097Z [inf]    - newProspects from log.data: ["brandt duhn","doll","raspels"]
+2025-12-10T01:10:18.593653514Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:18.593662657Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:18.593670237Z [err]  [SQLiteHistorical] ⚠️ CORRUPTED GPS COORDINATE DETECTED for Nic:
+2025-12-10T01:10:18.593676879Z [err]  [SQLiteHistorical]   lat=51.158111572265625 (valid: true), lng=1.69145747e-314 (valid: false)
+2025-12-10T01:10:18.593683363Z [err]  [SQLiteHistorical]   Raw log data: {"latitude":51.158111572265625,"longitude":1.69145747e-314,"timestamp":"2025-12-08T11:19:20.285Z","source":"external_app","receivedAt":"2025-12-08T11:19:20.346Z","appVersion":"1.3.0"}
+2025-12-10T01:10:18.593689180Z [err]  [SQLiteHistorical] ⚠️ CORRUPTED GPS COORDINATE DETECTED for Nic:
+2025-12-10T01:10:18.593696231Z [err]  [SQLiteHistorical]   lat=51.158111572265625 (valid: true), lng=1.513310787e-314 (valid: false)
+2025-12-10T01:10:18.593702831Z [err]  [SQLiteHistorical]   Raw log data: {"latitude":51.158111572265625,"longitude":1.513310787e-314,"timestamp":"2025-12-08T11:28:50.580Z","source":"external_app","receivedAt":"2025-12-08T11:28:50.667Z","appVersion":"1.3.0"}
+2025-12-10T01:10:18.593709273Z [err]  [SQLiteHistorical] ⚠️ CORRUPTED GPS COORDINATE DETECTED for Nic:
+2025-12-10T01:10:18.593716075Z [err]  [SQLiteHistorical]   lat=51.158111572265625 (valid: true), lng=4.640837884e-315 (valid: false)
+2025-12-10T01:10:18.593721428Z [err]  [SQLiteHistorical]   Raw log data: {"latitude":51.158111572265625,"longitude":4.640837884e-315,"timestamp":"2025-12-08T11:33:53.808Z","source":"external_app","receivedAt":"2025-12-08T11:33:53.874Z","appVersion":"1.3.0"}
+2025-12-10T01:10:18.593726825Z [err]  [SQLiteHistorical] ⚠️ CORRUPTED GPS COORDINATE DETECTED for Nic:
+2025-12-10T01:10:18.593732660Z [err]  [SQLiteHistorical]   lat=0 (valid: false), lng=6.6941852564923465 (valid: true)
+2025-12-10T01:10:18.596158979Z [err]  [SQLiteHistorical]   Raw log data: {"latitude":0,"longitude":6.6941852564923465,"timestamp":"2025-12-08T11:52:04.778Z","source":"external_app","receivedAt":"2025-12-08T11:52:04.886Z","appVersion":"1.3.0"}
+2025-12-10T01:10:18.596168142Z [err]  [SQLiteHistorical] ⚠️ Rejected corrupted GPS (action): lat=0, lng=6.6941852564923465 for Nic
+2025-12-10T01:10:18.596175963Z [err]  [SQLiteHistorical] ⚠️ CORRUPTED GPS COORDINATE DETECTED for Nic:
+2025-12-10T01:10:18.596182535Z [err]  [SQLiteHistorical]   lat=0 (valid: false), lng=6.69466209365055 (valid: true)
+2025-12-10T01:10:18.596188519Z [err]  [SQLiteHistorical]   Raw log data: {"latitude":0,"longitude":6.69466209365055,"timestamp":"2025-12-08T12:12:58.006Z","source":"external_app","receivedAt":"2025-12-08T12:12:58.068Z","appVersion":"1.3.0"}
+2025-12-10T01:10:18.596193763Z [err]  [SQLiteHistorical] ⚠️ Rejected corrupted GPS (action): lat=0, lng=6.69466209365055 for Nic
+2025-12-10T01:10:18.596198485Z [err]  [SQLiteHistorical] ⚠️ CORRUPTED GPS COORDINATE DETECTED for Nic:
+2025-12-10T01:10:18.596203193Z [err]  [SQLiteHistorical]   lat=0 (valid: false), lng=6.694730758201331 (valid: true)
+2025-12-10T01:10:18.596207965Z [err]  [SQLiteHistorical]   Raw log data: {"latitude":0,"longitude":6.694730758201331,"timestamp":"2025-12-08T12:29:58.299Z","source":"external_app","receivedAt":"2025-12-08T12:29:58.375Z","appVersion":"1.3.0"}
+2025-12-10T01:10:18.600489673Z [err]  [SQLiteHistorical] ⚠️ CORRUPTED GPS COORDINATE DETECTED for Nic:
+2025-12-10T01:10:18.600499654Z [err]  [SQLiteHistorical]   lat=51.16357421875 (valid: true), lng=5.97662965e-315 (valid: false)
+2025-12-10T01:10:18.600506151Z [err]  [SQLiteHistorical]   Raw log data: {"latitude":51.16357421875,"longitude":5.97662965e-315,"timestamp":"2025-12-08T14:58:05.559Z","source":"external_app","receivedAt":"2025-12-08T14:58:05.635Z","appVersion":"1.3.0"}
+2025-12-10T01:10:18.602634671Z [err]  [SQLiteHistorical] ⚠️ CORRUPTED GPS COORDINATE DETECTED for Nic:
+2025-12-10T01:10:18.602642555Z [err]  [SQLiteHistorical]   lat=51.14520263671875 (valid: true), lng=1.6332062697e-314 (valid: false)
+2025-12-10T01:10:18.602650855Z [err]  [SQLiteHistorical]   Raw log data: {"latitude":51.14520263671875,"longitude":1.6332062697e-314,"timestamp":"2025-12-08T15:15:57.496Z","source":"external_app","receivedAt":"2025-12-08T15:15:57.546Z","appVersion":"1.3.0"}
+2025-12-10T01:10:18.604648565Z [inf]  [Photo Count] Nic: 8 unique photos (from 8 total OCR uploads)
+2025-12-10T01:10:18.604655845Z [inf]  [SQLiteHistorical] Nic finalStatuses: [
+2025-12-10T01:10:18.604660653Z [inf]    [ 'nicht_interessiert', 14 ],
+2025-12-10T01:10:18.604665039Z [inf]    [ 'nicht_angetroffen', 23 ],
+2025-12-10T01:10:18.604669609Z [inf]    [ 'termin_vereinbart', 1 ],
+2025-12-10T01:10:18.604674646Z [inf]    [ 'interessiert', 2 ]
+2025-12-10T01:10:18.604679573Z [inf]  ]
+2025-12-10T01:10:18.608683630Z [inf]  [SQLiteHistorical] Nic activeTime: 106min (total span: 373min, breaks: 267min from 623 native GPS points)
+2025-12-10T01:10:18.608690832Z [inf]  [SQLiteHistorical] Reconstructed Nic: 540 actions, 16173 GPS (623 native), 8 photos, 79 status changes, 1.66km, 106min active
+2025-12-10T01:10:18.777526629Z [inf]  [Photo Debug] First /api/ocr found for David:
+2025-12-10T01:10:18.777550813Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:18.777559993Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:18.777571623Z [inf]    - newProspects from logData: ["becker","solmaz","mallmann bixa","zachert"]
+2025-12-10T01:10:18.777582154Z [inf]    - newProspects from log.data: ["becker","solmaz","mallmann bixa","zachert"]
+2025-12-10T01:10:18.777589110Z [inf]    - existingCustomers from logData: [{"id":"8e6ca3d5-8a57-4fca-ae71-648cf653217b","name":"stantscheff","street":"Am Fährweg","houseNumber":"76","postalCode":"41468","isExisting":true,"contractType":null},{"id":"8357a6f2-b4ae-4066-8e96-83da9d9200e2","name":"brietzke böttge","street":"Am Fährweg","houseNumber":"76","postalCode":"41468","isExisting":true,"contractType":null},{"id":"60f77e16-5034-4e2f-83c3-c6f8a8cffbe4","name":"scheuer","street":"Am Fährweg","houseNumber":"76","postalCode":"41468","isExisting":true,"contractType":null},{"id":"d492a0e9-b138-4702-8044-ce64ac9c3d70","name":"ulbricht","street":"Am Fährweg","houseNumber":"76","postalCode":"41468","isExisting":true,"contractType":null},{"id":"dd89e35c-b1eb-4905-b6ac-08637f43ff6c","name":"speetjens","street":"Am Fährweg","houseNumber":"76","postalCode":"41468","isExisting":true,"contractType":null},{"id":"c6b75d04-6c84-47e9-af51-5c67ad6c047c","name":"feuster","street":"Am Fährweg","houseNumber":"76","postalCode":"41468","isExisting":true,"contractType":null}]
+2025-12-10T01:10:18.777597592Z [inf]    - existingCustomers from log.data: [{"id":"8e6ca3d5-8a57-4fca-ae71-648cf653217b","name":"stantscheff","street":"Am Fährweg","houseNumber":"76","postalCode":"41468","isExisting":true,"contractType":null},{"id":"8357a6f2-b4ae-4066-8e96-83da9d9200e2","name":"brietzke böttge","street":"Am Fährweg","houseNumber":"76","postalCode":"41468","isExisting":true,"contractType":null},{"id":"60f77e16-5034-4e2f-83c3-c6f8a8cffbe4","name":"scheuer","street":"Am Fährweg","houseNumber":"76","postalCode":"41468","isExisting":true,"contractType":null},{"id":"d492a0e9-b138-4702-8044-ce64ac9c3d70","name":"ulbricht","street":"Am Fährweg","houseNumber":"76","postalCode":"41468","isExisting":true,"contractType":null},{"id":"dd89e35c-b1eb-4905-b6ac-08637f43ff6c","name":"speetjens","street":"Am Fährweg","houseNumber":"76","postalCode":"41468","isExisting":true,"contractType":null},{"id":"c6b75d04-6c84-47e9-af51-5c67ad6c047c","name":"feuster","street":"Am Fährweg","houseNumber":"76","postalCode":"41468","isExisting":true,"contractType":null}]
+2025-12-10T01:10:18.780138008Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:18.780148558Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:18.789412931Z [inf]  [Photo Count] David: 5 unique photos (from 5 total OCR uploads)
+2025-12-10T01:10:18.792090861Z [inf]  [SQLiteHistorical] David finalStatuses: [
+2025-12-10T01:10:18.792099905Z [inf]    [ 'nicht_interessiert', 23 ],
+2025-12-10T01:10:18.792106441Z [inf]    [ 'nicht_angetroffen', 30 ],
+2025-12-10T01:10:18.792111752Z [inf]    [ 'termin_vereinbart', 7 ]
+2025-12-10T01:10:18.792117385Z [inf]  ]
+2025-12-10T01:10:18.794851349Z [inf]  [SQLiteHistorical] David activeTime: 94min (total span: 380min, breaks: 286min from 88 native GPS points)
+2025-12-10T01:10:18.794858218Z [inf]  [SQLiteHistorical] Reconstructed David: 1028 actions, 16570 GPS (88 native), 5 photos, 74 status changes, 2.05km, 94min active
+2025-12-10T01:10:18.872567928Z [inf]  [Photo Count] Maurice: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:10:18.875162093Z [inf]  [SQLiteHistorical] Maurice activeTime: 0min (no native GPS or session data)
+2025-12-10T01:10:18.875170591Z [inf]  [SQLiteHistorical] Reconstructed Maurice: 0 actions, 7377 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:10:19.354974733Z [inf]  [Photo Debug] First /api/ocr found for Eva:
+2025-12-10T01:10:19.354982014Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:19.354987927Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:19.354994034Z [inf]    - newProspects from logData: ["grothe","knieper","junggeburth","janoschka"]
+2025-12-10T01:10:19.355000356Z [inf]    - newProspects from log.data: ["grothe","knieper","junggeburth","janoschka"]
+2025-12-10T01:10:19.355005827Z [inf]    - existingCustomers from logData: [{"id":"0f4d8c8a-6bfd-4bce-9983-352b8d13d14b","name":"giesen","street":"Am Bollenberg","houseNumber":"10","postalCode":"41468","isExisting":true,"contractType":null},{"id":"059405e7-e753-4db7-81c3-f50d903aebcc","name":"hermanns","street":"Am Bollenberg","houseNumber":"10","postalCode":"41468","isExisting":true,"contractType":null},{"id":"9bbe0a58-ddc7-4e59-83b2-aee05a4cf300","name":"noori dayo","street":"Am Bollenberg","houseNumber":"10","postalCode":"41468","isExisting":true,"contractType":null}]
+2025-12-10T01:10:19.355011400Z [inf]    - existingCustomers from log.data: [{"id":"0f4d8c8a-6bfd-4bce-9983-352b8d13d14b","name":"giesen","street":"Am Bollenberg","houseNumber":"10","postalCode":"41468","isExisting":true,"contractType":null},{"id":"059405e7-e753-4db7-81c3-f50d903aebcc","name":"hermanns","street":"Am Bollenberg","houseNumber":"10","postalCode":"41468","isExisting":true,"contractType":null},{"id":"9bbe0a58-ddc7-4e59-83b2-aee05a4cf300","name":"noori dayo","street":"Am Bollenberg","houseNumber":"10","postalCode":"41468","isExisting":true,"contractType":null}]
+2025-12-10T01:10:19.355019496Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:19.355027009Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:19.355036402Z [inf]  [Photo Count] Eva: 3 unique photos (from 3 total OCR uploads)
+2025-12-10T01:10:19.355043152Z [inf]  [SQLiteHistorical] Eva finalStatuses: [
+2025-12-10T01:10:19.358294470Z [inf]    [ 'nicht_angetroffen', 49 ],
+2025-12-10T01:10:19.358300686Z [inf]    [ 'interessiert', 3 ],
+2025-12-10T01:10:19.358309272Z [inf]    [ 'termin_vereinbart', 5 ],
+2025-12-10T01:10:19.358315429Z [inf]    [ 'nicht_interessiert', 4 ]
+2025-12-10T01:10:19.358321300Z [inf]  ]
+2025-12-10T01:10:19.358326852Z [inf]  [SQLiteHistorical] Eva activeTime: 283min (total span: 559min, breaks: 275min from 311 native GPS points)
+2025-12-10T01:10:19.358332356Z [inf]  [SQLiteHistorical] Reconstructed Eva: 379 actions, 17313 GPS (311 native), 3 photos, 68 status changes, 2.67km, 283min active
+2025-12-10T01:10:19.358338438Z [inf]  [Photo Debug] First /api/ocr found for Stefan:
+2025-12-10T01:10:19.358343114Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:19.358347564Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:19.358351614Z [inf]    - newProspects from logData: ["hoffmann","köter","byrtus","saxler"]
+2025-12-10T01:10:19.358356031Z [inf]    - newProspects from log.data: ["hoffmann","köter","byrtus","saxler"]
+2025-12-10T01:10:19.358368400Z [inf]    - existingCustomers from logData: [{"id":"530fe647-c22f-4ed6-a273-3f3b869d7a5b","name":"akkaya","street":"Hermann-Löns-Str.","houseNumber":"120","postalCode":"51147","isExisting":true,"contractType":null},{"id":"46bfaa28-f148-4a72-a24f-663143109ebc","name":"polotzek","street":"Hermann-Löns-Str.","houseNumber":"120","postalCode":"51147","isExisting":true,"contractType":null}]
+2025-12-10T01:10:19.358373406Z [inf]    - existingCustomers from log.data: [{"id":"530fe647-c22f-4ed6-a273-3f3b869d7a5b","name":"akkaya","street":"Hermann-Löns-Str.","houseNumber":"120","postalCode":"51147","isExisting":true,"contractType":null},{"id":"46bfaa28-f148-4a72-a24f-663143109ebc","name":"polotzek","street":"Hermann-Löns-Str.","houseNumber":"120","postalCode":"51147","isExisting":true,"contractType":null}]
+2025-12-10T01:10:19.358377412Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:19.360610297Z [inf]    [ 'interessiert', 1 ]
+2025-12-10T01:10:19.360623728Z [inf]  ]
+2025-12-10T01:10:19.360632850Z [inf]  [SQLiteHistorical] Stefan activeTime: 192min (total span: 402min, breaks: 209min from 707 native GPS points)
+2025-12-10T01:10:19.360642022Z [inf]  [SQLiteHistorical] Reconstructed Stefan: 625 actions, 16244 GPS (707 native), 15 photos, 57 status changes, 5.10km, 192min active
+2025-12-10T01:10:19.360651188Z [inf]  [SQLiteHistorical] ✅ Loaded 8 users for 2025-12-08
+2025-12-10T01:10:19.360748697Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:19.360757074Z [inf]  [Photo Count] Stefan: 15 unique photos (from 15 total OCR uploads)
+2025-12-10T01:10:19.360765751Z [inf]  [SQLiteHistorical] Stefan finalStatuses: [
+2025-12-10T01:10:19.360775979Z [inf]    [ 'nicht_angetroffen', 32 ],
+2025-12-10T01:10:19.360785381Z [inf]    [ 'nicht_interessiert', 19 ],
+2025-12-10T01:10:19.360793931Z [inf]    [ 'geschrieben', 1 ],
+2025-12-10T01:10:20.425829289Z [inf]  [PauseLocationCache] Cache HIT: NEUBAUER Consulting (22m) | Hit rate: 76.7%
+2025-12-10T01:10:20.425845696Z [inf]  [PauseLocationCache] Found nearby POI: Tchibo im Supermarkt at 8m
+2025-12-10T01:10:20.425859939Z [inf]  [PauseLocationCache] Cache HIT: Tchibo im Supermarkt (8m) | Hit rate: 77.0%
+2025-12-10T01:10:20.425903661Z [inf]  [DailyReport] Marcel Gattung: 2 pauses → 2 unique locations (POI lookup)
+2025-12-10T01:10:20.425911952Z [inf]  [PauseLocationCache] Found nearby POI: NEUBAUER Consulting at 22m
+2025-12-10T01:10:22.531985290Z [inf]  [DailyReport] Maurice: 0 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:10:22.543858990Z [inf]  [DailyReport] Nic: 3 pauses → 3 unique locations (POI lookup)
+2025-12-10T01:10:22.543865878Z [inf]  [PauseLocationCache] Cache MISS (18) | Hit rate: 76.0%
+2025-12-10T01:10:22.543870926Z [inf]  [PauseLocationCache] Places API request for 51.158065876415414, 6.688478273937266 (Total: 18)
+2025-12-10T01:10:23.316730327Z [err]  [DailyStore] Rejected GPS from wrong date: 2025-12-09 (today: 2025-12-10), user: Ibrahim Yilmaz
+2025-12-10T01:10:23.396977643Z [inf]  [PauseLocationCache] No POIs found for location
+2025-12-10T01:10:23.396986831Z [inf]  [PauseLocationCache] Found nearby POI: Neuss Aurinstr. at 5m
+2025-12-10T01:10:23.396992997Z [inf]  [PauseLocationCache] Cache HIT: Neuss Aurinstr. (5m) | Hit rate: 76.3%
+2025-12-10T01:10:23.396999939Z [inf]  [PauseLocationCache] Found nearby POI: Neuss Lindenplatz at 12m
+2025-12-10T01:10:23.397004818Z [inf]  [PauseLocationCache] Cache HIT: Neuss Lindenplatz (12m) | Hit rate: 76.6%
+2025-12-10T01:10:24.552140809Z [inf]  [DailyReport] David: 4 pauses → 3 unique locations (POI lookup)
+2025-12-10T01:10:24.552150053Z [inf]  [PauseLocationCache] Found nearby POI: Parkplatz McDonald's at 5m
+2025-12-10T01:10:24.552156889Z [inf]  [PauseLocationCache] Cache HIT: Parkplatz McDonald's (5m) | Hit rate: 76.9%
+2025-12-10T01:10:24.552162315Z [inf]  [PauseLocationCache] Cache MISS (19) | Hit rate: 75.9%
+2025-12-10T01:10:24.552167004Z [inf]  [PauseLocationCache] Places API request for 51.17286479389751, 6.749928599522292 (Total: 19)
+2025-12-10T01:10:25.451490410Z [inf]  [PauseLocationCache] No POIs found for location
+2025-12-10T01:10:25.451496800Z [inf]  [PauseLocationCache] Found nearby POI: Dres. Günter & Ingrid Bergerhof-Berendt gGmbH at 15m
+2025-12-10T01:10:25.451502915Z [inf]  [PauseLocationCache] Cache HIT: Dres. Günter & Ingrid Bergerhof-Berendt gGmbH (15m) | Hit rate: 76.3%
+2025-12-10T01:10:26.874359497Z [inf]  [DailyReport] Eva: 4 pauses → 4 unique locations (POI lookup)
+2025-12-10T01:10:26.874370760Z [inf]  [PauseLocationCache] Found nearby POI: Stephanie Froitzheim at 38m
+2025-12-10T01:10:26.874377864Z [inf]  [PauseLocationCache] Cache HIT: Stephanie Froitzheim (38m) | Hit rate: 76.5%
+2025-12-10T01:10:26.874383764Z [inf]  [PauseLocationCache] Cache MISS (20) | Hit rate: 75.6%
+2025-12-10T01:10:26.874396523Z [inf]  [PauseLocationCache] Places API request for 51.16139937722825, 6.780645335704252 (Total: 20)
+2025-12-10T01:10:27.401653040Z [inf]  [PauseLocationCache] No POIs found for location
+2025-12-10T01:10:27.401670466Z [inf]  [PauseLocationCache] Cache MISS (21) | Hit rate: 74.7%
+2025-12-10T01:10:27.401679813Z [inf]  [PauseLocationCache] Places API request for 51.16064052268346, 6.78099755185814 (Total: 21)
+2025-12-10T01:10:27.401686779Z [inf]  [BatchLogger] Flushed 3 logs from 1 queue(s)
+2025-12-10T01:10:27.401697125Z [inf]  [PauseLocationCache] No POIs found for location
+2025-12-10T01:10:27.401705993Z [inf]  [PauseLocationCache] Found nearby POI: Büro Service Eggenkämper at 22m
+2025-12-10T01:10:27.401714026Z [inf]  [PauseLocationCache] Cache HIT: Büro Service Eggenkämper (22m) | Hit rate: 75.0%
+2025-12-10T01:10:28.747351702Z [inf]  [DailyReport] Stefan: 6 pauses → 4 unique locations (POI lookup)
+2025-12-10T01:10:28.747358039Z [inf]  [PauseLocationCache] Found nearby POI: Nähkurse - Nähschnuppe at 25m
+2025-12-10T01:10:28.747366197Z [inf]  [PauseLocationCache] Cache HIT: Nähkurse - Nähschnuppe (25m) | Hit rate: 75.3%
+2025-12-10T01:10:28.747373482Z [inf]  [PauseLocationCache] Found nearby POI: CJG-Jugendhilfezentrum St. Ansgar at 46m
+2025-12-10T01:10:28.747379744Z [inf]  [PauseLocationCache] Cache HIT: CJG-Jugendhilfezentrum St. Ansgar (46m) | Hit rate: 75.6%
+2025-12-10T01:10:28.747385973Z [inf]  [PauseLocationCache] Found nearby POI: star Tankstelle at 18m
+2025-12-10T01:10:28.747392931Z [inf]  [PauseLocationCache] Cache HIT: star Tankstelle (18m) | Hit rate: 75.9%
+2025-12-10T01:10:28.747398942Z [inf]  [PauseLocationCache] Found nearby POI: Köln Lucasstr. at 3m
+2025-12-10T01:10:28.747406053Z [inf]  [PauseLocationCache] Cache HIT: Köln Lucasstr. (3m) | Hit rate: 76.1%
+2025-12-10T01:10:30.421304225Z [inf]    apiCalls: 21,
+2025-12-10T01:10:30.421314689Z [inf]    savedPOIs: 0,
+2025-12-10T01:10:30.421330653Z [inf]  [DailyReport] POI Cache Performance: {
+2025-12-10T01:10:30.421336567Z [inf]    cacheSize: 139,
+2025-12-10T01:10:30.421338346Z [inf]    estimatedCost: '$0.36'
+2025-12-10T01:10:30.421345321Z [inf]    initialized: true,
+2025-12-10T01:10:30.421347716Z [inf]  }
+2025-12-10T01:10:30.421351520Z [inf]    hits: 67,
+2025-12-10T01:10:30.421357971Z [inf]    misses: 21,
+2025-12-10T01:10:30.421362588Z [inf]    hitRate: '76.1%',
+2025-12-10T01:10:31.434645441Z [inf]  [DailyReport] Updating existing report: daily-report-2025-12-08.json
+2025-12-10T01:10:32.773079885Z [inf]  [DailyReport] Report for 2025-12-08 (final) uploaded successfully
+2025-12-10T01:10:32.773094237Z [inf]  [DailyReportCron] ✅ Created missing report for 2025-12-08
+2025-12-10T01:10:32.773102151Z [inf]  [DailyReport] Generating final report for 2025-12-09
+2025-12-10T01:10:32.773108730Z [inf]  [SQLiteHistorical] Loading data for 2025-12-09...
+2025-12-10T01:10:32.784941512Z [inf]  [SQLiteHistorical] Found 9 user(s) for 2025-12-09
+2025-12-10T01:10:32.787255256Z [inf]  [Photo Count] Kevin: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:10:32.787264255Z [inf]  [SQLiteHistorical] Kevin activeTime: 0min (no native GPS or session data)
+2025-12-10T01:10:32.787271362Z [inf]  [SQLiteHistorical] Reconstructed Kevin: 0 actions, 204 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:10:33.458135786Z [inf]  [Photo Debug] First /api/ocr found for Marcel Gattung:
+2025-12-10T01:10:33.458146391Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:33.458153875Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:33.458159084Z [inf]    - newProspects from logData: ["krieger","krieger"]
+2025-12-10T01:10:33.458164606Z [inf]    - newProspects from log.data: ["krieger","krieger"]
+2025-12-10T01:10:33.458173533Z [inf]    - existingCustomers from logData: []
+2025-12-10T01:10:33.458178950Z [inf]    - existingCustomers from log.data: []
+2025-12-10T01:10:33.458183180Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:33.458187572Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:33.475821005Z [inf]  [Photo Count] Marcel Gattung: 23 unique photos (from 26 total OCR uploads)
+2025-12-10T01:10:33.481285713Z [inf]  [SQLiteHistorical] Marcel Gattung finalStatuses: [
+2025-12-10T01:10:33.481296384Z [inf]    [ 'nicht_angetroffen', 28 ],
+2025-12-10T01:10:33.481303526Z [inf]    [ 'geschrieben', 1 ],
+2025-12-10T01:10:33.481310465Z [inf]    [ 'interessiert', 3 ],
+2025-12-10T01:10:33.481317193Z [inf]    [ 'nicht_interessiert', 11 ]
+2025-12-10T01:10:33.481326329Z [inf]  ]
+2025-12-10T01:10:33.485997325Z [inf]  [SQLiteHistorical] Marcel Gattung activeTime: 101min (total span: 312min, breaks: 210min from 249 native GPS points)
+2025-12-10T01:10:33.486008095Z [inf]  [SQLiteHistorical] Reconstructed Marcel Gattung: 270 actions, 33547 GPS (249 native), 26 photos, 43 status changes, 1.45km, 101min active
+2025-12-10T01:10:33.595232793Z [inf]  [Photo Debug] First /api/ocr found for Lisandra:
+2025-12-10T01:10:33.595242706Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:33.595249818Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:33.595257483Z [inf]    - newProspects from logData: ["bayer walser bayer","siamo gbr","hoegen schirmer","gofra","lukasewitz","köppel ladwig","hanf","hoffmann perronace"]
+2025-12-10T01:10:33.595263728Z [inf]    - newProspects from log.data: ["bayer walser bayer","siamo gbr","hoegen schirmer","gofra","lukasewitz","köppel ladwig","hanf","hoffmann perronace"]
+2025-12-10T01:10:33.595272459Z [inf]    - existingCustomers from logData: [{"id":"b5236c1a-134c-4a3a-9062-5cac95842c50","name":"adl","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"5d5db416-8bda-4cb9-a6aa-46af957a75ec","name":"pigulla","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"6d06127f-9e09-40fb-a6ec-6f767075dd53","name":"kramkowski","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"5cad3967-2084-421d-9522-895145439a5b","name":"angelova denkov","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"c0641dcd-e62d-4a73-8346-eafaca7aa0b9","name":"arambasic","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"d1342f60-6e28-4efa-a127-4ce3c8336c29","name":"meghrazi badri","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"daf0b9d4-1e0f-4521-bd23-dc3a2629a3c7","name":"bilgi terzi","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"e488a502-4143-4641-b532-048a3b87679f","name":"grota fuchs","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"d9fb1250-8b86-48b1-9629-71e0cb3b272e","name":"werner","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"41050ef6-9357-4973-ae3a-19fd7284f9b5","name":"cieslik","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-10T01:10:33.597726681Z [inf]    - existingCustomers from log.data: [{"id":"b5236c1a-134c-4a3a-9062-5cac95842c50","name":"adl","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"5d5db416-8bda-4cb9-a6aa-46af957a75ec","name":"pigulla","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"6d06127f-9e09-40fb-a6ec-6f767075dd53","name":"kramkowski","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"5cad3967-2084-421d-9522-895145439a5b","name":"angelova denkov","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"c0641dcd-e62d-4a73-8346-eafaca7aa0b9","name":"arambasic","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"d1342f60-6e28-4efa-a127-4ce3c8336c29","name":"meghrazi badri","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"daf0b9d4-1e0f-4521-bd23-dc3a2629a3c7","name":"bilgi terzi","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"e488a502-4143-4641-b532-048a3b87679f","name":"grota fuchs","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"d9fb1250-8b86-48b1-9629-71e0cb3b272e","name":"werner","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null},{"id":"41050ef6-9357-4973-ae3a-19fd7284f9b5","name":"cieslik","street":"Ziegeleiweg","houseNumber":"2","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-10T01:10:33.597740917Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:33.597749352Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:33.599285991Z [inf]  [Photo Count] Lisandra: 2 unique photos (from 2 total OCR uploads)
+2025-12-10T01:10:33.599293038Z [inf]  [SQLiteHistorical] Lisandra finalStatuses: [ [ 'nicht_interessiert', 3 ], [ 'nicht_angetroffen', 2 ] ]
+2025-12-10T01:10:33.602353527Z [inf]  [SQLiteHistorical] Lisandra activeTime: 17min (total span: 17min, breaks: 0min from 9 native GPS points)
+2025-12-10T01:10:33.602363611Z [inf]  [SQLiteHistorical] Reconstructed Lisandra: 35 actions, 13054 GPS (9 native), 2 photos, 5 status changes, 0.70km, 17min active
+2025-12-10T01:10:33.628858625Z [inf]  [Photo Debug] First /api/ocr found for Nic:
+2025-12-10T01:10:33.628870041Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:33.628876448Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:33.628882483Z [inf]    - newProspects from logData: "gazut, abude, martin, stojanoska"
+2025-12-10T01:10:33.628888491Z [inf]    - newProspects from log.data: "gazut, abude, martin, stojanoska"
+2025-12-10T01:10:33.628894957Z [inf]    - existingCustomers from logData: "wieczorek (5dad81bd-68ef-4536-ade0-0b77992aae68), piechaczek (50b934a1-2bdc-4b96-ab8d-46b75800d39b)"
+2025-12-10T01:10:33.628901597Z [inf]    - existingCustomers from log.data: "wieczorek (5dad81bd-68ef-4536-ade0-0b77992aae68), piechaczek (50b934a1-2bdc-4b96-ab8d-46b75800d39b)"
+2025-12-10T01:10:33.628907768Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:33.628914904Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:33.636182022Z [inf]  [Photo Count] Nic: 9 unique photos (from 9 total OCR uploads)
+2025-12-10T01:10:33.639344057Z [inf]  [SQLiteHistorical] Nic finalStatuses: [
+2025-12-10T01:10:33.639351828Z [inf]    [ 'termin_vereinbart', 1 ],
+2025-12-10T01:10:33.639358532Z [inf]    [ 'nicht_angetroffen', 42 ],
+2025-12-10T01:10:33.639364027Z [inf]    [ 'nicht_interessiert', 20 ],
+2025-12-10T01:10:33.639371219Z [inf]    [ 'interessiert', 8 ]
+2025-12-10T01:10:33.639376248Z [inf]  ]
+2025-12-10T01:10:33.639380835Z [inf]  [SQLiteHistorical] Nic conversions: {
+2025-12-10T01:10:33.639385789Z [inf]    interest_later_to_written: 0,
+2025-12-10T01:10:33.639390771Z [inf]    interest_later_to_no_interest: 0,
+2025-12-10T01:10:33.639396193Z [inf]    interest_later_to_appointment: 0,
+2025-12-10T01:10:33.639400586Z [inf]    interest_later_to_not_reached: 0,
+2025-12-10T01:10:33.639404694Z [inf]    interest_later_total: 1
+2025-12-10T01:10:33.639409532Z [inf]  }
+2025-12-10T01:10:33.639414501Z [inf]  [SQLiteHistorical] Nic activeTime: 376min (total span: 445min, breaks: 68min from 818 native GPS points)
+2025-12-10T01:10:33.639419602Z [inf]  [SQLiteHistorical] Reconstructed Nic: 258 actions, 3566 GPS (818 native), 9 photos, 80 status changes, 6.59km, 376min active
+2025-12-10T01:10:33.780221648Z [inf]  [Photo Count] Julie: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:10:33.783076502Z [inf]  [SQLiteHistorical] Julie activeTime: 0min (no native GPS or session data)
+2025-12-10T01:10:33.783084118Z [inf]  [SQLiteHistorical] Reconstructed Julie: 0 actions, 18288 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:10:33.791667702Z [inf]  [Photo Count] David: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:10:33.791677735Z [inf]  [SQLiteHistorical] David activeTime: 0min (no native GPS or session data)
+2025-12-10T01:10:33.791687518Z [inf]  [SQLiteHistorical] Reconstructed David: 0 actions, 1879 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:10:34.409528093Z [inf]  [Photo Debug] First /api/ocr found for Eva:
+2025-12-10T01:10:34.409532497Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:34.409536770Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:34.409540980Z [inf]    - newProspects from logData: ["ezzagnouni","nail","reiners wegner","wegner","wegner","reiners wegner","skrzypek","yilmaz"]
+2025-12-10T01:10:34.409545704Z [inf]    - newProspects from log.data: ["ezzagnouni","nail","reiners wegner","wegner","wegner","reiners wegner","skrzypek","yilmaz"]
+2025-12-10T01:10:34.409552273Z [inf]    - existingCustomers from logData: [{"id":"031adaa8-b999-41d6-81e4-a394063a184a","name":"memedi","street":"Stüttgener Str.","houseNumber":"66","postalCode":"41468","isExisting":true,"contractType":null},{"id":"4621ca06-0edb-4420-9e47-4b8bb1832919","name":"warnke","street":"Stüttgener Str.","houseNumber":"66","postalCode":"41468","isExisting":true,"contractType":null}]
+2025-12-10T01:10:34.409559950Z [inf]    - existingCustomers from log.data: [{"id":"031adaa8-b999-41d6-81e4-a394063a184a","name":"memedi","street":"Stüttgener Str.","houseNumber":"66","postalCode":"41468","isExisting":true,"contractType":null},{"id":"4621ca06-0edb-4420-9e47-4b8bb1832919","name":"warnke","street":"Stüttgener Str.","houseNumber":"66","postalCode":"41468","isExisting":true,"contractType":null}]
+2025-12-10T01:10:34.409565606Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:34.409570101Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:34.409574169Z [inf]  [Photo Count] Eva: 3 unique photos (from 3 total OCR uploads)
+2025-12-10T01:10:34.409579506Z [inf]  [SQLiteHistorical] Eva finalStatuses: [
+2025-12-10T01:10:34.409585048Z [inf]    [ 'termin_vereinbart', 5 ],
+2025-12-10T01:10:34.409591639Z [inf]    [ 'nicht_angetroffen', 29 ],
+2025-12-10T01:10:34.409597823Z [inf]    [ 'nicht_interessiert', 4 ],
+2025-12-10T01:10:34.413875154Z [inf]  [SQLiteHistorical] Reconstructed Pia: 0 actions, 20532 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-10T01:10:34.413884966Z [inf]    [ 'interessiert', 2 ]
+2025-12-10T01:10:34.413902944Z [inf]  ]
+2025-12-10T01:10:34.413903949Z [inf]  [SQLiteHistorical] Pia activeTime: 0min (no native GPS or session data)
+2025-12-10T01:10:34.413917051Z [inf]  [SQLiteHistorical] Eva conversions: {
+2025-12-10T01:10:34.413925080Z [inf]  [SQLiteHistorical] Reconstructed Eva: 163 actions, 16150 GPS (308 native), 3 photos, 46 status changes, 3.78km, 395min active
+2025-12-10T01:10:34.413941262Z [inf]  [Photo Count] Pia: 0 unique photos (from 0 total OCR uploads)
+2025-12-10T01:10:34.413950800Z [inf]    interest_later_to_written: 0,
+2025-12-10T01:10:34.413960794Z [inf]    interest_later_to_not_reached: 1,
+2025-12-10T01:10:34.413964377Z [inf]    interest_later_to_no_interest: 0,
+2025-12-10T01:10:34.413974842Z [inf]    interest_later_total: 1
+2025-12-10T01:10:34.413978681Z [inf]    interest_later_to_appointment: 0,
+2025-12-10T01:10:34.413984763Z [inf]  }
+2025-12-10T01:10:34.413990490Z [inf]  [SQLiteHistorical] Eva activeTime: 395min (total span: 500min, breaks: 104min from 308 native GPS points)
+2025-12-10T01:10:34.414080532Z [inf]  [Photo Debug] First /api/ocr found for Stefan:
+2025-12-10T01:10:34.414090986Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-10T01:10:34.414099434Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-10T01:10:34.414106816Z [inf]    - newProspects from logData: ["schaufler","boiko","khalil","werner","onal"]
+2025-12-10T01:10:34.414117638Z [inf]    - newProspects from log.data: ["schaufler","boiko","khalil","werner","onal"]
+2025-12-10T01:10:34.414125164Z [inf]    - existingCustomers from logData: [{"id":"4190d693-d01f-4576-8035-23046edcddd2","name":"ess","street":"Hölderlinweg","houseNumber":"8","postalCode":"51147","isExisting":true,"contractType":null}]
+2025-12-10T01:10:34.415186465Z [inf]    - existingCustomers from log.data: [{"id":"4190d693-d01f-4576-8035-23046edcddd2","name":"ess","street":"Hölderlinweg","houseNumber":"8","postalCode":"51147","isExisting":true,"contractType":null}]
+2025-12-10T01:10:34.415192700Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:34.415199634Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-10T01:10:34.415205981Z [inf]  [Photo Count] Stefan: 23 unique photos (from 24 total OCR uploads)
+2025-12-10T01:10:34.415212328Z [inf]  [SQLiteHistorical] Stefan finalStatuses: [
+2025-12-10T01:10:34.415218778Z [inf]    [ 'nicht_interessiert', 32 ],
+2025-12-10T01:10:34.415224654Z [inf]    [ 'nicht_angetroffen', 32 ],
+2025-12-10T01:10:34.415232623Z [inf]    [ 'geschrieben', 5 ],
+2025-12-10T01:10:34.415239704Z [inf]    [ 'interessiert', 4 ]
+2025-12-10T01:10:34.415247259Z [inf]  ]
+2025-12-10T01:10:34.415253282Z [inf]  [SQLiteHistorical] Stefan conversions: {
+2025-12-10T01:10:34.415258978Z [inf]    interest_later_to_written: 0,
+2025-12-10T01:10:34.415265072Z [inf]    interest_later_to_no_interest: 0,
+2025-12-10T01:10:34.415272003Z [inf]    interest_later_to_appointment: 0,
+2025-12-10T01:10:34.415277564Z [inf]    interest_later_to_not_reached: 0,
+2025-12-10T01:10:34.415282846Z [inf]    interest_later_total: 7
+2025-12-10T01:10:34.415290446Z [inf]  }
+2025-12-10T01:10:34.415296743Z [inf]  [SQLiteHistorical] Stefan activeTime: 218min (total span: 414min, breaks: 196min from 559 native GPS points)
+2025-12-10T01:10:34.415305402Z [inf]  [SQLiteHistorical] Reconstructed Stefan: 486 actions, 17190 GPS (559 native), 24 photos, 83 status changes, 4.48km, 218min active
+2025-12-10T01:10:34.415312081Z [inf]  [SQLiteHistorical] ✅ Loaded 9 users for 2025-12-09
+2025-12-10T01:10:34.428397219Z [inf]  [DailyReport] Marcel Gattung: 3 pauses → 3 unique locations (POI lookup)
+2025-12-10T01:10:34.428407688Z [inf]  [PauseLocationCache] Cache MISS (22) | Hit rate: 75.3%
+2025-12-10T01:10:34.428416621Z [inf]  [PauseLocationCache] Places API request for 50.896423907240695, 7.0269767480020375 (Total: 22)
+2025-12-10T01:10:34.430492120Z [inf]  [UserAuthCache] Syncing user data from Google Sheets...
+2025-12-10T01:10:34.441917440Z [inf]  [PauseLocationCache] No POIs found for location
+2025-12-10T01:10:34.441929578Z [inf]  [PauseLocationCache] Found nearby POI: Tchibo im Supermarkt at 8m
+2025-12-10T01:10:34.441936987Z [inf]  [PauseLocationCache] Cache HIT: Tchibo im Supermarkt (8m) | Hit rate: 75.6%
+2025-12-10T01:10:34.441944449Z [inf]  [PauseLocationCache] Found nearby POI: NEUBAUER Consulting at 49m
+2025-12-10T01:10:34.441950542Z [inf]  [PauseLocationCache] Cache HIT: NEUBAUER Consulting (49m) | Hit rate: 75.8%
+2025-12-10T01:10:36.566064869Z [inf]  [DailyReport] Lisandra: 0 pauses → 0 unique locations (POI lookup)
+2025-12-10T01:10:37.832605876Z [inf]  [DailyReport] Nic: 2 pauses → 2 unique locations (POI lookup)
+2025-12-10T01:10:37.832617182Z [inf]  [PauseLocationCache] Found nearby POI: Shell Select at 2m
+2025-12-10T01:10:37.832624841Z [inf]  [PauseLocationCache] Cache HIT: Shell Select (2m) | Hit rate: 76.1%
+2025-12-10T01:10:37.832633258Z [inf]  [PauseLocationCache] Found nearby POI: Stadtwerke Neuss Charging Station at 11m
+2025-12-10T01:10:37.832639820Z [inf]  [PauseLocationCache] Cache HIT: Stadtwerke Neuss Charging Station (11m) | Hit rate: 76.3%
+2025-12-10T01:10:40.415208278Z [inf]  [DailyReport] Eva: 3 pauses → 2 unique locations (POI lookup)
+2025-12-10T01:10:40.415214560Z [inf]  [PauseLocationCache] Cache MISS (23) | Hit rate: 75.5%
+2025-12-10T01:10:40.415221552Z [inf]  [PauseLocationCache] Places API request for 51.16053454189132, 6.780884698362307 (Total: 23)
+2025-12-10T01:10:40.415236701Z [inf]  [CronJobService] Running failed logs retry job...
+2025-12-10T01:10:40.415244253Z [inf]  [FollowMee] 8 users with FollowMee devices
+2025-12-10T01:10:40.415252763Z [inf]  [FollowMee Scheduler] Running PERIODIC SYNC...
+2025-12-10T01:10:40.415264301Z [inf]  [FollowMee] Fetching 24h history for all devices...
+2025-12-10T01:10:40.415273657Z [inf]  [RetryFailedLogs] No failed logs to retry
+2025-12-10T01:10:41.432439453Z [err]  [DailyStore] Rejected GPS from wrong date: 2025-12-09 (today: 2025-12-10), user: Ibrahim Yilmaz
+2025-12-10T01:10:41.432446108Z [inf]  [UserAuthCache] Synced 36 users (8 with FollowMee devices)
+2025-12-10T01:10:41.432452550Z [inf]  [PauseLocationCache] No POIs found for location
+2025-12-10T01:10:41.432460141Z [inf]  [PauseLocationCache] Found nearby POI: Rauhhaarteckeln von der Magna Kybele at 26m
+2025-12-10T01:10:41.432468062Z [inf]  [PauseLocationCache] Cache HIT: Rauhhaarteckeln von der Magna Kybele (26m) | Hit rate: 75.8%
+2025-12-10T01:10:44.584997538Z [inf]  [DailyReport] Stefan: 6 pauses → 5 unique locations (POI lookup)
+2025-12-10T01:10:44.585003701Z [inf]  [PauseLocationCache] Cache MISS (24) | Hit rate: 75.0%
+2025-12-10T01:10:44.585012143Z [inf]  [PauseLocationCache] Places API request for 50.87481603928107, 7.095779969402498 (Total: 24)
+2025-12-10T01:10:44.585019389Z [inf]  [FollowMee] Received 204 location points
+2025-12-10T01:10:44.585026987Z [inf]  [SQLite] Found 0 FollowMee timestamps for user 1a4abbb8 on 2025-12-10
+2025-12-10T01:10:44.585034779Z [inf]  [FollowMee Scheduler] ✅ Sync completed successfully
+2025-12-10T01:10:44.585041694Z [inf]  [PauseLocationCache] No POIs found for location
+2025-12-10T01:10:44.585051194Z [inf]  [PauseLocationCache] Cache MISS (25) | Hit rate: 74.2%
+2025-12-10T01:10:44.585058399Z [inf]  [PauseLocationCache] Places API request for 50.872596278016445, 7.102641659464999 (Total: 25)
+2025-12-10T01:10:44.585065018Z [inf]  [PauseLocationCache] No POIs found for location
+2025-12-10T01:10:44.585070803Z [inf]  [PauseLocationCache] Cache MISS (26) | Hit rate: 73.5%
+2025-12-10T01:10:44.585077107Z [inf]  [PauseLocationCache] Places API request for 50.87650566622867, 7.095751429987472 (Total: 26)
+2025-12-10T01:10:44.585082698Z [inf]  [PauseLocationCache] No POIs found for location
+2025-12-10T01:10:44.585089594Z [inf]  [PauseLocationCache] Found nearby POI: Rollstuhltransport Köln at 37m
+2025-12-10T01:10:44.585095669Z [inf]  [PauseLocationCache] Cache HIT: Rollstuhltransport Köln (37m) | Hit rate: 73.7%
+2025-12-10T01:10:44.585101684Z [inf]  [PauseLocationCache] Found nearby POI: Mika Holz und Bautenschutz at 44m
+2025-12-10T01:10:44.585123599Z [inf]  [PauseLocationCache] Cache HIT: Mika Holz und Bautenschutz (44m) | Hit rate: 74.0%
+2025-12-10T01:10:45.805315705Z [inf]  [DailyReport] POI Cache Performance: {
+2025-12-10T01:10:45.805329749Z [inf]    cacheSize: 139,
+2025-12-10T01:10:45.805336546Z [inf]    initialized: true,
+2025-12-10T01:10:45.805342698Z [inf]    hits: 74,
+2025-12-10T01:10:45.805347803Z [inf]    misses: 26,
+2025-12-10T01:10:45.805352746Z [inf]    hitRate: '74.0%',
+2025-12-10T01:10:45.805357897Z [inf]    apiCalls: 26,
+2025-12-10T01:10:45.805363429Z [inf]    savedPOIs: 0,
+2025-12-10T01:10:45.805368565Z [inf]    estimatedCost: '$0.44'
+2025-12-10T01:10:45.805373480Z [inf]  }
+2025-12-10T01:10:46.645456796Z [inf]  [DailyReport] Updating existing report: daily-report-2025-12-09.json
+2025-12-10T01:10:48.430863335Z [inf]  [DailyReport] Report for 2025-12-09 (final) uploaded successfully
+2025-12-10T01:10:48.430868337Z [inf]  [DailyReportCron] ✅ Created missing report for 2025-12-09
+2025-12-10T01:10:48.430875626Z [inf]  [DailyReportCron] Missing reports generation complete
+2025-12-10T01:10:48.430984887Z [inf]  1:10:48 AM [express] ✅ Daily Report cron job started
+2025-12-10T01:10:48.537155390Z [err]  [DailyStore] Rejected session update from wrong date: 2025-12-09 (today: 2025-12-10), user: Ibrahim Yilmaz
+2025-12-10T01:10:50.530868674Z [err]  [DailyStore] Rejected GPS from wrong date: 2025-12-09 (today: 2025-12-10), user: Ibrahim Yilmaz
+2025-12-10T01:10:55.711643120Z [inf]  [BatchLogger] Flushed 4 logs from 1 queue(s)
+2025-12-10T01:11:15.712493978Z [err]  [DailyStore] Rejected GPS from wrong date: 2025-12-09 (today: 2025-12-10), user: Ibrahim Yilmaz
+2025-12-10T01:11:19.479167153Z [err]  [DailyStore] Rejected session update from wrong date: 2025-12-09 (today: 2025-12-10), user: Ibrahim Yilmaz
+2025-12-10T01:11:22.447715676Z [err]  [DailyStore] Rejected GPS from wrong date: 2025-12-09 (today: 2025-12-10), user: Ibrahim Yilmaz
+2025-12-10T01:11:25.529973545Z [inf]  [BatchLogger] Flushed 4 logs from 1 queue(s)
+2025-12-10T01:11:45.537099001Z [err]  [DailyStore] Rejected GPS from wrong date: 2025-12-09 (today: 2025-12-10), user: Ibrahim Yilmaz
+2025-12-10T01:11:50.524115223Z [err]  [DailyStore] Rejected session update from wrong date: 2025-12-09 (today: 2025-12-10), user: Ibrahim Yilmaz
+2025-12-10T01:11:54.714879892Z [err]  [DailyStore] Rejected GPS from wrong date: 2025-12-09 (today: 2025-12-10), user: Ibrahim Yilmaz
+2025-12-10T01:11:55.705185747Z [inf]  [BatchLogger] Flushed 4 logs from 1 queue(s)
+2025-12-10T01:12:15.704822350Z [err]  [DailyStore] Rejected GPS from wrong date: 2025-12-09 (today: 2025-12-10), user: Ibrahim Yilmaz
+2025-12-10T01:12:21.544776754Z [err]  [DailyStore] Rejected session update from wrong date: 2025-12-09 (today: 2025-12-10), user: Ibrahim Yilmaz
+2025-12-10T01:12:25.696086486Z [inf]  [BatchLogger] Flushed 3 logs from 1 queue(s)
+2025-12-10T01:12:26.521107628Z [err]  [DailyStore] Rejected GPS from wrong date: 2025-12-09 (today: 2025-12-10), user: Ibrahim Yilmaz

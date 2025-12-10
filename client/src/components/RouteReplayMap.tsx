@@ -185,7 +185,8 @@ interface MapOverlays {
   currentMarker: google.maps.Marker | null;
   userMarkers: Map<string, google.maps.Marker>; // Markers for each active User-Agent
   photoMarker: google.maps.Marker | null;
-  contractMarker: google.maps.Marker | null; // EGON contract marker
+  contractMarker: google.maps.Marker | null; // EGON contract marker (animierter Flash)
+  contractPermanentMarkers: Map<number, google.maps.Marker>; // Permanente Contract-Marker (timestamp -> marker)
   poiMarker: any | null; // Custom HTML overlay marker for POI
   gpsMarkers: google.maps.Marker[];
 }
@@ -392,7 +393,8 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentTimestamp, setCurrentTimestamp] = useState(0); // Current GPS timestamp for smooth interpolation
   const [activePhotoFlash, setActivePhotoFlash] = useState<number | null>(null);
-  const [activeContractFlash, setActiveContractFlash] = useState<number | null>(null); // EGON contract flash
+  const [activeContractFlash, setActiveContractFlash] = useState<number | null>(null); // EGON contract flash (aktuell animiert)
+  const [visibleContracts, setVisibleContracts] = useState<Set<number>>(new Set()); // Alle bereits passierten Verträge (bleiben sichtbar)
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [snapToRoadsEnabled, setSnapToRoadsEnabled] = useState(false); // Snap-to-roads toggle
@@ -454,6 +456,7 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
     userMarkers: new Map(),
     photoMarker: null,
     contractMarker: null,
+    contractPermanentMarkers: new Map(),
     poiMarker: null,
     gpsMarkers: [],
   });
@@ -974,6 +977,9 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
       overlays.userMarkers.forEach(marker => marker.setMap(null));
       overlays.userMarkers.clear();
       overlays.photoMarker = removeMarker(overlays.photoMarker);
+      overlays.contractMarker = removeMarker(overlays.contractMarker);
+      overlays.contractPermanentMarkers.forEach(marker => marker.setMap(null));
+      overlays.contractPermanentMarkers.clear();
       overlays.gpsMarkers.forEach(marker => marker.setMap(null));
       overlays.gpsMarkers = [];
       zoomListenerRef.current?.remove();
@@ -1517,13 +1523,39 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
     }))
     .filter(p => p.position !== null) as Array<{ timestamp: number; position: [number, number] }>;
 
-  // Contract marker effect (green marker with 📝 emoji)
+  // Track which contracts have already been triggered (to avoid re-triggering)
+  const triggeredContractsRef = useRef<Set<number>>(new Set());
+  
+  // Helper: Reset all contract-related state
+  const resetContractState = useCallback(() => {
+    triggeredContractsRef.current.clear();
+    setVisibleContracts(new Set());
+    setActiveContractFlash(null);
+    contractPauseRef.current = { paused: false, resumeAt: null };
+    
+    // Clear all permanent contract markers
+    const overlays = mapOverlaysRef.current;
+    overlays.contractPermanentMarkers.forEach(marker => marker.setMap(null));
+    overlays.contractPermanentMarkers.clear();
+    overlays.contractMarker = removeMarker(overlays.contractMarker);
+    
+    console.log('[Contract] 🔄 Contract state reset');
+  }, []);
+  
+  // Reset contracts when data changes
+  useEffect(() => {
+    resetContractState();
+  }, [contracts, date, resetContractState]);
+
+  // Animated contract flash marker effect (pulsing effect for 1 second)
   useEffect(() => {
     const map = mapRef.current;
     const googleMaps = window.google?.maps;
     if (!map || !googleMaps) return;
 
     const overlays = mapOverlaysRef.current;
+    
+    // Remove animated flash marker
     overlays.contractMarker = removeMarker(overlays.contractMarker);
 
     if (activeContractFlash === null) return;
@@ -1531,32 +1563,83 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
     const flash = contractPositions.find(contract => contract.timestamp === activeContractFlash);
     if (!flash) return;
 
+    // Create animated flash marker with larger, more prominent appearance
     overlays.contractMarker = new googleMaps.Marker({
       map,
       position: { lat: flash.position[0], lng: flash.position[1] },
       icon: {
         path: googleMaps.SymbolPath.CIRCLE,
-        fillColor: '#22c55e', // Green for contracts
-        fillOpacity: 1,
-        strokeColor: '#ffffff',
-        strokeWeight: 2,
-        scale: 10,
+        fillColor: '#16a34a', // Darker green for flash
+        fillOpacity: 0.9,
+        strokeColor: '#fbbf24', // Gold border for attention
+        strokeWeight: 4,
+        scale: 20, // Larger for flash effect
       },
       label: {
         text: '📝',
-        fontSize: '22px',
+        fontSize: '32px', // Bigger emoji during flash
       },
-      zIndex: 650, // Above photo markers
+      zIndex: 700, // Very high during flash
+      animation: googleMaps.Animation.BOUNCE, // Bounce animation!
     });
+
+    // Stop bouncing after 1 second (when pause ends)
+    const stopBounce = setTimeout(() => {
+      if (overlays.contractMarker) {
+        overlays.contractMarker.setAnimation(null);
+      }
+    }, 1000);
+
+    return () => clearTimeout(stopBounce);
   }, [activeContractFlash, contractPositions, mapsApiLoaded]);
 
-  // Track which contracts have already been triggered (to avoid re-triggering)
-  const triggeredContractsRef = useRef<Set<number>>(new Set());
-  
-  // Reset triggered contracts when contracts change or animation restarts
+  // Permanent contract markers effect - show all passed contracts
   useEffect(() => {
-    triggeredContractsRef.current.clear();
-  }, [contracts, date]);
+    const map = mapRef.current;
+    const googleMaps = window.google?.maps;
+    if (!map || !googleMaps) return;
+
+    const overlays = mapOverlaysRef.current;
+
+    // Add markers for newly visible contracts
+    visibleContracts.forEach(contractTs => {
+      // Skip if marker already exists
+      if (overlays.contractPermanentMarkers.has(contractTs)) return;
+      
+      const contractData = contractPositions.find(c => c.timestamp === contractTs);
+      if (!contractData) return;
+
+      // Create permanent marker (smaller, static)
+      const marker = new googleMaps.Marker({
+        map,
+        position: { lat: contractData.position[0], lng: contractData.position[1] },
+        icon: {
+          path: googleMaps.SymbolPath.CIRCLE,
+          fillColor: '#22c55e', // Green
+          fillOpacity: 0.85,
+          strokeColor: '#ffffff',
+          strokeWeight: 2,
+          scale: 12,
+        },
+        label: {
+          text: '📝',
+          fontSize: '20px',
+        },
+        zIndex: 650,
+        title: `Vertrag: ${new Date(contractTs).toLocaleTimeString('de-DE')}`,
+      });
+
+      overlays.contractPermanentMarkers.set(contractTs, marker);
+    });
+
+    // Remove markers for contracts no longer visible (e.g., after rewind)
+    overlays.contractPermanentMarkers.forEach((marker, ts) => {
+      if (!visibleContracts.has(ts)) {
+        marker.setMap(null);
+        overlays.contractPermanentMarkers.delete(ts);
+      }
+    });
+  }, [visibleContracts, contractPositions, mapsApiLoaded]);
 
   // Check if current animation time should trigger a contract flash (with 1 sec pause)
   // This effect sets the contractPauseRef which the animation loop checks
@@ -1569,7 +1652,7 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
     const activeContract = contracts.find(contractTs => {
       // Contract must be before or at current animation time
       if (contractTs > currentTimestamp) return false;
-      // Contract must not have been triggered already
+      // Contract must not have been triggered already in this session
       if (triggeredContractsRef.current.has(contractTs)) return false;
       // Contract must be within reasonable range (not too far in the past)
       const timeSinceContract = currentTimestamp - contractTs;
@@ -1577,14 +1660,35 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
     });
 
     if (activeContract) {
-      console.log(`[Contract Check] 🎯 CONTRACT TRIGGERED! Animation time: ${new Date(currentTimestamp).toLocaleTimeString()}, Contract: ${new Date(activeContract).toLocaleTimeString()}`);
+      console.log(`[Contract] 🎯 CONTRACT TRIGGERED! Animation: ${new Date(currentTimestamp).toLocaleTimeString()}, Contract: ${new Date(activeContract).toLocaleTimeString()}`);
       triggeredContractsRef.current.add(activeContract);
       setActiveContractFlash(activeContract);
+      
+      // Add to visible contracts (permanent marker will be shown)
+      setVisibleContracts(prev => new Set([...prev, activeContract]));
       
       // Set contract pause - animation loop will check this and stop (1 second pause)
       contractPauseRef.current = { paused: true, resumeAt: Date.now() + 1000 };
     }
   }, [currentTimestamp, isPlaying, contracts, displayPoints]);
+
+  // Update visible contracts when timeline is scrubbed manually (without playing)
+  // This ensures contracts before current time are shown, contracts after are hidden
+  useEffect(() => {
+    if (isPlaying) return; // Don't interfere during playback
+    if (currentTimestamp === 0) return;
+
+    // Find all contracts that should be visible (before or at current time)
+    const shouldBeVisible = new Set(
+      contracts.filter(ts => ts <= currentTimestamp)
+    );
+
+    // Update visible contracts
+    setVisibleContracts(shouldBeVisible);
+    
+    // Also update triggered ref to match (for proper re-triggering after rewind)
+    triggeredContractsRef.current = new Set(shouldBeVisible);
+  }, [currentTimestamp, isPlaying, contracts]);
 
   // Calculate time span
   const timeSpan = displayPoints.length > 0
@@ -2043,14 +2147,21 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
   }, [animatedSnapSegments, snapToRoadsEnabled, mapsApiLoaded]);
 
   // Intelligente Kamera-Steuerung mit prädiktivem Auto-Zoom
-  // WICHTIG: Keine Dependencies außer Refs, um Endlosschleife zu vermeiden
   // 
-  // Algorithmus:
-  // 1. Berechne aktuelle Position des Users
-  // 2. Berechne Lookahead-Punkte (nächste 3 Anzeige-Sekunden)
-  // 3. Zoom so setzen, dass User nie näher als 20% an den Rand kommt
-  // 4. Zentrum auf aktueller User-Position halten
-  // 5. Kamera-Updates nur alle 3 Sekunden, es sei denn Emergency (User am Rand)
+  // Algorithmus (optimiert für maximale Bildschirmnutzung):
+  // - Oben/Unten: User darf bis zum Rand (kein Padding nötig)
+  // - Links/Rechts: User muss die Panel-Bereiche meiden
+  //   - Linkes Panel (Einstellungen): ~220px vom linken Rand
+  //   - Rechtes Panel (Info & Pausen): ~400px vom rechten Rand
+  // - Wenn User in den nächsten 3 Anzeige-Sekunden in einen Panel-Bereich kommt:
+  //   → Zoom anpassen sodass User nicht unter das Panel gerät
+  //
+  // Panel-Konstanten (Standard-Positionen, ausgeklappt):
+  const LEFT_PANEL_WIDTH = 220;   // 16px margin + ~200px Panel-Breite
+  const RIGHT_PANEL_WIDTH = 400;  // 16px margin + ~384px Panel-Breite (max-w-sm)
+  const TIMELINE_HEIGHT = 80;     // Ungefähre Höhe der Timeline oben
+  const BOTTOM_PADDING = 60;      // Padding unten für Zoom-Controls etc.
+  
   const updateCameraView = useCallback((forceUpdate = false, onComplete?: () => void) => {
     const map = mapRef.current;
     if (!map) {
@@ -2121,110 +2232,145 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
       return;
     }
 
-    // Berechne maximale Distanz aller Lookahead-Punkte von aktueller Position
-    const maxLatDiff = Math.max(...lookaheadPoints.map(p => Math.abs(p.latitude - position.latitude)), 0);
-    const maxLngDiff = Math.max(...lookaheadPoints.map(p => Math.abs(p.longitude - position.longitude)), 0);
+    // Alle relevanten Punkte (aktuelle Position + Lookahead)
+    const allPoints = [position, ...lookaheadPoints];
+    
+    // Berechne Bounding Box aller Punkte
+    const lats = allPoints.map(p => p.latitude);
+    const lngs = allPoints.map(p => p.longitude);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+    
+    // Latitude-Range: User darf bis zum Rand (nur minimales Padding)
+    const latRange = maxLat - minLat;
+    const latCenter = (minLat + maxLat) / 2;
+    
+    // Longitude-Range: User muss Panel-Bereiche meiden
+    const lngRange = maxLng - minLng;
+    const lngCenter = (minLng + maxLng) / 2;
 
-    // Emergency-Check: User näher als 20% am Rand?
-    // Bei 20% Randabstand bedeutet das: maxDiff / (range/2) > 0.6 (da 50% - 20% = 30% vom Zentrum)
+    // Viewport-Größe ermitteln
+    const mapDiv = map.getDiv();
+    const viewportWidth = mapDiv?.clientWidth || 1200;
+    const viewportHeight = mapDiv?.clientHeight || 800;
+    
+    // Berechne wie viel Platz die Panels in Prozent des Viewports einnehmen
+    const leftPanelPercent = LEFT_PANEL_WIDTH / viewportWidth;   // z.B. 220/1200 = 18%
+    const rightPanelPercent = RIGHT_PANEL_WIDTH / viewportWidth; // z.B. 400/1200 = 33%
+    
+    // Verfügbare Breite für die Route (ohne Panel-Bereiche)
+    const usableWidthPercent = 1 - leftPanelPercent - rightPanelPercent; // z.B. 49%
+    
+    // Die Route soll in den nutzbaren Bereich passen
+    // Wenn lngRange die volle nutzbare Breite einnimmt, brauchen wir:
+    // visibleLngRange * usableWidthPercent >= lngRange
+    // => visibleLngRange >= lngRange / usableWidthPercent
+    
+    // Mindest-Ranges für sinnvolle Darstellung
+    const MIN_LAT_RANGE = 0.0005;  // ca. 50m vertikal
+    const MIN_LNG_RANGE = 0.0008;  // ca. 80m horizontal
+    
+    // Berechne benötigte visible Ranges
+    // Für Latitude: Route kann fast den ganzen Viewport nutzen (nur Timeline oben, etwas Padding unten)
+    const verticalUsablePercent = (viewportHeight - TIMELINE_HEIGHT - BOTTOM_PADDING) / viewportHeight;
+    const requiredLatRange = Math.max(latRange * 1.1 / verticalUsablePercent, MIN_LAT_RANGE); // 10% Puffer
+    
+    // Für Longitude: Route muss in den Bereich zwischen den Panels passen
+    // Plus: Verschiebung des Zentrums nach rechts, weil linkes Panel kleiner ist als rechtes
+    const requiredLngRange = Math.max(lngRange * 1.15 / usableWidthPercent, MIN_LNG_RANGE); // 15% Puffer
+    
+    // Zentrum horizontal verschieben: Route soll in der Mitte des NUTZBAREN Bereichs sein
+    // Nutzbarer Bereich beginnt bei leftPanelPercent und endet bei (1 - rightPanelPercent)
+    // Mitte des nutzbaren Bereichs = leftPanelPercent + usableWidthPercent/2
+    const usableCenterPercent = leftPanelPercent + usableWidthPercent / 2; // z.B. 18% + 24.5% = 42.5%
+    // Das bedeutet: Das Zentrum der Route sollte bei 42.5% des Viewports liegen statt bei 50%
+    // Verschiebung in Longitude: (0.5 - usableCenterPercent) * requiredLngRange
+    const lngCenterOffset = (0.5 - usableCenterPercent) * requiredLngRange;
+    const adjustedLngCenter = lngCenter + lngCenterOffset;
+
+    // Emergency-Check: Ist User nahe am Panel-Bereich?
     let isEmergencyZoom = false;
     if (lastBoundsRef.current) {
-      const latEdgeRatio = maxLatDiff / (lastBoundsRef.current.latRange / 2);
-      const lngEdgeRatio = maxLngDiff / (lastBoundsRef.current.lngRange / 2);
-      // Emergency wenn User in der "Gefahrenzone" (näher als 20% am Rand = mehr als 60% vom Zentrum)
-      isEmergencyZoom = latEdgeRatio > 0.6 || lngEdgeRatio > 0.6;
+      // Prüfe ob aktuelle Bounds noch ausreichen
+      const currentLatRatio = latRange / lastBoundsRef.current.latRange;
+      const currentLngRatio = lngRange / lastBoundsRef.current.lngRange;
+      // Emergency wenn Route mehr als 80% der verfügbaren Fläche braucht
+      isEmergencyZoom = currentLatRatio > 0.85 || currentLngRatio > 0.85;
     }
 
-    // 3-Sekunden-Regel: Keine Änderung öfter als alle 3 Sekunden
-    // ABER: Überspringen bei forceUpdate, erstem Zoom (lastBoundsRef === null), oder Emergency
+    // 3-Sekunden-Regel
     const timeSinceLastChange = now - lastViewportChange.current;
     if (!forceUpdate && !isEmergencyZoom && lastBoundsRef.current !== null && timeSinceLastChange < 3000) {
       onComplete?.();
       return;
     }
 
-    if (isEmergencyZoom) {
-      console.log('[RouteReplay] 🚨 Emergency zoom triggered - User near edge');
-    }
-
-    // 20%-Regel: Alle Punkte sollen mindestens 20% vom Rand entfernt sein
-    // Mathematik:
-    // - User ist im Zentrum (50% der Höhe/Breite)
-    // - 20% vom Rand = 80% von links/unten = 30% vom Zentrum Richtung Rand
-    // - Wenn weitester Punkt X Grad entfernt ist und bei max 30% vom Zentrum liegen soll:
-    //   X / (visibleRange / 2) = 0.30  =>  visibleRange = X * 2 / 0.30 = X * 6.67
-    // - Faktor 3.33 (für einen etwas engeren Zoom und etwas Spielraum)
-    const EDGE_BUFFER = 0.30; // 30% vom Zentrum = 20% vom Rand
-    const ZOOM_FACTOR = 1 / EDGE_BUFFER; // ~3.33
-    const MIN_VISIBLE_RANGE = 0.001; // ca. 100m - verhindert zu starkes Ranzoomen
-    
-    const visibleLatRange = Math.max(maxLatDiff * ZOOM_FACTOR * 2, MIN_VISIBLE_RANGE);
-    const visibleLngRange = Math.max(maxLngDiff * ZOOM_FACTOR * 2, MIN_VISIBLE_RANGE);
-
-    // Prüfe ob sich die Bounds signifikant geändert haben (> 25% Änderung)
+    // Prüfe ob sich die Bounds signifikant geändert haben (> 20% Änderung)
     const lastBoundsData = lastBoundsRef.current;
     if (!forceUpdate && !isEmergencyZoom && lastBoundsData) {
-      const latChange = Math.abs(visibleLatRange - lastBoundsData.latRange) / lastBoundsData.latRange;
-      const lngChange = Math.abs(visibleLngRange - lastBoundsData.lngRange) / lastBoundsData.lngRange;
+      const latChange = Math.abs(requiredLatRange - lastBoundsData.latRange) / lastBoundsData.latRange;
+      const lngChange = Math.abs(requiredLngRange - lastBoundsData.lngRange) / lastBoundsData.lngRange;
       const maxChange = Math.max(latChange, lngChange);
 
-      // Nur zoomen wenn Änderung > 25%
-      if (maxChange < 0.25) {
+      if (maxChange < 0.20) {
         onComplete?.();
         return;
       }
     }
 
+    if (isEmergencyZoom) {
+      console.log('[RouteReplay] 🚨 Emergency zoom - route near panel edges');
+    }
+
     // Markiere dass Kamera angepasst wird
     cameraAdjustingRef.current = true;
 
-    // Bounds setzen - zentriert auf aktuelle Position
+    // Bounds setzen mit angepasstem Zentrum
     const bounds = new window.google.maps.LatLngBounds(
-      { lat: position.latitude - visibleLatRange / 2, lng: position.longitude - visibleLngRange / 2 },
-      { lat: position.latitude + visibleLatRange / 2, lng: position.longitude + visibleLngRange / 2 }
+      { lat: latCenter - requiredLatRange / 2, lng: adjustedLngCenter - requiredLngRange / 2 },
+      { lat: latCenter + requiredLatRange / 2, lng: adjustedLngCenter + requiredLngRange / 2 }
     );
 
-    // fitBounds mit Padding für UI-Elemente (Einstellungen und Info-Panels links/rechts)
+    // fitBounds mit asymmetrischem Padding für die Panels
+    // Das Padding verschiebt das sichtbare Zentrum der Karte
     map.fitBounds(bounds, {
-      top: 30,
-      bottom: 60,
-      left: 80,  // Mehr Platz links für Einstellungen-Panel
-      right: 80  // Mehr Platz rechts für Info-Panel
+      top: TIMELINE_HEIGHT,
+      bottom: BOTTOM_PADDING,
+      left: LEFT_PANEL_WIDTH,
+      right: RIGHT_PANEL_WIDTH
     });
 
-    // Bounds und Timestamp speichern
-    lastBoundsRef.current = { latRange: visibleLatRange, lngRange: visibleLngRange };
+    // Bounds speichern
+    lastBoundsRef.current = { latRange: requiredLatRange, lngRange: requiredLngRange };
     lastViewportChange.current = now;
 
     console.log('[RouteReplay] Camera updated:', {
       forceUpdate,
       isEmergencyZoom,
-      currentPos: { lat: position.latitude.toFixed(5), lng: position.longitude.toFixed(5) },
-      lookaheadPoints: lookaheadPoints.length,
-      maxLatDiff: maxLatDiff.toFixed(6),
-      maxLngDiff: maxLngDiff.toFixed(6),
-      visibleLatRange: visibleLatRange.toFixed(6),
-      visibleLngRange: visibleLngRange.toFixed(6)
+      viewport: `${viewportWidth}x${viewportHeight}`,
+      panels: `L:${LEFT_PANEL_WIDTH}px R:${RIGHT_PANEL_WIDTH}px`,
+      usableWidth: `${(usableWidthPercent * 100).toFixed(0)}%`,
+      routeBounds: { latRange: latRange.toFixed(6), lngRange: lngRange.toFixed(6) },
+      visibleBounds: { latRange: requiredLatRange.toFixed(6), lngRange: requiredLngRange.toFixed(6) }
     });
 
-    // Warte auf idle-Event der Karte bevor Animation fortgesetzt wird
-    // (Karte hat fertig gerendert und Tiles geladen)
+    // Warte auf idle-Event der Karte
     const idleListener = map.addListener('idle', () => {
       idleListener.remove();
       cameraAdjustingRef.current = false;
-      console.log('[RouteReplay] Camera idle - ready to continue');
       onComplete?.();
     });
 
-    // Fallback-Timeout falls idle nicht feuert (z.B. bei schnellen Änderungen)
+    // Fallback-Timeout
     setTimeout(() => {
       if (cameraAdjustingRef.current) {
         idleListener.remove();
         cameraAdjustingRef.current = false;
-        console.log('[RouteReplay] Camera timeout - forcing continue');
         onComplete?.();
       }
-    }, 800); // Max 800ms warten
+    }, 800);
   }, []); // Keine Dependencies - verwendet nur refs für aktuelle Werte
 
   // Periodische Kamera-Updates alle 3 Sekunden während Animation
@@ -2659,6 +2805,7 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
             // Resume animation after contract pause
             console.log('[RouteReplay] 📝 Contract pause ended, resuming from GPS time:', new Date(currentTimestampRef.current).toLocaleTimeString());
             contractPauseRef.current = { paused: false, resumeAt: null };
+            // Clear the animated flash marker (permanent marker stays via visibleContracts)
             setActiveContractFlash(null);
             // CRITICAL: Update GPS start to current position, reset real time start
             animationGPSStartRef.current = currentTimestampRef.current;
@@ -2767,6 +2914,8 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
   // Reset animation
   const resetAnimation = () => {
     pauseAnimation();
+    // Reset contract state for fresh playback
+    resetContractState();
     if (displayPoints.length > 0) {
       setCurrentTimestamp(startTime);
       pausedTimestampRef.current = startTime;
