@@ -463,13 +463,16 @@ class EgonScraper {
 
         // Process each order
         for (const order of orders) {
-          const orderNo = order.order_no;
+          const orderNo = String(order.order_no).trim(); // Ensure string and trim
 
           // Optimization: Stop if order already exists
-          if (orderNo && egonOrdersDB.existsOrderNo(orderNo)) {
+          const exists = egonOrdersDB.existsOrderNo(orderNo);
+          if (orderNo && exists) {
             console.log(`[EgonScraper] Order ${orderNo} already exists in DB. Stopping incremental scrape.`);
             shouldStop = true;
             break;
+          } else {
+             console.log(`[EgonScraper] Checking order ${orderNo}: Exists=${exists}`);
           }
 
           const contractDateStr = order.contract_date || '';
