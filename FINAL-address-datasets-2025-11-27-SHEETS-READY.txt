@@ -1,0 +1,118 @@
+Barbarastraße	36f	51147	Köln			Raphael	2025-11-27T08:44:06.220Z	tönnesen; gürses; tsinas; richter; berg; tarneja
+Barbarastraße	36g	51147	Köln			Raphael	2025-11-27T08:50:49.547Z	reichhardt; sundri luthra sindi; reichert straub; klein; risling mastroiacovo; emetlioglu
+Kleeweg	10	51147	Köln			Kiri	2025-11-27T08:53:30.299Z	kuebart; erb lech; oswald; schmitz; sahling schwandt; wemhöner
+Kleeweg	12	51147	Köln			Kiri	2025-11-27T08:57:53.960Z	woit; kaysim; lehmann diehr; wolf; stäuder; herzog
+Jasminweg	2	41468	Neuss			Eva	2025-11-27T09:10:41.197Z	solbach; arens
+Jasminweg	4	41468	Neuss			Eva	2025-11-27T09:12:22.631Z	Evers
+Jasminweg	5	41468	Neuss			Eva	2025-11-27T09:13:26.440Z	Noname 
+Jasminweg	7	41468	Neuss			Eva	2025-11-27T09:16:15.563Z	Eilers
+Jasminweg	8	41468	Neuss			Eva	2025-11-27T09:17:12.861Z	Schmeynk
+Barbarastraße	36e	51147	Köln			Raphael	2025-11-27T09:19:49.429Z	maron; egyed; chan; vieres; krewinkel; hahrens
+Kleeweg	18	51147	Köln			Kiri	2025-11-27T09:21:54.672Z	wienhold janker; jegart dreiucker; bouabid; holzgrewe; kredler; kirch hagenau
+Jasminweg	12	41468	Neuss			Eva	2025-11-27T09:22:46.394Z	Spicker
+Hermann-Löns-Straße	120	51147	Köln			Stefan	2025-11-27T09:23:09.442Z	hoffmann; köter; byrtus; saxler; akkaya; polotzek
+Jasminweg	14a	41468	Neuss			Eva	2025-11-27T09:27:11.576Z	schmitz tarasenko; ehlert; grundmann
+Hermann-Löns-Straße	118	51147	Köln			Stefan	2025-11-27T09:28:10.553Z	bomba; Thiel papalia; domachowski; kernbach; mosiezny; katic
+Distelweg	10	51147	Köln			Kiri	2025-11-27T09:29:50.907Z	nilius; lorenz; trelenberg; vesen
+Distelweg	13	51147	Köln			Kiri	2025-11-27T09:32:09.624Z	siebertz; renz; brettschneider; renz; gründel kläs; landers benfer
+Distelweg	6a	51147	Köln			Kiri	2025-11-27T09:35:05.083Z	scheid; scheld
+Hermann-Löns-Straße	116	51147	Köln			Stefan	2025-11-27T09:35:14.020Z	ochotta; veber; fuest renz; weiss; schönenberg; tampier
+Barbarastraße	36d	51147	Köln			Raphael	2025-11-27T09:36:05.032Z	windecker; haidery; gilani; hirsch schoprudko; wieczorek linke; berati
+Hermann-Löns-Straße	114	51147	Köln			Stefan	2025-11-27T09:43:09.678Z	görs; bräuer; gaitzsch; grgic; heinrichs; wodarz
+Barbarastraße	34c	51147	Köln			Raphael	2025-11-27T09:46:32.615Z	Lumia
+Hermann-Löns-Straße	112	51147	Köln			Stefan	2025-11-27T09:49:03.225Z	yildirim; gallianer; yagmur; solty; durgut; dittrich
+Hermann-Löns-Straße	110	51147	Köln			Stefan	2025-11-27T09:54:00.246Z	kobe; scepanski; semper; lüdigk; kleine; möhle
+Barbarastraße	42	51147	Köln			Raphael	2025-11-27T09:54:20.969Z	inanli; olbrich; hütter; hoffmann; kaschubowski; sprenger
+Jasminweg	21	41468	Neuss			Eva	2025-11-27T09:57:34.178Z	Eisbach Elke; Heinemann Renate; Wysocki Natalie; Jas
+Barbarastraße	40	51147	Köln			Raphael	2025-11-27T09:58:05.492Z	franz; evers; heil; bimberg; breuer; sipala
+Barbarastraße	38	51147	Köln			Raphael	2025-11-27T09:59:22.711Z	blaskowitz scholz; cala; petrovic; dege; asamoah; plies
+Barbarastraße	44	51147	Köln			Raphael	2025-11-27T10:01:30.481Z	Reinhard Ziegler; G. P. Lu
+Jasminweg	23	41468	Neuss			Eva	2025-11-27T10:01:52.793Z	Kayser
+Barbarastraße	50	51147	Köln			Raphael	2025-11-27T10:02:54.922Z	
+Jasminweg	29	41468	Neuss			Eva	2025-11-27T10:06:29.140Z	schmitz; volkmann; cremer; stickel; stickel
+Barbarastraße	66	51147	Köln			Raphael	2025-11-27T10:07:19.049Z	Steinbach
+Holunderweg	6	41468	Neuss			David	2025-11-27T10:07:39.797Z	Thaler
+Holunderweg	4a	41468	Neuss			David	2025-11-27T10:09:07.658Z	Atajir
+Ginsterweg	14	41468	Neuss			Eva	2025-11-27T10:13:14.519Z	Fülber
+Holunderweg	3a	41468	Neuss			David	2025-11-27T10:13:24.675Z	On
+Holunderweg	1	41468	Neuss			David	2025-11-27T10:15:16.873Z	Remus
+Ginsterweg	15	41468	Neuss			Eva	2025-11-27T10:15:43.571Z	neumann; weber; schnitzler; schubert
+Holunderweg	15	41468	Neuss			David	2025-11-27T10:19:04.678Z	Vieth
+Ginsterweg	24	41468	Neuss			Eva	2025-11-27T10:19:38.481Z	Reißner
+Rolandstraße	7	51147	Köln			Lisandra	2025-11-27T10:19:50.298Z	damon jie; hartmann; rux; stella; bober sonnenberg; kalberlah; fornito porca; weber dittmann; fischer
+Ginsterweg	2	41468	Neuss			Eva	2025-11-27T10:22:23.063Z	Kehler
+Barbarastraße	65	51147	Köln			Raphael	2025-11-27T10:23:39.721Z	Laumen
+Kantstraße	4	51147	Köln			Stefan	2025-11-27T10:25:41.557Z	tretyakov ebauer; samoilenko; bulpa; daiber; bruhy; lindigrin; simernickij; erfling lüttgens
+Barbarastraße	59	51147	Köln			Raphael	2025-11-27T10:25:41.620Z	konstanty; horvath; link; weiss; hingst; neumann; Tasdemir
+Ginsterweg	12a	41468	Neuss			Eva	2025-11-27T10:30:51.606Z	Josvanovis
+Hainbuchenweg	17a	41468	Neuss			David	2025-11-27T10:33:10.823Z	Bergmanns
+Gagelweg	17	41468	Neuss			Eva	2025-11-27T10:33:10.911Z	Meyers
+Barbarastraße	57	51147	Köln			Raphael	2025-11-27T10:33:43.423Z	saint; sawodschikov; pierno; gebbert; müller
+Barbarastraße	53	51147	Köln			Raphael	2025-11-27T10:36:07.437Z	Frank Schnell; Heike Rodewald; Wisniewska
+Hainbuchenweg	11b	41468	Neuss			David	2025-11-27T10:37:42.855Z	Hoppe
+Gagelweg	16	41468	Neuss			Eva	2025-11-27T10:41:22.267Z	Krieger
+Hainbuchenweg	1	41468	Neuss			David	2025-11-27T10:41:22.601Z	Ley
+Gagelweg	14	41468	Neuss			Eva	2025-11-27T10:42:48.130Z	Schmitz 
+Hainbuchenweg	4	41468	Neuss			David	2025-11-27T10:43:41.534Z	Noname
+Gagelweg	6	41468	Neuss			Eva	2025-11-27T10:44:47.570Z	Mohr; Krönig
+Barbarastraße	47a	51147	Köln			Raphael	2025-11-27T10:44:54.705Z	Greus
+Hainbuchenweg	8	41468	Neuss			David	2025-11-27T10:45:12.486Z	Noname
+Gagelweg	2	41468	Neuss			Eva	2025-11-27T10:46:33.658Z	Risteki
+Hainbuchenweg	16	41468	Neuss			David	2025-11-27T10:46:33.897Z	Hildebrand 
+Hainbuchenweg	22	41468	Neuss			David	2025-11-27T10:50:42.469Z	Nett
+Barbarastraße	43	51147	Köln			Raphael	2025-11-27T10:56:00.085Z	hartmann; gasper; loidl alilja; Strate-Müller
+Rolandstraße	2	51147	Köln			Lisandra	2025-11-27T11:07:35.606Z	bajrami hasani; hallmann; eroglu; unalan; Günes ; poddig; neumann linden
+Grüner Weg	50	41468	Neuss			Eva	2025-11-27T11:08:48.784Z	knochel; schikora; bosch; rosenfeld; kaufmann; kaufmann; hennesen; dörge; kaufmann; kaufmann
+Grüner Weg	48	41468	Neuss			Eva	2025-11-27T11:10:50.864Z	dittrich esser; hug; kalengaur
+Rolandstraße	4	51147	Köln			Lisandra	2025-11-27T11:12:49.810Z	shehni; fatehl; kobinger; tocru; pohl griebsch; wirtz; kierdorf baumann; schiemann
+Barbarastraße	41	51147	Köln			Raphael	2025-11-27T11:13:56.637Z	weinreich
+Grüner Weg	57	41468	Neuss			Nic	2025-11-27T11:14:05.145Z	Schröer
+Rolandstraße	6	51147	Köln			Lisandra	2025-11-27T11:14:54.014Z	schulz; außerehl; paradies; der ichs; reuter; klich
+Grüner Weg	51	41468	Neuss			Nic	2025-11-27T11:15:58.876Z	Zada
+Rolandstraße	8	51147	Köln			Lisandra	2025-11-27T11:19:05.585Z	
+Grüner Weg	38	41468	Neuss			Eva	2025-11-27T11:19:22.875Z	eulenburg; becher; lindner; klaff; wiebusch; arndt
+Barbarastraße	37	51147	Köln			Raphael	2025-11-27T11:21:53.392Z	fuchs; ott kaboth; trelenberg; möwes; Ahmed; Salam; Kohl
+Rolandstraße	10	51147	Köln			Lisandra	2025-11-27T11:23:34.279Z	bartetzko; schmitz; klein; stolley; cnossen; wissmach; klich hürtgen
+Rolandstraße	12	51147	Köln			Lisandra	2025-11-27T11:26:26.519Z	glowczynski; umarova; foerster; schneider; maik jahn; hetkamp
+Grüner Weg	34	41468	Neuss			Eva	2025-11-27T11:30:48.758Z	burghardt; jovanovic; kovalevic; granato; granato; stark; granato bertini; granato bertini; kaminski
+Rolandstraße	14	51147	Köln			Lisandra	2025-11-27T11:32:05.753Z	müller; umarova; suleanscaia; makl; hoff; kornivska; kreutl; suleanschii; kristen
+Am Heepsgarten	18	51147	Köln			Kiri	2025-11-27T11:32:34.437Z	
+Rolandstraße	16	51147	Köln			Lisandra	2025-11-27T11:34:42.929Z	plumar; doufrain; nowak; knobloch; young oelschlägel
+Am Wolfsgarten	26	51147	Köln			Kiri	2025-11-27T11:37:40.040Z	reichel
+Am Wolfsgarten	16	51147	Köln			Kiri	2025-11-27T11:39:57.886Z	steffens
+Barbarastraße	33	51147	Köln			Raphael	2025-11-27T11:40:04.882Z	nikolai; atabek
+Wacholderweg	1e	41468	Neuss			David	2025-11-27T11:42:14.928Z	Salz
+Am Wolfsgarten	4	51147	Köln			Kiri	2025-11-27T11:42:37.774Z	slodwinsky
+Wacholderweg	5	41468	Neuss			David	2025-11-27T11:46:41.225Z	Köktas
+Wacholderweg	7	41468	Neuss			David	2025-11-27T11:47:11.722Z	Farrenkopf 
+Wacholderweg	9	41468	Neuss			David	2025-11-27T11:48:09.755Z	Raddatz 
+Wacholderweg	14	41468	Neuss			David	2025-11-27T11:50:39.867Z	Tieves 
+Barbarastraße	31	51147	Köln			Raphael	2025-11-27T11:51:09.988Z	zager; thomann; tor boetzel; haberscheid; feriduni; siedler
+Grüner Weg	49	41468	Neuss			Nic	2025-11-27T11:51:11.893Z	Perk Özcan; Runaj Klenath; Runaj Klenth; Runay Kleanth; Qirjaj; Sayik
+Wacholderweg	12	41468	Neuss			David	2025-11-27T11:54:55.842Z	Nebiung 
+Am Wolfsgarten	2	51147	Köln			Kiri	2025-11-27T11:55:07.216Z	eckertz
+Wacholderweg	8	41468	Neuss			David	2025-11-27T11:56:11.150Z	Porsch
+Barbarastraße	27	51147	Köln			Raphael	2025-11-27T11:57:30.499Z	spiesecke; gambus; luft; wagner; olbert; bruder
+Am Büllesgarten	26	51147	Köln			Kiri	2025-11-27T11:59:36.733Z	bauer
+Barbarastraße	25	51147	Köln			Raphael	2025-11-27T12:00:50.716Z	drajewski; weyers; stiewe; dorner; reinhardt janzen; heinz
+Am Büllesgarten	22	51147	Köln			Kiri	2025-11-27T12:02:22.445Z	schneider; przewieslik
+Grüner Weg	43	41468	Neuss			Nic	2025-11-27T12:02:42.370Z	Gruber/ handke
+Barbarastraße	23	51147	Köln			Raphael	2025-11-27T12:02:54.652Z	rollmann; müller; schmitt; berger; beiden; pfau; pfau
+Grüner Weg	39	41468	Neuss			Nic	2025-11-27T12:03:58.114Z	Zehner
+Grüner Weg	35	41468	Neuss			Nic	2025-11-27T12:05:20.075Z	
+Grüner Weg	16	41468	Neuss			Eva	2025-11-27T12:05:27.994Z	
+Grüner Weg	35a	41468	Neuss			Nic	2025-11-27T12:05:36.296Z	Maassen
+Am Börschsgarten	16	51147	Köln			Kiri	2025-11-27T12:06:42.332Z	Abele
+Grüner Weg	19	41468	Neuss			Nic	2025-11-27T12:10:03.322Z	Chudoba Susanne; Jost Elena; Neueinzug
+Hagebuttenweg	18	41468	Neuss			David	2025-11-27T12:10:05.441Z	Zimmermann
+Hagebuttenweg	16	41468	Neuss			David	2025-11-27T12:11:49.376Z	Roßkothen
+Hagebuttenweg	2	41468	Neuss			David	2025-11-27T12:14:41.709Z	Mach
+Magnolienweg	15	41468	Neuss			David	2025-11-27T12:18:15.267Z	Krumm
+Grüner Weg	13	41468	Neuss			Nic	2025-11-27T12:18:32.244Z	Bolz Gudrun u. Peter; Fröhlich Ingrid; Dinslage
+Grüner Weg	11	41468	Neuss			Nic	2025-11-27T12:19:26.099Z	Meyer; Na; Pettiti
+Magnolienweg	21	41468	Neuss			David	2025-11-27T12:19:55.510Z	Aubin 
+Grüner Weg	2a	41468	Neuss			Eva	2025-11-27T12:20:36.657Z	
+Magnolienweg	25	41468	Neuss			David	2025-11-27T12:20:41.432Z	Gaspard
+Grüner Weg	7	41468	Neuss			Nic	2025-11-27T12:28:38.754Z	Erz
+Magnolienweg	12	41468	Neuss			David	2025-11-27T12:32:54.970Z	On name 
+Magnolienweg	10	41468	Neuss			David	2025-11-27T12:34:09.271Z	Karen 

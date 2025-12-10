@@ -1,0 +1,172 @@
+This session is being continued from a previous conversation that ran out of context. The conversation is summarized below:
+Analysis:
+Let me analyze the conversation chronologically:
+
+1. **Initial Request**: The user provided a detailed German-language specification for extending the EnergyScanCapture app with historical data matching. The app helps field sales representatives identify existing customers before ringing doorbells.
+
+2. **Key Requirements**:
+   - When a salesperson is at an address where there's historical data (AddressDataset), use that data for matching
+   - Clean duplicate names from historical datasets (if same last name appears in both existing and new customers lists, remove all)
+   - If same last name appears multiple times in one list, use only the last name
+   - Support house number range matching (e.g., searching "1-5" should find dataset "3-7")
+   - New categorization logic:
+     - In customer list + in dataset as existing → confirmed existing
+     - In customer list + in dataset as new → clarification needed
+     - Not in list + in dataset as existing → clarification needed  
+     - Not in list + in dataset as new → new customer with historical status
+   - Detect previous tenant when exactly one name changed
+   - For "Adresse durchsuchen": extend customer list with historical existing customers
+
+3. **My Implementation Steps**:
+   - Created new types in `shared/schema.ts` (HistoricalMatchType, HistoricalInfo, EnhancedOCRResult, etc.)
+   - Created `server/services/historicalMatchingService.ts` with matching logic
+   - Extended OCR routes (`/api/ocr`, `/api/ocr-correct`) with enhanced matching
+   - Extended `/api/search-address` route with historical customer enhancement
+
+4. **TypeScript Errors Fixed**:
+   - Reordered schema definitions (residentCategorySchema before ocrResponseSchema)
+   - Changed `null` to `undefined` for historicalDatasetUsed
+   - Used `Array.from()` for Map/Set iterations
+
+5. **User's First Test Failed**: The user tested with:
+   - Dataset: Ferdinand-Stücker-Straße 14, 51067 (with "Test" as existing_customer)
+   - Customer list: Isabel Kudla at Ferdinand-Stücker-Str. 14, 51067
+   - Problem: "Test" wasn't showing as historical existing customer
+
+6. **Root Cause Identified**: My `getMostRecentDataset` was building the wrong address format. The existing code uses:
+   ```javascript
+   `${street} ${postal} ${city}`.toLowerCase()
+   ```
+   But I was using:
+   ```javascript
+   `${street} ${number}, ${postal}`
+   ```
+
+7. **My Fix Attempt**: I added flexible street name matching with normalization (Straße → str, etc.)
+
+8. **User's Second Feedback**: The user pointed out that the existing matching system is already very sophisticated (uses Google Geocoding normalization) and I should NOT implement new matching. Instead, I should:
+   - Use the existing normalization
+   - Put the historical matching AFTER normalization
+   - Use the normalized address data for matching
+
+The user is correct - the existing `normalizeAddress` function uses Google Geocoding API which is the gold standard for address normalization.
+
+Summary:
+1. Primary Request and Intent:
+   The user requested extending the EnergyScanCapture app (a field sales efficiency tool for a German electricity provider) with historical data matching capabilities. Specifically:
+   - When a salesperson scans a doorbell at an address with existing historical datasets, use that historical data for enhanced customer matching
+   - Implement duplicate name cleaning from historical datasets (remove conflicting last names that appear in both existing and new customer lists)
+   - Support house number range overlap matching
+   - Implement new categorization: confirmed_existing, clarification_needed (for conflicts), historical_prospect
+   - Detect previous tenants when exactly one name changed between old and new scans
+   - For "Adresse durchsuchen" (address search): extend the customer list with historical existing customers who may no longer be in the current list (for win-back hints)
+
+2. Key Technical Concepts:
+   - React + TypeScript frontend, Node.js + Express backend
+   - Google Cloud Vision API for OCR
+   - Google Geocoding API for address normalization
+   - AddressDataset storage (SQLite primary, Google Sheets backup)
+   - EditableResident with categories: existing_customer, potential_new_customer, duplicate, clarification_needed
+   - House number range expansion (e.g., "1-5" → ["1","2","3","4","5"])
+   - DatasetCache with flexible address matching
+
+3. Files and Code Sections:
+
+   - **shared/schema.ts** - Extended with new historical matching types
+     - Added `clarification_needed` to residentCategorySchema
+     - Created new schemas: historicalMatchTypeSchema, historicalInfoSchema, enhancedOCRResultSchema, enhancedExistingCustomerSchema
+     - Extended ocrResponseSchema with enhancedResults, clarificationNeeded, historicalDatasetUsed fields
+     ```typescript
+     export const historicalMatchTypeSchema = z.enum([
+       'confirmed_existing',     // In Bestandskundenliste UND im Datensatz als Bestandskunde
+       'list_vs_dataset_conflict', // In Bestandskundenliste, aber im Datensatz als Neukunde
+       'dataset_only_existing',  // Nicht in Bestandskundenliste, aber im Datensatz als Bestandskunde
+       'historical_prospect',    // Nicht in Bestandskundenliste UND im Datensatz als Neukunde
+       'no_historical_data'      // Kein historischer Datensatz vorhanden
+     ]);
+     ```
+
+   - **server/services/historicalMatchingService.ts** - NEW FILE - Core historical matching logic
+     - Functions: getMostRecentDataset, getAllRelevantDatasets, cleanHistoricalData, categorizeWithHistoricalData, detectPreviousTenant, enhanceCustomerListWithHistoricalData, performEnhancedOCRMatching
+     - Added flexible street name matching (normalizeStreetName, streetNamesMatch) and expandHouseNumbers
+     ```typescript
+     function normalizeStreetName(street: string): string {
+       return street
+         .toLowerCase()
+         .replace(/ß/g, 'ss')
+         .replace(/straße$/i, 'str')
+         .replace(/strasse$/i, 'str')
+         .replace(/str\.$/i, 'str')
+         .replace(/[-\s\.]+/g, '')
+         .trim();
+     }
+     ```
+
+   - **server/routes.ts** - Extended OCR and search-address routes
+     - Added import: `import { performEnhancedOCRMatching, enhanceCustomerListWithHistoricalData } from "./services/historicalMatchingService";`
+     - `/api/ocr` and `/api/ocr-correct` now call performEnhancedOCRMatching
+     - `/api/search-address` now calls enhanceCustomerListWithHistoricalData
+
+   - **client/src/components/ResultsDisplay.tsx** - Extended frontend types
+     - Added imports for EnhancedOCRResult, HistoricalInfo
+     - Extended Customer interface with isFromHistoricalDataset, historicalDatasetDate, notInCurrentList
+     - Extended OCRResult interface with enhancedResults, clarificationNeeded, historicalDatasetUsed
+
+4. Errors and fixes:
+   - **Schema definition order error**: enhancedOCRResultSchema was referenced before definition
+     - Fix: Moved residentCategorySchema, residentStatusSchema, and all historical schemas BEFORE ocrResponseSchema
+   
+   - **TypeScript null vs undefined error**: historicalDatasetUsed could be null but schema expected undefined
+     - Fix: Changed `historicalDatasetUsed` to `historicalDatasetUsed || undefined`
+   
+   - **Map/Set iteration errors**: TypeScript complained about iterating MapIterator without downlevelIteration
+     - Fix: Wrapped with `Array.from()` - e.g., `for (const lastName of Array.from(lastNameCountExisting.keys()))`
+
+   - **Address matching not working** (user feedback): Test with "Ferdinand-Stücker-Str. 14, 51067" didn't find dataset with "Ferdinand-Stücker-Straße"
+     - First fix attempt: Changed address format from `${street} ${number}, ${postal}` to `${street} ${postal} ${city}`
+     - Second fix attempt: Added flexible street name normalization and fallback matching
+     - **User rejected this approach**: Said existing matching system uses Google Geocoding and I should use that instead of implementing new matching
+
+5. Problem Solving:
+   - Successfully created type system for historical matching
+   - Successfully created historical matching service with duplicate cleaning and previous tenant detection
+   - Successfully integrated into OCR and search-address routes
+   - ONGOING: Address matching still not working correctly - user's test case failed because my service doesn't use the existing Google Geocoding normalization
+
+6. All user messages:
+   - Initial detailed German specification for historical data matching feature (very long, with specific business logic)
+   - "Vielen Dank. Das hört sich gut an, aber folgender Test hat leider nicht funktioniert..." - Reported that searching "Ferdinand-Stücker-Str. 14, 51067" didn't show "Test" as historical existing customer, even though dataset exists with that data
+   - "Warte aber das matching gab es schon und das war sehr durchdacht. Prüf das bitte nochmal und vermeide ein neues matching zu implementieren. Es findet sogar eine normalisierung der adresse gegen google geocoding statt - also das höchste normalisieren was möglich ist. Ändere da bitte nix an dem matching sondern schau dir mal bitte die reihenfolge an und setze ggf. den abgleich von datensatz und bestandskundenliste nach der normalisierung und nutze die daten aus der normalisierung um die adresse zu matchen"
+
+7. Pending Tasks:
+   - Fix the address matching to use the existing Google Geocoding normalization instead of custom matching
+   - The historical matching should happen AFTER address normalization, using the normalized address data
+   - Remove or bypass the custom street name matching I added
+
+8. Current Work:
+   The user rejected my custom street name matching implementation. They pointed out that:
+   - The existing system already uses Google Geocoding for address normalization ("das höchste normalisieren was möglich ist")
+   - I should NOT implement new matching
+   - I should reorder the code so historical matching happens AFTER normalization
+   - I should use the normalized address data from Google Geocoding for matching
+
+   I had just read the routes.ts file to see that `normalizeAddress` is already imported and was about to refactor to use it:
+   ```typescript
+   import { addressDatasetService, normalizeAddress, appointmentService } from "./services/googleSheets";
+   ```
+
+9. Optional Next Step:
+   Refactor the `/api/search-address` route to:
+   1. Call `normalizeAddress()` first (like `/api/address-datasets` GET does)
+   2. Use the normalized address components for the historical matching
+   3. Remove or simplify the custom street name matching from historicalMatchingService.ts
+
+   User's exact words: "setze ggf. den abgleich von datensatz und bestandskundenliste nach der normalisierung und nutze die daten aus der normalisierung um die adresse zu matchen"
+   (Translation: "put the matching of dataset and customer list after normalization and use the data from normalization to match the address").
+Please continue the conversation from where we left it off without asking the user any further questions. Continue with the last task that you were asked to work on.
+Show less
+Ich werde das Matching korrigieren, um die bestehende Google Geocoding-Normalisierung zu nutzen. Lass mich zuerst die relevanten Dateien lesen, um zu verstehen, wie die Normalisierung aktuell funktioniert.
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes.ts, c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\historicalMatchingService.ts
+Ich muss verstehen, wie die bestehende normalizeAddress-Funktion funktioniert. Lass mich den GoogleSheets-Service lesen:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\googleSheets.ts, c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes\addressDatasets.ts
+Limit reached · resets 12am (Europe/Berlin) · /upgrade to Max or turn on /extra-usage

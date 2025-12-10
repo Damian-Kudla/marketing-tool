@@ -245,15 +245,15 @@ function closeDB(name: DBName): void {
 function checkpointDB(name: DBName): boolean {
   try {
     const db = initDB(name);
-    const result = db.pragma('wal_checkpoint(TRUNCATE)', { simple: true }) as any;
+    // simple: true returns the first column of the first row (busy status)
+    // 0 means success (not busy)
+    const busy = db.pragma('wal_checkpoint(TRUNCATE)', { simple: true }) as number;
 
-    // WAL checkpoint returns [busy, log, checkpointed]
-    // busy = 0 means checkpoint succeeded
-    if (Array.isArray(result) && result[0] === 0) {
+    if (busy === 0) {
       console.log(`[SystemDB] Checkpointed ${name} successfully`);
       return true;
     } else {
-      console.error(`[SystemDB] Checkpoint ${name} failed or incomplete: ${JSON.stringify(result)}`);
+      console.error(`[SystemDB] Checkpoint ${name} failed (busy=${busy})`);
       return false;
     }
   } catch (error) {

@@ -1,0 +1,300 @@
+Ich beschreibe im folgenden zuerst das Projekt, in welchem ich dich um Unterstützung bitte und danach beschreibe ich die Hilfe um die ich dich bitten würde.
+## Projekt: EnergyScanCapture – Effizienztool für Außendienstmitarbeiter eines Stromanbieters
+
+### Ziel der App
+**Zeit sparen. Weniger Fehlkontakte. Mehr Abschlüsse.**  
+Die App hilft Vertrieblern im Außendienst, **unnötige Klingelaktionen bei Bestandskunden zu vermeiden**, indem sie **automatisch erkennt**, wer bereits Kunde ist – **bevor** der Mitarbeiter klingelt.
+
+---
+
+### Kern-Workflow (Mitarbeiter-Seite)
+1. **"Standort ermitteln"** → GPS wird erfasst (nur Deutschland)
+2. **Foto vom Klingelschild hochladen**
+3. **KI-gestützte Texterkennung (OCR)** → extrahiert Namen
+4. **Abgleich mit Kundendatenbank**
+5. **Ergebnis auf Foto überlagert**:
+   - **Grün** = Bestandskunde → **nicht klingeln**
+   - **Orange** = potenzieller Neukunde → **klingeln**
+   - **Blau** = Duplikat / unsicher
+6. **Nur bei echten Leads wird geklingelt** → **höhere Trefferquote, weniger Zeitverschwendung**
+
+---
+
+### Admin-Panel (Dashboard)
+Administratoren überwachen alle Mitarbeiter in Echtzeit:
+
+| Funktion | Beschreibung |
+|--------|-------------|
+| **Live-Karte** | Alle aktiven Mitarbeiter als Marker |
+| **"Route"-Button** | Öffnet **Fullscreen-Popup** mit **animierter Streckenwiedergabe** |
+| **Timeline-Scrubber** | Zeitstrahl zum Vor-/Zurückspulen |
+| **Animationsgeschwindigkeit** | `secondsPerHour` → z. B. `6` = 1 Stunde GPS in 6 Sekunden |
+| **Intelligenter Zoom** | Karte folgt dem Mitarbeiter, passt Zoom automatisch an |
+
+---
+
+### Technische Basis
+- **Frontend**: React + TypeScript, Tailwind CSS
+- **Backend**: Node.js + Express
+- **Karten**: **Google Maps JavaScript API** (Admin-Route), Leaflet (Live-Übersicht)
+- **Daten**: GPS-Logs, Fotos, OCR-Ergebnisse, Kundendaten
+- **Auth**: JWT, Rollen: `user`, `admin`
+
+---
+
+### Wichtige Dateien
+| Pfad | Zweck |
+|------|------|
+| `client/src/components/RouteReplayMap.tsx` | Animierte Route im Admin-Popup (Google Maps) |
+| `client/src/components/GPSAddressForm.tsx` | Standort + Adresserkennung |
+| `server/routes/admin.ts` | Admin-Endpunkte (Route, Stats) |
+| `shared/trackingTypes.ts` | GPSPoint-Interface |
+
+
+Nun zu meinen gewünschten Änderungen für die ich dich um Hilfe bitte:
+
+Ich habe sehr viele logs und würde dich bitten diese effizienter zu machen und zusammenzufassen, sodass die konsole nicht so vollgespamt wird. Bitte prüfe auf relevant oder ob mehrere consolen logs nicht zu einem zusammengefasst werden können.
+
+Ein beispiel für logs findest du in logs.txt
+Show less
+Ich schaue mir zuerst die logs.txt an, um zu verstehen, welche Logs aktuell ausgegeben werden.
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\logs.txt
+Die Datei ist groß. Lass mich sie in Abschnitten lesen:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\logs.txt (lines 1-500)
+Ich sehe die Probleme deutlich. Lass mich die Hauptquellen der Log-Spam identifizieren und die relevanten Dateien analysieren:
+Update Todos
+
+Analysiere Log-Quellen im Codebase
+
+Optimiere CustomerCache Logs (Cache HIT Spam)
+
+Optimiere FollowMee Service Logs
+
+Optimiere BatchLogger Logs
+
+Optimiere bulkUpdateResidentsInDataset Logs
+
+Optimiere HistoricalMatching Logs
+
+Optimiere Startup Sync Logs
+Grep "CustomerCache.*Cache HIT" (in c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie)
+3 lines of output
+Grep "console\.log.*FollowMee" (in c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie)
+16 lines of output
+Grep "console\.log.*BatchLogger" (in c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie)
+2 lines of output
+Grep "bulkUpdateResidentsInDataset" (in c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie)
+5 lines of output
+Grep "HistoricalMatching" (in c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie)
+3 lines of output
+Jetzt lese ich die relevanten Dateien:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\storage.ts, c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\batchLogger.ts, c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\historicalMatchingService.ts, c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes\addressDatasets.ts
+Jetzt lese ich noch weitere relevante Dateien:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\followMeeApi.ts, c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\googleSheets.ts (lines 1-500), c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\config\logConfig.ts
+Ich habe nun ein gutes Verständnis. Es gibt bereits eine logConfig.ts, aber viele Logs nutzen sie nicht. Lass mich die Optimierungen implementieren:
+Update Todos
+
+Analysiere Log-Quellen im Codebase
+
+Erweitere logConfig.ts mit neuen Optionen
+
+Optimiere CustomerCache Logs (Cache HIT Spam)
+
+Optimiere FollowMee Service Logs
+
+Optimiere BatchLogger Logs
+
+Optimiere HistoricalMatching Logs
+
+Optimiere googleSheets bulkUpdate Logs
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\config\logConfig.ts
+Added 51 lines
+Update Todos
+
+Analysiere Log-Quellen im Codebase
+
+Erweitere logConfig.ts mit neuen Optionen
+
+Optimiere CustomerCache Logs (Cache HIT Spam)
+
+Optimiere FollowMee Service Logs
+
+Optimiere BatchLogger Logs
+
+Optimiere HistoricalMatching Logs
+
+Optimiere googleSheets bulkUpdate Logs
+Jetzt optimiere ich die CustomerCache Logs in storage.ts:
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\storage.ts
+Added 1 line
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\storage.ts
+Added 7 lines
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\storage.ts
+Added 2 lines
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\storage.ts
+Added 2 lines
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\storage.ts
+Added 2 lines
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\storage.ts
+Added 2 lines
+Update Todos
+
+Analysiere Log-Quellen im Codebase
+
+Erweitere logConfig.ts mit neuen Optionen
+
+Optimiere CustomerCache Logs (Cache HIT Spam)
+
+Optimiere FollowMee Service Logs
+
+Optimiere BatchLogger Logs
+
+Optimiere HistoricalMatching Logs
+
+Optimiere googleSheets bulkUpdate Logs
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\followMeeApi.ts
+Added 1 line
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\followMeeApi.ts
+Added 2 lines
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\followMeeApi.ts
+Removed 1 line
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\followMeeApi.ts
+Added 2 lines
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\followMeeApi.ts
+Removed 6 lines
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\followMeeApi.ts
+Added 4 lines
+Update Todos
+
+Analysiere Log-Quellen im Codebase
+
+Erweitere logConfig.ts mit neuen Optionen
+
+Optimiere CustomerCache Logs (Cache HIT Spam)
+
+Optimiere FollowMee Service Logs
+
+Optimiere BatchLogger Logs
+
+Optimiere HistoricalMatching Logs
+
+Optimiere googleSheets bulkUpdate Logs
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\batchLogger.ts
+Added 3 lines
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\batchLogger.ts
+Modified
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\batchLogger.ts
+Added 2 lines
+Update Todos
+
+Analysiere Log-Quellen im Codebase
+
+Erweitere logConfig.ts mit neuen Optionen
+
+Optimiere CustomerCache Logs (Cache HIT Spam)
+
+Optimiere FollowMee Service Logs
+
+Optimiere BatchLogger Logs
+
+Optimiere HistoricalMatching Logs
+
+Optimiere googleSheets bulkUpdate Logs
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\historicalMatchingService.ts
+Added 1 line
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\historicalMatchingService.ts
+Added 4 lines
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\historicalMatchingService.ts
+Added 6 lines
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\historicalMatchingService.ts
+Modified
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\historicalMatchingService.ts
+Added 1 line
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\historicalMatchingService.ts
+Modified
+Update Todos
+
+Analysiere Log-Quellen im Codebase
+
+Erweitere logConfig.ts mit neuen Optionen
+
+Optimiere CustomerCache Logs (Cache HIT Spam)
+
+Optimiere FollowMee Service Logs
+
+Optimiere BatchLogger Logs
+
+Optimiere HistoricalMatching Logs
+
+Optimiere googleSheets bulkUpdate Logs
+Grep "bulkUpdateResidentsInDataset" (in c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\googleSheets.ts)
+62 lines of output
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\googleSheets.ts (lines 1081-1150)
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\googleSheets.ts
+Removed 9 lines
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\googleSheets.ts
+Modified
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\googleSheets.ts
+Added 2 lines
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\googleSheets.ts
+Removed 1 line
+Update Todos
+
+Analysiere Log-Quellen im Codebase
+
+Erweitere logConfig.ts mit neuen Optionen
+
+Optimiere CustomerCache Logs (Cache HIT Spam)
+
+Optimiere FollowMee Service Logs
+
+Optimiere BatchLogger Logs
+
+Optimiere HistoricalMatching Logs
+
+Optimiere googleSheets bulkUpdate Logs
+Die Log-Optimierung ist abgeschlossen. Hier ist eine Zusammenfassung der Änderungen:
+Zusammenfassung der Log-Optimierungen
+Neue Konfiguration in logConfig.ts
+Ich habe die zentrale Log-Konfiguration um folgende Optionen erweitert:
+Modul	Option	Standard	Beschreibung
+CUSTOMER_CACHE	logEveryHit	false	Cache HIT Logs (vorher: 100+ Logs pro Request)
+CUSTOMER_CACHE	logMiss	true	Nur bei Cache-Miss loggen
+FOLLOWMEE	logPerUserDetails	false	Details pro User bei Sync
+FOLLOWMEE	logDeviceMappings	false	Device-Mappings bei Startup
+FOLLOWMEE	logSyncSummary	true	Nur Zusammenfassung
+BATCH_LOGGER	logFlushDetails	false	Details pro Queue-Flush
+HISTORICAL_MATCHING	logDetailedResults	false	Detaillierte Match-Listen
+DATASET_CACHE	logUpdates	false	Jedes Dataset-Update
+DATA_CLEANING	logHouseNumberExtraction	false	Hausnummer-Extraktionen
+Reduzierte Log-Ausgabe
+Vorher (typisches Beispiel):
+✅ [CustomerCache] Cache HIT - Using cached customer data (2845 customers, age: 5s/300s)
+✅ [CustomerCache] Cache HIT - Using cached customer data (2845 customers, age: 6s/300s)
+... (100+ Wiederholungen)
+[FollowMee] Found 48 existing FollowMee entries in SQLite for Leon
+[FollowMee] Found 23 existing FollowMee entries in Sheets for Leon
+[FollowMee] Total unique existing FollowMee entries: 48 for Leon
+[FollowMee] 0 new locations to import for Leon
+[BatchLogger] Flushing 3 user queue(s)...
+[BatchLogger] Flushing 5 logs for user_123...
+[BatchLogger] Successfully flushed logs for user_123
+[bulkUpdateResidentsInDataset] BEFORE update: {...JSON...}
+[bulkUpdateResidentsInDataset] AFTER update: {...JSON...}
+Nachher:
+[FollowMee] ✅ Periodic sync: 12 new locations for 2 users
+[BatchLogger] Flushed 15 logs from 3 queue(s)
+[bulkUpdate] dataset_abc: 5 residents updated
+Geänderte Dateien
+server/config/logConfig.ts - Erweiterte Konfiguration
+server/storage.ts - CustomerCache Logs
+server/services/followMeeApi.ts - FollowMee Sync Logs
+server/services/batchLogger.ts - BatchLogger Logs
+server/services/historicalMatchingService.ts - Matching Logs
+server/services/googleSheets.ts - DatasetCache & bulkUpdate Logs
+Debug-Modus aktivieren
+Falls du detaillierte Logs für Debugging brauchst, kannst du in logConfig.ts einzelne Optionen auf true setzen:
+CUSTOMER_CACHE: {
+  logEveryHit: true,  // Für Cache-Debugging
+  // ...
+}

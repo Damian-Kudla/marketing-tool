@@ -196,6 +196,23 @@ export default function AdminDashboard() {
     };
   }, [showRouteReplay]);
 
+  // Close route replay modal on ESC key press
+  useEffect(() => {
+    if (!showRouteReplay) return;
+
+    const handleEscKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowRouteReplay(false);
+        setRouteData(null);
+        setSelectedUserId(null);
+        setSelectedUsername(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleEscKey);
+    return () => window.removeEventListener('keydown', handleEscKey);
+  }, [showRouteReplay]);
+
   // Redirect if not admin
   useEffect(() => {
     if (isAdmin === false) {

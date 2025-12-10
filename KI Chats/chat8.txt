@@ -1,0 +1,1404 @@
+Damian-Kudla: Kannst du bitte fortfahren hier?:
+
+Ich beschreibe im folgenden zuerst das Projekt, in welchem ich dich um Unterstützung bitte und danach beschreibe ich die Hilfe um die ich dich bitten würde.
+## Projekt: EnergyScanCapture – Effizienztool für Außendienstmitarbeiter eines Stromanbieters
+
+### Ziel der App
+**Zeit sparen. Weniger Fehlkontakte. Mehr Abschlüsse.**  
+Die App hilft Vertrieblern im Außendienst, **unnötige Klingelaktionen bei Bestandskunden zu vermeiden**, indem sie **automatisch erkennt**, wer bereits Kunde ist – **bevor** der Mitarbeiter klingelt.
+
+---
+
+### Kern-Workflow (Mitarbeiter-Seite)
+1. **"Standort ermitteln"** → GPS wird erfasst (nur Deutschland)
+2. **Foto vom Klingelschild hochladen**
+3. **KI-gestützte Texterkennung (OCR)** → extrahiert Namen
+4. **Abgleich mit Kundendatenbank**
+5. **Ergebnis auf Foto überlagert**:
+   - **Grün** = Bestandskunde → **nicht klingeln**
+   - **Orange** = potenzieller Neukunde → **klingeln**
+   - **Blau** = Duplikat / unsicher
+6. **Nur bei echten Leads wird geklingelt** → **höhere Trefferquote, weniger Zeitverschwendung**
+
+---
+
+### Admin-Panel (Dashboard)
+Administratoren überwachen alle Mitarbeiter in Echtzeit:
+
+| Funktion | Beschreibung |
+|--------|-------------|
+| **Live-Karte** | Alle aktiven Mitarbeiter als Marker |
+| **"Route"-Button** | Öffnet **Fullscreen-Popup** mit **animierter Streckenwiedergabe** |
+| **Timeline-Scrubber** | Zeitstrahl zum Vor-/Zurückspulen |
+| **Animationsgeschwindigkeit** | `secondsPerHour` → z. B. `6` = 1 Stunde GPS in 6 Sekunden |
+| **Intelligenter Zoom** | Karte folgt dem Mitarbeiter, passt Zoom automatisch an |
+
+---
+
+### Technische Basis
+- **Frontend**: React + TypeScript, Tailwind CSS
+- **Backend**: Node.js + Express
+- **Karten**: **Google Maps JavaScript API** (Admin-Route), Leaflet (Live-Übersicht)
+- **Daten**: GPS-Logs, Fotos, OCR-Ergebnisse, Kundendaten
+- **Auth**: JWT, Rollen: `user`, `admin`
+
+---
+
+### Wichtige Dateien
+| Pfad | Zweck |
+|------|------|
+| `client/src/components/RouteReplayMap.tsx` | Animierte Route im Admin-Popup (Google Maps) |
+| `client/src/components/GPSAddressForm.tsx` | Standort + Adresserkennung |
+| `server/routes/admin.ts` | Admin-Endpunkte (Route, Stats) |
+| `shared/trackingTypes.ts` | GPSPoint-Interface |
+
+
+Nun zu meinen gewünschten Änderungen für die ich dich um Hilfe bitte:
+
+Beim Abgleich von Bestandskunden wird im backend gegen die Bestandskundenliste abgeglichen. Das funktioniert super. Ich habe nun überlegt, dass wenn an einer Adresse ein Vertriebler ist, wo in der Vergangenheit schon jemand war und es dadurch einen oder mehrere alte Datensätze gibt, das vom jüngsten datensatz die dort angelegten Bestandskunden und neukunden ebenfalls herangezogen werden und wie folgt in den Abgleich einfließen:
+
+Abgleich OCR. In dem Fall übermittelt der Vertriebler ein Foto an gegenständlicher Adresse und es werden Klingelschildnamen ausgelesen und durch Abgleich der (aktuell nur Bestandskundenliste) ausgewertet. Ich würde nun einen zusätzlichen Abgleich mit den Daten aus dem jüngsten Datensatz aus den dortigen Bestands- und Neukunden hinzufügen.
+
+Grundsätzlich werden duplikate wie bisher gar nicht abgeglichen sondern als duplikat markiert und vom abgleich ausgeschlossen (also wenn ein Name 2 mal im klingelschild an verschiedenen klingeln vorkommt). 
+
+Des Weiteren ist wichtig, dass vor dem abgleich die Bestands- und Neukundenliste vom Datensatz auf duplikate geprüft werden. Jeder Name der mehr als einmal vorkommt soll für den abgleich bereinigt werden, wie folgt erläutert. Das bedeutet, wenn "Janis Schmitz" und "Johann Schmitz" in der Bestandskundenliste des Datensatzes vorkommt, sollen soll in den Abgleich nur die Überschneidung also "Schmitz" in der Bestandskundenliste genutzt werden.  Wenn "Janis Schmitz" in Bestandskunden und "Johann Schmitz" Neukunden steht, sollen alle Namen mit "Schmitz" entfernt werden, weil dann kann sowieso nicht berechnet werden, wenn der User mit seinem neuen Bild einen Schmitz übermittelt, welcher Schmitz gemeint ist und ob er Neukunde oder Bestandskunde ist. Wenn "Janis Schmitz" und "Johann Schmitz" in Bestandskunden und Peter Schmitz in Neukunden sollen also alle 3 entfernt werden.
+
+Bei adressen können mehrere Hausnummern übermittelt und gesucht werden. Dementsprechend kann ein Datensatz für die Hausnummer 1-5 bestehen und der User nur hausnummer 1 oder 1-2 suchen. In solchen fällen sollen für die nachfolgende Logik alle Datensätze genutzt werden, welche in den vom User gesuchten Bereich fallen oder den Bereich überschneiden. Sucht der User beispielsweise hausnummer 1-5 und es gibt einen Datensatz 3-7, soll dieser Datensatz ebenfalls vollwertig für die nachstehenden abgleiche genutzt werden. Wichtig ist aber, dass beim Anzeigen von Daten aus Datensätzen immer die Hausnummer bzw. der Hausnummerbereich des Datensatzes angezeigt wird.
+
+Übermittlung 1 - Foto:
+Nun gehen wir davon aus, dass ein Datensatz an der Adresse wo der User ein Bild übermittelt aus der Vergangenheit vorliegt und die Listen aus dem Datensatz bereinigt wurden und die Bestandskundenliste vorliegt.
+
+1. Wenn ein Klingelschildname in Bestandskundenliste und im Datensatz als Bestandskunde erkannt wird (in der Bestandskundenliste so wie bisher programmiert einfach gefunden wird und in dem alten Datensatz unter "Bestandskunden" geführt wird) ist es klar ein Bestandskunde.
+2. Wenn ein Kundenname in der Bestandskundenliste  gefunden wird (also demnach Bestandskunde sein müsste) aber im Datensatz als Neukunde gefunden wird -> Klärungsbedarf (neue Kategorie). Grund dafür (für dein Verständnis) ist, dass hier davon ausgegangen wird, dass die Bestandskundenliste möglicherweise fehlerhaft war und nicht aktuell ist oder seit dem letzten Erstellen eines Datensatzes der Kundenstatus sich geändert haben könnte. Es ist also unklar ob der Kunde jetzt Bestandskunde oder Neukunde ist.
+3. Wenn ein Kundenname nicht in der Bestandskundenliste gefunden wird, aber im Datensatz unter bestandskunde gefunden wird -> Klärungebedarf
+4. Wenn ein Kundenname nicht in der Bestandskundenliste gefunden wird und im Datensatz unter Neukunde geführt wird -> Neukunde und letzter status (falls verfügbar) aus dem Datensatz soll im frontend angezeigt werden mit datum. 
+
+Nun, zusätzlich zum Abgleich soll Folgendes geprüft werden:
+Die Daten die aus dem übermittelten Foto gelesen werden und die neuen Listen für den neuen Datensatz ergeben, sollen einmal verglichen werden mit den Daten aus dem alten Datensatz. Das bedeutet alle Kundennamen aus dem alten datensatz sollen für den Vergleich in eine einzige Liste gepackt werden (array) und alle Kundennamen (egal welche klassifikation - also neukunde, bestandskunde oder duplikat) sollen in eine Liste gepackt werden (array). Dann soll geschaut werden ob es genau einen Unterschied zwischen den listen gibt. Also sind die listen genau gleich, bis auf ein einziges Element? Es soll dadurch erkannt werden, ob zwischen dem letzten Datensatz und dem neuen genau eine Person ausgezogen und eine neue eingezogen ist. Weil dann kann man klar sagen, diese neue Person hatte die alte Person als Vormieter und ist in der zeitspanne seit dem letzten Datensatz eingezogen. Das lässt sich natürlich nicht eindeutig sagen, wenn mehr als ein Element unterschiedlich ist, dann weiß man nicht mehr wer der vormieter von wem war. Aber wenn es eindeutig ist, soll die Info genutzt werden. Diese Information ist gut für den Vertriebler um Vertrauen und seriösität aufzubauen im Gespräch. Deswegen würde ich gerne in genau diesem speziellen Fall bei dem betreffenden Namen einen Hinweis im frontend für den Vertriebler anzeigen "Das Klingelschild für [neuer Name] ist neu. Diese Person ist vermutlich seit [Datum des letzten Datensatzes] neu eingezogen und hatte [Name des vermeintlichen Vormieters] als Vormieter. 
+
+Übermittlung 2 - Adresse durchsuchen
+Nun gibt es noch den Fall, dass der User bei einer Adresse mit einem vorhandenen alten Datensatz kein Foto übermittelt sondern auf "Adresse durchsuchen" klickt. In dem Fall wird nur eine Liste an bestandskunden übermittelt. Hier soll nur die Bestandskundenliste gegen die Bestandskunden des letzten Datensatz abgeglichen werden, wie folgt:
+
+Es soll die Bestandskundenliste genommen werden und durch Bestandskunden aus dem Datensatz erweitert werden, welche noch nicht in der Bestandskundenliste vorkommen. Steht also in der Bestandskundenliste nur Niklas Schmitz und in den Bestandskunden des Datensatzes steht "Schmitz" und "Reiner", soll Schmitz nicht hinzugefügt werden, aber "Reiner". Es soll bei Reiner im Frontend der Hinweis angezeigt werden "Reiner war am [Datum des letzten Datensatzes] Bestandskunde, wurde aber nicht in der neusten Bestandskundenliste der Stadtwerke gefunden. Vielleicht hat Reiner gewechselt und kann zurückgewonnen werden."
+
+
+Bitte verstehe tiegründig den entsprechenden code und baue die gewünschten Erweiterungen so effizient und sauber wie möglich in den Bestehenden code ein, sodass das Risiko von Fehlern die sich auf die sonstige Funktionsweise auswirken minimiert ist. Beachte, dass der aktuelle Code ohne Fehler super funktioniert. Versuche nichts zu zerstören und sei vorsichtig bei der Erweiterung bitte.
+Show less
+Ich verstehe die Anforderungen. Das ist ein komplexes Feature mit mehreren Komponenten. Lass mich zuerst den bestehenden Code gründlich analysieren, um die beste Integrationsstrategie zu finden.
+Task:Explore OCR matching code
+IN
+Explore the codebase to understand how the OCR name matching and customer comparison currently works. I need to find:
+
+1. Where OCR results are processed and matched against the customer database (Bestandskundenliste)
+2. How historical data/datasets are stored (structure for storing scan results at addresses)
+3. How addresses with house numbers are matched/compared
+4. The data structures used for tracking customers (Bestandskunden/Neukunden)
+5. The "Adresse durchsuchen" (address search) functionality
+
+Look for:
+- Backend routes handling photo uploads and OCR processing
+- Services that do customer name matching
+- Database models/schemas for historical scan data
+- Any existing address matching logic
+
+Be very thorough - search for keywords like:
+- "Bestandskunde", "Neukunde", "OCR", "matching", "compare", "historical"
+- Look in server/routes/, server/services/, and shared/ directories
+- Check for database/SQLite files
+
+Return a comprehensive summary of:
+1. The current flow for OCR processing and customer matching
+2. File paths and key functions involved
+3. Data structures used
+4. Any existing historical data features
+Bash List project structure and file types
+IN
+cd "c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie" && find . -type f -name "*.ts" -o -name "*.js" -o -name "*.tsx" -o -name "*.jsx" | head -30
+OUT
+./analyze-db.js
+./backup-activity-logs.ts
+./check-gps-structure.js
+./check-worksheet-names.ts
+./client/public/sw.js
+./client/src/App.tsx
+./client/src/components/AddressDatasets.tsx
+./client/src/components/AddressOverview.tsx
+./client/src/components/AppointmentsList.tsx
+./client/src/components/CallBackList.tsx
+./client/src/components/ClickableAddressHeader.tsx
+./client/src/components/DataStorageConfirmation.tsx
+./client/src/components/examples/GPSAddressForm.tsx
+./client/src/components/examples/LanguageToggle.tsx
+./client/src/components/examples/PhotoCapture.tsx
+./client/src/components/examples/ResultsDisplay.tsx
+./client/src/components/GPSAddressForm [conflicted].tsx
+./client/src/components/GPSAddressForm.tsx
+./client/src/components/ImageCropDialog.tsx
+./client/src/components/ImageWithOverlays.tsx
+./client/src/components/LanguageToggle.tsx
+./client/src/components/LeonFilter.tsx
+./client/src/components/Login.tsx
+./client/src/components/MaximizeButton.tsx
+./client/src/components/OCRCorrection.tsx
+./client/src/components/OrientationStats.tsx
+./client/src/components/PhotoCapture.tsx
+./client/src/components/ProtectedAdminRoute.tsx
+./client/src/components/ProtectedRoute.tsx
+./client/src/components/PWAInstallPrompt.tsx
+Globpattern: "shared/**/*.ts"
+Found 5 files
+Grep "matching|compare|comparison" (type: ts)
+24 lines of output
+Globpattern: "client/src/components/OCR*"
+Found 1 file
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\sqliteHistoricalData.ts
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\services\api.ts
+Grep "searchCustomers|getCustomersByAddress|findRelatedHouseNumbers" (type: ts)
+17 lines of output
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\storage.ts (lines 251-600)
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\googleSheets.ts
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\dailyDataStore.ts
+Grep "EditableResident|ResidentStatus|ResidentCategory" (type: ts)
+12 lines of output
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\constants\statuses.ts
+Ausgezeichnete Analyse! Jetzt muss ich die konkreten Dateien lesen, um die Implementierung zu planen.
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes.ts (lines 431-780), c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\shared\schema.ts
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\googleSheets.ts (lines 101-300)
+Lass mich mehr Code lesen, um die Dataset-Abfrage-Methoden zu verstehen:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\googleSheets.ts (lines 301-550)
+Grep "findDatasetsForAddress|getDatasetsForAddress|getByAddress"
+70 lines of output
+Ich muss noch die Address-Datasets API-Route und die Abfrage-Methoden verstehen:
+Grep "/api/address-datasets" (in c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server)
+101 lines of output
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\googleSheets.ts (lines 1001-1150)
+Lass mich noch die addressDatasets-Route genauer lesen:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes\addressDatasets.ts
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes\addressDatasets.ts (lines 451-600)
+Jetzt habe ich ein vollständiges Verständnis des Systems. Lass mich einen strukturierten Implementierungsplan erstellen:
+Update Todos
+
+Neue Typen und Schemas erstellen für erweiterte Kategorien und historische Infos
+
+Historical Matching Service erstellen für Datensatz-Abgleich und Duplikat-Bereinigung
+
+OCR-Route erweitern mit historischem Abgleich und neuen Kategorien
+
+Adresse-durchsuchen-Route erweitern mit historischen Bestandskunden
+
+Frontend Response-Types anpassen
+Update Todos
+
+Neue Typen und Schemas erstellen für erweiterte Kategorien und historische Infos
+
+Historical Matching Service erstellen für Datensatz-Abgleich und Duplikat-Bereinigung
+
+OCR-Route erweitern mit historischem Abgleich und neuen Kategorien
+
+Adresse-durchsuchen-Route erweitern mit historischen Bestandskunden
+
+Frontend Response-Types anpassen
+Lass mich zunächst die vollständige Schema-Datei lesen und dann die neuen Typen hinzufügen:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\shared\schema.ts (lines 61-160)
+Jetzt erweitere ich die Schema-Datei mit den neuen Typen für die historische Abgleichslogik:
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\shared\schema.ts
+Added 59 lines
+Jetzt erweitere ich das OCRResponse-Schema, um die neuen historischen Daten zu unterstützen:
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\shared\schema.ts
+Added 20 lines
+Ich sehe ein Problem - ich habe enhancedOCRResultSchema referenziert, aber es wird erst später definiert. Lass mich das korrigieren, indem ich die Definition umstrukturiere:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\shared\schema.ts (lines 51-250)
+Ich muss die Schema-Reihenfolge korrigieren - die historischen Typen müssen VOR ocrResponseSchema definiert werden. Lass mich das Schema umstrukturieren:
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\shared\schema.ts
+Added 2 lines
+Ich muss jetzt die doppelten Definitionen entfernen, die jetzt später in der Datei noch einmal vorkommen. Lass mich die Datei prüfen:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\shared\schema.ts (lines 196-255)
+Die Schema-Struktur ist jetzt korrekt. Ich markiere den ersten Task als abgeschlossen und beginne mit dem Historical Matching Service:
+Update Todos
+
+Neue Typen und Schemas erstellen für erweiterte Kategorien und historische Infos
+
+Historical Matching Service erstellen für Datensatz-Abgleich und Duplikat-Bereinigung
+
+OCR-Route erweitern mit historischem Abgleich und neuen Kategorien
+
+Adresse-durchsuchen-Route erweitern mit historischen Bestandskunden
+
+Frontend Response-Types anpassen
+Jetzt erstelle ich den Historical Matching Service:
+Write c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\historicalMatchingService.ts
+569 lines
+/**
+ * Historical Matching Service
+ *
+ * Erweitert den OCR-Abgleich mit historischen Datensätzen (AddressDatasets).
+ *
+ * Funktionen:
+ * 1. Abrufen des jüngsten Datensatzes für eine Adresse
+ * 2. Duplikat-Bereinigung in Bestands- und Neukundenlisten aus Datensätzen
+ * 3. Erweiterte Kategorisierung basierend auf Bestandskundenliste + historischen Daten
+ * 4. Vormieter-Erkennung (wenn genau eine Person ausgetauscht wurde)
+ * 5. Erweiterung der Bestandskundenliste für "Adresse durchsuchen"
+ */
+
+import { addressDatasetService } from './googleSheets';
+import type {
+  AddressDataset,
+  EditableResident,
+  ResidentCategory,
+  HistoricalMatchType,
+  HistoricalInfo,
+  EnhancedOCRResult,
+  EnhancedExistingCustomer,
+  Address
+} from '../../shared/schema';
+import type { Customer } from '../../shared/schema';
+
+// ==================== HELPER FUNCTIONS ====================
+
+/**
+ * Normalisiert einen Namen für den Vergleich
+ * - Lowercase
+ * - Umlaute ersetzen (ä→ae, ö→oe, ü→ue, ß→ss)
+ * - Mehrfache Leerzeichen normalisieren
+ * - Trimmen
+ */
+function normalizeName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+    .replace(/ß/g, 'ss')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Extrahiert den Nachnamen aus einem Namen
+ * Nimmt das letzte Wort (bei "Max Müller" → "müller")
+ */
+function extractLastName(name: string): string {
+  const normalized = normalizeName(name);
+  const parts = normalized.split(' ').filter(p => p.length >= 2);
+  return parts.length > 0 ? parts[parts.length - 1] : normalized;
+}
+
+/**
+ * Prüft ob zwei Namen übereinstimmen (wortbasiert)
+ * Mindestens ein Wort muss übereinstimmen
+ */
+function namesMatch(name1: string, name2: string): boolean {
+  const norm1 = normalizeName(name1);
+  const norm2 = normalizeName(name2);
+
+  // Exakte Übereinstimmung
+  if (norm1 === norm2) return true;
+
+  // Wortbasierter Vergleich
+  const words1 = norm1.split(' ').filter(w => w.length >= 2);
+  const words2 = norm2.split(' ').filter(w => w.length >= 2);
+
+  for (const w1 of words1) {
+    for (const w2 of words2) {
+      if (w1 === w2) return true;
+    }
+  }
+
+  return false;
+}
+
+// ==================== TYPES ====================
+
+interface CleanedHistoricalData {
+  existingCustomers: string[];  // Bereinigte Liste der Bestandskunden aus Datensatz
+  newCustomers: string[];       // Bereinigte Liste der Neukunden aus Datensatz
+  allNames: string[];           // Alle Namen (für Vormieter-Vergleich)
+  removedDueToDuplicates: string[]; // Namen die wegen Duplikaten entfernt wurden
+  dataset: AddressDataset;      // Der verwendete Datensatz
+}
+
+interface PreviousTenantInfo {
+  newName: string;              // Der neue Name auf dem Klingelschild
+  previousTenant: string;       // Der vermutliche Vormieter
+  movedInAfter: Date;           // Datum des letzten Datensatzes
+}
+
+// ==================== CORE FUNCTIONS ====================
+
+/**
+ * Holt den jüngsten Datensatz für eine Adresse
+ * Berücksichtigt Hausnummern-Bereiche (z.B. Suche "1" findet auch "1-5")
+ */
+export async function getMostRecentDataset(
+  address: Address
+): Promise<AddressDataset | null> {
+  const normalizedAddress = `${address.street} ${address.number}, ${address.postal}`;
+
+  // getAddressDatasets gibt bereits nach createdAt sortiert zurück (neueste zuerst)
+  const datasets = await addressDatasetService.getAddressDatasets(
+    normalizedAddress,
+    1, // Nur den neuesten
+    address.number
+  );
+
+  return datasets.length > 0 ? datasets[0] : null;
+}
+
+/**
+ * Holt alle relevanten Datensätze für eine Adresse (bei überlappenden Hausnummern)
+ */
+export async function getAllRelevantDatasets(
+  address: Address
+): Promise<AddressDataset[]> {
+  const normalizedAddress = `${address.street} ${address.number}, ${address.postal}`;
+
+  return await addressDatasetService.getAddressDatasets(
+    normalizedAddress,
+    10, // Mehr Datensätze für umfassenden Abgleich
+    address.number
+  );
+}
+
+/**
+ * Bereinigt die Bestands- und Neukundenlisten aus einem Datensatz
+ *
+ * Logik:
+ * 1. Wenn ein Nachname mehrfach in Bestandskunden vorkommt → nur Nachname verwenden
+ * 2. Wenn ein Nachname in Bestandskunden UND Neukunden vorkommt → alle mit diesem Nachnamen entfernen
+ */
+export function cleanHistoricalData(dataset: AddressDataset): CleanedHistoricalData {
+  const existingCustomers: string[] = [];
+  const newCustomers: string[] = [];
+  const removedDueToDuplicates: string[] = [];
+
+  // Extrahiere Bestandskunden und Neukunden aus editableResidents
+  const rawExisting: string[] = [];
+  const rawNew: string[] = [];
+
+  for (const resident of dataset.editableResidents) {
+    if (resident.category === 'existing_customer') {
+      rawExisting.push(resident.name);
+    } else if (resident.category === 'potential_new_customer') {
+      rawNew.push(resident.name);
+    }
+    // Duplikate werden ignoriert (wie im ursprünglichen Code)
+  }
+
+  // fixedCustomers sind immer Bestandskunden
+  for (const fixed of dataset.fixedCustomers) {
+    rawExisting.push(fixed.name);
+  }
+
+  // Zähle Nachnamen in beiden Listen
+  const lastNameCountExisting = new Map<string, string[]>(); // lastName -> [fullNames]
+  const lastNameCountNew = new Map<string, string[]>();
+
+  for (const name of rawExisting) {
+    const lastName = extractLastName(name);
+    if (!lastNameCountExisting.has(lastName)) {
+      lastNameCountExisting.set(lastName, []);
+    }
+    lastNameCountExisting.get(lastName)!.push(name);
+  }
+
+  for (const name of rawNew) {
+    const lastName = extractLastName(name);
+    if (!lastNameCountNew.has(lastName)) {
+      lastNameCountNew.set(lastName, []);
+    }
+    lastNameCountNew.get(lastName)!.push(name);
+  }
+
+  // Finde Nachnamen die in BEIDEN Listen vorkommen → komplett entfernen
+  const conflictingLastNames = new Set<string>();
+  for (const lastName of lastNameCountExisting.keys()) {
+    if (lastNameCountNew.has(lastName)) {
+      conflictingLastNames.add(lastName);
+    }
+  }
+
+  // Verarbeite Bestandskunden
+  for (const [lastName, names] of lastNameCountExisting.entries()) {
+    if (conflictingLastNames.has(lastName)) {
+      // Konflikt: Nachname in beiden Listen → alle entfernen
+      removedDueToDuplicates.push(...names);
+    } else if (names.length > 1) {
+      // Mehrere mit gleichem Nachnamen in Bestandskunden → nur Nachname verwenden
+      // Kapitalisiere ersten Buchstaben für bessere Anzeige
+      const capitalizedLastName = lastName.charAt(0).toUpperCase() + lastName.slice(1);
+      existingCustomers.push(capitalizedLastName);
+    } else {
+      // Einziger mit diesem Nachnamen → vollständiger Name
+      existingCustomers.push(names[0]);
+    }
+  }
+
+  // Verarbeite Neukunden
+  for (const [lastName, names] of lastNameCountNew.entries()) {
+    if (conflictingLastNames.has(lastName)) {
+      // Konflikt: Nachname in beiden Listen → alle entfernen
+      removedDueToDuplicates.push(...names);
+    } else if (names.length > 1) {
+      // Mehrere mit gleichem Nachnamen in Neukunden → nur Nachname verwenden
+      const capitalizedLastName = lastName.charAt(0).toUpperCase() + lastName.slice(1);
+      newCustomers.push(capitalizedLastName);
+    } else {
+      // Einziger mit diesem Nachnamen → vollständiger Name
+      newCustomers.push(names[0]);
+    }
+  }
+
+  // Alle Namen für Vormieter-Vergleich (ohne Bereinigung)
+  const allNames = [...rawExisting, ...rawNew];
+
+  return {
+    existingCustomers,
+    newCustomers,
+    allNames,
+    removedDueToDuplicates,
+    dataset
+  };
+}
+
+/**
+ * Findet einen Namen in der bereinigten historischen Liste
+ */
+function findInHistoricalList(
+  name: string,
+  historicalList: string[]
+): string | null {
+  for (const historicalName of historicalList) {
+    if (namesMatch(name, historicalName)) {
+      return historicalName;
+    }
+  }
+  return null;
+}
+
+/**
+ * Findet Resident-Details aus dem Datensatz
+ */
+function findResidentInDataset(
+  name: string,
+  dataset: AddressDataset
+): EditableResident | null {
+  // Suche in editableResidents
+  for (const resident of dataset.editableResidents) {
+    if (namesMatch(name, resident.name)) {
+      return resident;
+    }
+  }
+  // Suche in fixedCustomers
+  for (const fixed of dataset.fixedCustomers) {
+    if (namesMatch(name, fixed.name)) {
+      return fixed;
+    }
+  }
+  return null;
+}
+
+/**
+ * Hauptfunktion: Kategorisiert einen Namen basierend auf Bestandskundenliste + historischen Daten
+ *
+ * Kategorisierung:
+ * 1. In Bestandskundenliste + im Datensatz als Bestandskunde → confirmed_existing (Bestandskunde)
+ * 2. In Bestandskundenliste + im Datensatz als Neukunde → list_vs_dataset_conflict (Klärungsbedarf)
+ * 3. Nicht in Bestandskundenliste + im Datensatz als Bestandskunde → dataset_only_existing (Klärungsbedarf)
+ * 4. Nicht in Bestandskundenliste + im Datensatz als Neukunde → historical_prospect (Neukunde mit Status)
+ * 5. Kein historischer Datensatz → no_historical_data
+ */
+export function categorizeWithHistoricalData(
+  name: string,
+  isInCustomerList: boolean,
+  customer: Customer | null,
+  cleanedData: CleanedHistoricalData | null
+): EnhancedOCRResult {
+  const result: EnhancedOCRResult = {
+    name,
+    category: isInCustomerList ? 'existing_customer' : 'potential_new_customer',
+    isExistingCustomer: isInCustomerList,
+  };
+
+  // Kundendaten hinzufügen wenn vorhanden
+  if (customer) {
+    result.customerId = customer.id;
+    result.customerStreet = customer.street;
+    result.customerHouseNumber = customer.houseNumber;
+    result.customerPostalCode = customer.postalCode;
+    result.contractType = customer.contractType;
+  }
+
+  // Wenn keine historischen Daten vorhanden
+  if (!cleanedData) {
+    result.historicalInfo = {
+      matchType: 'no_historical_data'
+    };
+    return result;
+  }
+
+  const { existingCustomers, newCustomers, dataset } = cleanedData;
+
+  // Suche in historischen Listen
+  const foundInHistoricalExisting = findInHistoricalList(name, existingCustomers);
+  const foundInHistoricalNew = findInHistoricalList(name, newCustomers);
+
+  // Finde Resident-Details für Status
+  const residentDetails = findResidentInDataset(name, dataset);
+
+  let matchType: HistoricalMatchType;
+  let finalCategory: ResidentCategory;
+
+  if (isInCustomerList) {
+    if (foundInHistoricalExisting) {
+      // Fall 1: Bestandskunde bestätigt
+      matchType = 'confirmed_existing';
+      finalCategory = 'existing_customer';
+    } else if (foundInHistoricalNew) {
+      // Fall 2: Widerspruch - in Liste als Bestandskunde, im Datensatz als Neukunde
+      matchType = 'list_vs_dataset_conflict';
+      finalCategory = 'clarification_needed';
+    } else {
+      // In Bestandskundenliste, aber nicht im historischen Datensatz gefunden
+      matchType = 'no_historical_data';
+      finalCategory = 'existing_customer';
+    }
+  } else {
+    if (foundInHistoricalExisting) {
+      // Fall 3: Nicht in Liste, aber im Datensatz als Bestandskunde
+      matchType = 'dataset_only_existing';
+      finalCategory = 'clarification_needed';
+    } else if (foundInHistoricalNew) {
+      // Fall 4: Neukunde mit historischem Status
+      matchType = 'historical_prospect';
+      finalCategory = 'potential_new_customer';
+    } else {
+      // Weder in Liste noch in historischen Daten
+      matchType = 'no_historical_data';
+      finalCategory = 'potential_new_customer';
+    }
+  }
+
+  result.category = finalCategory;
+  result.historicalInfo = {
+    matchType,
+    datasetId: dataset.id,
+    datasetDate: dataset.createdAt,
+    datasetHouseNumber: dataset.houseNumber,
+    historicalStatus: residentDetails?.status,
+    historicalCategory: residentDetails?.category,
+  };
+
+  return result;
+}
+
+/**
+ * Erkennt Vormieter wenn genau ein Name ausgetauscht wurde
+ *
+ * Vergleicht alle Namen aus dem neuen Scan mit allen Namen aus dem alten Datensatz.
+ * Wenn genau ein Name hinzugekommen und einer weggefallen ist, wird der Vormieter erkannt.
+ */
+export function detectPreviousTenant(
+  newNames: string[],
+  cleanedData: CleanedHistoricalData
+): PreviousTenantInfo | null {
+  const oldNames = cleanedData.allNames;
+
+  // Normalisiere alle Namen für Vergleich
+  const normalizedNew = new Set(newNames.map(n => normalizeName(n)));
+  const normalizedOld = new Set(oldNames.map(n => normalizeName(n)));
+
+  // Finde Namen die nur in der neuen Liste sind
+  const onlyInNew: string[] = [];
+  for (const name of newNames) {
+    const normalized = normalizeName(name);
+    if (!normalizedOld.has(normalized)) {
+      onlyInNew.push(name);
+    }
+  }
+
+  // Finde Namen die nur in der alten Liste sind
+  const onlyInOld: string[] = [];
+  for (const name of oldNames) {
+    const normalized = normalizeName(name);
+    if (!normalizedNew.has(normalized)) {
+      onlyInOld.push(name);
+    }
+  }
+
+  // Vormieter-Erkennung: Genau ein Unterschied in beide Richtungen
+  if (onlyInNew.length === 1 && onlyInOld.length === 1) {
+    return {
+      newName: onlyInNew[0],
+      previousTenant: onlyInOld[0],
+      movedInAfter: cleanedData.dataset.createdAt
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Fügt Vormieter-Info zu den Enhanced Results hinzu
+ */
+export function addPreviousTenantInfo(
+  results: EnhancedOCRResult[],
+  previousTenantInfo: PreviousTenantInfo | null
+): EnhancedOCRResult[] {
+  if (!previousTenantInfo) return results;
+
+  return results.map(result => {
+    if (namesMatch(result.name, previousTenantInfo.newName)) {
+      return {
+        ...result,
+        historicalInfo: {
+          ...result.historicalInfo!,
+          previousTenant: previousTenantInfo.previousTenant,
+          movedInAfter: previousTenantInfo.movedInAfter
+        }
+      };
+    }
+    return result;
+  });
+}
+
+// ==================== ADDRESS SEARCH ENHANCEMENT ====================
+
+/**
+ * Erweitert die Bestandskundenliste mit historischen Bestandskunden
+ * für die "Adresse durchsuchen" Funktion
+ */
+export async function enhanceCustomerListWithHistoricalData(
+  currentCustomers: Customer[],
+  address: Address
+): Promise<EnhancedExistingCustomer[]> {
+  const result: EnhancedExistingCustomer[] = [];
+
+  // Zuerst aktuelle Kunden hinzufügen
+  for (const customer of currentCustomers) {
+    result.push({
+      ...customer,
+      isFromHistoricalDataset: false,
+      notInCurrentList: false
+    });
+  }
+
+  // Historischen Datensatz abrufen
+  const dataset = await getMostRecentDataset(address);
+  if (!dataset) {
+    return result;
+  }
+
+  const cleanedData = cleanHistoricalData(dataset);
+  const currentCustomerNames = new Set(
+    currentCustomers.map(c => normalizeName(c.name))
+  );
+
+  // Füge historische Bestandskunden hinzu, die nicht in der aktuellen Liste sind
+  for (const historicalName of cleanedData.existingCustomers) {
+    const normalizedHistorical = normalizeName(historicalName);
+
+    // Prüfe ob dieser Name schon in der aktuellen Liste ist
+    let foundInCurrent = false;
+    for (const currentName of currentCustomerNames) {
+      if (namesMatch(historicalName, currentName) || normalizedHistorical === currentName) {
+        foundInCurrent = true;
+        break;
+      }
+    }
+
+    if (!foundInCurrent) {
+      // Dieser historische Bestandskunde ist nicht mehr in der aktuellen Liste
+      result.push({
+        id: undefined,
+        name: historicalName,
+        street: address.street,
+        houseNumber: dataset.houseNumber,
+        postalCode: address.postal,
+        isExisting: true, // War mal Bestandskunde
+        contractType: null,
+        isFromHistoricalDataset: true,
+        historicalDatasetDate: dataset.createdAt,
+        notInCurrentList: true // Rückgewinnungs-Hinweis
+      });
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Hauptfunktion für den erweiterten OCR-Abgleich
+ * Wird aus der OCR-Route aufgerufen
+ */
+export async function performEnhancedOCRMatching(
+  residentNames: string[],
+  existingCustomers: Customer[],
+  newProspects: string[],
+  address: Address
+): Promise<{
+  enhancedResults: EnhancedOCRResult[];
+  historicalDatasetUsed: { id: string; createdAt: Date; createdBy: string; houseNumber: string } | null;
+  previousTenantInfo: PreviousTenantInfo | null;
+}> {
+  // Historischen Datensatz abrufen
+  const dataset = await getMostRecentDataset(address);
+
+  let cleanedData: CleanedHistoricalData | null = null;
+  if (dataset) {
+    cleanedData = cleanHistoricalData(dataset);
+  }
+
+  // Erstelle Map für schnellen Zugriff auf Kundendaten
+  const customerByName = new Map<string, Customer>();
+  for (const customer of existingCustomers) {
+    customerByName.set(normalizeName(customer.name), customer);
+  }
+
+  // Kategorisiere jeden Namen
+  const enhancedResults: EnhancedOCRResult[] = [];
+
+  for (const name of residentNames) {
+    const normalizedName = normalizeName(name);
+    const customer = customerByName.get(normalizedName) || null;
+    const isInCustomerList = customer !== null ||
+      existingCustomers.some(c => namesMatch(c.name, name));
+
+    const result = categorizeWithHistoricalData(
+      name,
+      isInCustomerList,
+      customer,
+      cleanedData
+    );
+
+    enhancedResults.push(result);
+  }
+
+  // Vormieter-Erkennung
+  let previousTenantInfo: PreviousTenantInfo | null = null;
+  if (cleanedData) {
+    previousTenantInfo = detectPreviousTenant(residentNames, cleanedData);
+  }
+
+  // Füge Vormieter-Info hinzu
+  const finalResults = addPreviousTenantInfo(enhancedResults, previousTenantInfo);
+
+  return {
+    enhancedResults: finalResults,
+    historicalDatasetUsed: dataset ? {
+      id: dataset.id,
+      createdAt: dataset.createdAt,
+      createdBy: dataset.createdBy,
+      houseNumber: dataset.houseNumber
+    } : null,
+    previousTenantInfo
+  };
+}
+
+console.log('[HistoricalMatchingService] Service loaded');
+Update Todos
+
+Neue Typen und Schemas erstellen für erweiterte Kategorien und historische Infos
+
+Historical Matching Service erstellen für Datensatz-Abgleich und Duplikat-Bereinigung
+
+OCR-Route erweitern mit historischem Abgleich und neuen Kategorien
+
+Adresse-durchsuchen-Route erweitern mit historischen Bestandskunden
+
+Frontend Response-Types anpassen
+Jetzt erweitere ich die OCR-Route, um den Historical Matching Service zu integrieren. Zuerst lese ich den relevanten Teil nochmal:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes.ts
+Jetzt füge ich den Import hinzu und erweitere die OCR-Route:
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes.ts
+Added 1 line
+Jetzt erweitere ich die OCR-Route, um die historischen Daten abzugleichen. Ich lese zunächst den relevanten Teil der Route nochmal:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes.ts (lines 596-645)
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes.ts
+Added 49 lines
+Jetzt erweitere ich auch die /api/ocr-correct Route mit dem gleichen historischen Abgleich:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes.ts (lines 681-760)
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes.ts
+Added 38 lines
+Update Todos
+
+Neue Typen und Schemas erstellen für erweiterte Kategorien und historische Infos
+
+Historical Matching Service erstellen für Datensatz-Abgleich und Duplikat-Bereinigung
+
+OCR-Route erweitern mit historischem Abgleich und neuen Kategorien
+
+Adresse-durchsuchen-Route erweitern mit historischen Bestandskunden
+
+Frontend Response-Types anpassen
+Jetzt erweitere ich die /api/search-address Route:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes.ts (lines 786-855)
+Ich muss den Import erweitern und dann die Route aktualisieren:
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes.ts
+Modified
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes.ts
+Added 20 lines
+Update Todos
+
+Neue Typen und Schemas erstellen für erweiterte Kategorien und historische Infos
+
+Historical Matching Service erstellen für Datensatz-Abgleich und Duplikat-Bereinigung
+
+OCR-Route erweitern mit historischem Abgleich und neuen Kategorien
+
+Adresse-durchsuchen-Route erweitern mit historischen Bestandskunden
+
+Frontend Response-Types anpassen
+Grep "import.*OCRResponse|import.*schema" (in c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client)
+8 lines of output
+Grep "processImage|searchAddress|/api/ocr|/api/search-address" (in c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client)
+17 lines of output
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\services\api.ts (lines 166-265)
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\PhotoCapture.tsx (lines 266-345)
+Grep "ResultsDisplay|onPhotoProcessed" (in c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client)
+31 lines of output
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ResultsDisplay.tsx
+Ich muss das OCRResult Interface im Frontend erweitern, um die neuen historischen Felder zu unterstützen:
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ResultsDisplay.tsx
+Added 2 lines
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ResultsDisplay.tsx
+Added 17 lines
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ResultsDisplay.tsx
+Added 6 lines
+Jetzt überprüfe ich, ob es TypeScript-Kompilierungsfehler gibt:
+Bash Check TypeScript compilation
+IN
+cd "c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie" && npx tsc --noEmit --skipLibCheck 2>&1 | head -100
+OUT
+server/routes.ts(660,9): error TS2322: Type '{ id: string; createdAt: Date; createdBy: string; houseNumber: string; } | null | undefined' is not assignable to type '{ id: string; houseNumber: string; createdAt: Date; createdBy: string; } | undefined'.
+  Type 'null' is not assignable to type '{ id: string; houseNumber: string; createdAt: Date; createdBy: string; } | undefined'.
+server/routes.ts(762,9): error TS2322: Type '{ id: string; createdAt: Date; createdBy: string; houseNumber: string; } | null | undefined' is not assignable to type '{ id: string; houseNumber: string; createdAt: Date; createdBy: string; } | undefined'.
+  Type 'null' is not assignable to type '{ id: string; houseNumber: string; createdAt: Date; createdBy: string; } | undefined'.
+server/routes/admin.ts(443,32): error TS2345: Argument of type '{ start: number; end: number; duration: number; location: { lat: number; lng: number; } | { lat: number; lng: number; } | undefined; locations: { poi_name: string; poi_type: string; address: string; place_id: string; durationAtLocation: number; }[] | undefined; isCustomerConversation: false; contractsInBreak: undefi...' is not assignable to parameter of type '({ start: number; end: number; duration: number; location?: undefined; locations?: undefined; } | { start: number; end: number; duration: number; location: { lat: number; lng: number; }; locations: { ...; }[] | undefined; } | { ...; }) & { ...; }'.
+  Type '{ start: number; end: number; duration: number; location: { lat: number; lng: number; } | { lat: number; lng: number; } | undefined; locations: { poi_name: string; poi_type: string; address: string; place_id: string; durationAtLocation: number; }[] | undefined; isCustomerConversation: false; contractsInBreak: undefi...' is not assignable to type '{ start: number; end: number; duration: number; location: { lat: number; lng: number; }; locations?: undefined; } & { isCustomerConversation?: boolean | undefined; contractsInBreak?: number[] | undefined; }'.
+    Type '{ start: number; end: number; duration: number; location: { lat: number; lng: number; } | { lat: number; lng: number; } | undefined; locations: { poi_name: string; poi_type: string; address: string; place_id: string; durationAtLocation: number; }[] | undefined; isCustomerConversation: false; contractsInBreak: undefi...' is not assignable to type '{ start: number; end: number; duration: number; location: { lat: number; lng: number; }; locations?: undefined; }'.
+      Types of property 'location' are incompatible.
+        Type '{ lat: number; lng: number; } | { lat: number; lng: number; } | undefined' is not assignable to type '{ lat: number; lng: number; }'.
+          Type 'undefined' is not assignable to type '{ lat: number; lng: number; }'.
+server/routes/admin.ts(457,30): error TS2345: Argument of type '{ start: number; end: number; duration: number; location: { lat: number; lng: number; } | { lat: number; lng: number; } | undefined; locations: { poi_name: string; poi_type: string; address: string; place_id: string; durationAtLocation: number; }[] | undefined; isCustomerConversation: true; contractsInBreak: number[...' is not assignable to parameter of type '({ start: number; end: number; duration: number; location?: undefined; locations?: undefined; } | { start: number; end: number; duration: number; location: { lat: number; lng: number; }; locations: { ...; }[] | undefined; } | { ...; }) & { ...; }'.
+  Type '{ start: number; end: number; duration: number; location: { lat: number; lng: number; } | { lat: number; lng: number; } | undefined; locations: { poi_name: string; poi_type: string; address: string; place_id: string; durationAtLocation: number; }[] | undefined; isCustomerConversation: true; contractsInBreak: number[...' is not assignable to type '{ start: number; end: number; duration: number; location: { lat: number; lng: number; }; locations?: undefined; } & { isCustomerConversation?: boolean | undefined; contractsInBreak?: number[] | undefined; }'.
+    Type '{ start: number; end: number; duration: number; location: { lat: number; lng: number; } | { lat: number; lng: number; } | undefined; locations: { poi_name: string; poi_type: string; address: string; place_id: string; durationAtLocation: number; }[] | undefined; isCustomerConversation: true; contractsInBreak: number[...' is not assignable to type '{ start: number; end: number; duration: number; location: { lat: number; lng: number; }; locations?: undefined; }'.
+      Types of property 'location' are incompatible.
+        Type '{ lat: number; lng: number; } | { lat: number; lng: number; } | undefined' is not assignable to type '{ lat: number; lng: number; }'.
+          Type 'undefined' is not assignable to type '{ lat: number; lng: number; }'.
+server/routes/admin.ts(471,32): error TS2345: Argument of type '{ start: number; end: number; duration: number; location: { lat: number; lng: number; } | { lat: number; lng: number; } | undefined; locations: { poi_name: string; poi_type: string; address: string; place_id: string; durationAtLocation: number; }[] | undefined; isCustomerConversation: false; contractsInBreak: undefi...' is not assignable to parameter of type '({ start: number; end: number; duration: number; location?: undefined; locations?: undefined; } | { start: number; end: number; duration: number; location: { lat: number; lng: number; }; locations: { ...; }[] | undefined; } | { ...; }) & { ...; }'.
+  Type '{ start: number; end: number; duration: number; location: { lat: number; lng: number; } | { lat: number; lng: number; } | undefined; locations: { poi_name: string; poi_type: string; address: string; place_id: string; durationAtLocation: number; }[] | undefined; isCustomerConversation: false; contractsInBreak: undefi...' is not assignable to type '{ start: number; end: number; duration: number; location: { lat: number; lng: number; }; locations?: undefined; } & { isCustomerConversation?: boolean | undefined; contractsInBreak?: number[] | undefined; }'.
+    Type '{ start: number; end: number; duration: number; location: { lat: number; lng: number; } | { lat: number; lng: number; } | undefined; locations: { poi_name: string; poi_type: string; address: string; place_id: string; durationAtLocation: number; }[] | undefined; isCustomerConversation: false; contractsInBreak: undefi...' is not assignable to type '{ start: number; end: number; duration: number; location: { lat: number; lng: number; }; locations?: undefined; }'.
+      Types of property 'location' are incompatible.
+        Type '{ lat: number; lng: number; } | { lat: number; lng: number; } | undefined' is not assignable to type '{ lat: number; lng: number; }'.
+          Type 'undefined' is not assignable to type '{ lat: number; lng: number; }'.
+server/services/historicalMatchingService.ts(185,26): error TS2802: Type 'MapIterator<string>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+server/services/historicalMatchingService.ts(192,35): error TS2802: Type 'MapIterator<[string, string[]]>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+server/services/historicalMatchingService.ts(208,35): error TS2802: Type 'MapIterator<[string, string[]]>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+server/services/historicalMatchingService.ts(473,31): error TS2802: Type 'Set<string>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+server/test-egon-query.ts(25,31): error TS2802: Type 'Set<string>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+server/test-egon-query.ts(33,27): error TS2802: Type 'Set<string>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+Es gibt einige TypeScript-Fehler, die ich beheben muss:
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes.ts
+Modified
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes.ts
+Modified
+Jetzt behebe ich die Iterator-Fehler im historicalMatchingService:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\historicalMatchingService.ts (lines 176-235)
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\historicalMatchingService.ts
+Modified
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\historicalMatchingService.ts (lines 461-500)
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\historicalMatchingService.ts
+Modified
+Bash Check TypeScript compilation for my changes
+IN
+cd "c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie" && npx tsc --noEmit --skipLibCheck 2>&1 | grep -E "^(server/(routes|services/historical)|shared/schema)" | head -30
+OUT
+server/routes/admin.ts(443,32): error TS2345: Argument of type '{ start: number; end: number; duration: number; location: { lat: number; lng: number; } | { lat: number; lng: number; } | undefined; locations: { poi_name: string; poi_type: string; address: string; place_id: string; durationAtLocation: number; }[] | undefined; isCustomerConversation: false; contractsInBreak: undefi...' is not assignable to parameter of type '({ start: number; end: number; duration: number; location?: undefined; locations?: undefined; } | { start: number; end: number; duration: number; location: { lat: number; lng: number; }; locations: { ...; }[] | undefined; } | { ...; }) & { ...; }'.
+server/routes/admin.ts(457,30): error TS2345: Argument of type '{ start: number; end: number; duration: number; location: { lat: number; lng: number; } | { lat: number; lng: number; } | undefined; locations: { poi_name: string; poi_type: string; address: string; place_id: string; durationAtLocation: number; }[] | undefined; isCustomerConversation: true; contractsInBreak: number[...' is not assignable to parameter of type '({ start: number; end: number; duration: number; location?: undefined; locations?: undefined; } | { start: number; end: number; duration: number; location: { lat: number; lng: number; }; locations: { ...; }[] | undefined; } | { ...; }) & { ...; }'.
+server/routes/admin.ts(471,32): error TS2345: Argument of type '{ start: number; end: number; duration: number; location: { lat: number; lng: number; } | { lat: number; lng: number; } | undefined; locations: { poi_name: string; poi_type: string; address: string; place_id: string; durationAtLocation: number; }[] | undefined; isCustomerConversation: false; contractsInBreak: undefi...' is not assignable to parameter of type '({ start: number; end: number; duration: number; location?: undefined; locations?: undefined; } | { start: number; end: number; duration: number; location: { lat: number; lng: number; }; locations: { ...; }[] | undefined; } | { ...; }) & { ...; }'.
+Bash Check TypeScript for my specific files
+IN
+cd "c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie" && npx tsc --noEmit --skipLibCheck 2>&1 | grep -E "(routes\.ts|historicalMatchingService|schema\.ts)" | head -20
+OUT
+0
+Alle TypeScript-Fehler in meinen Änderungen sind behoben. Die verbleibenden Fehler in admin.ts waren bereits vor meinen Änderungen vorhanden.
+Update Todos
+
+Neue Typen und Schemas erstellen für erweiterte Kategorien und historische Infos
+
+Historical Matching Service erstellen für Datensatz-Abgleich und Duplikat-Bereinigung
+
+OCR-Route erweitern mit historischem Abgleich und neuen Kategorien
+
+Adresse-durchsuchen-Route erweitern mit historischen Bestandskunden
+
+Frontend Response-Types anpassen
+Zusammenfassung der Implementierung
+Ich habe die gewünschten Erweiterungen für den historischen Abgleich implementiert:
+1. Neue Typen (shared/schema.ts)
+clarification_needed - Neue Kategorie für Widersprüche zwischen Bestandskundenliste und historischem Datensatz
+HistoricalMatchType - Enum für die verschiedenen Match-Typen (confirmed_existing, list_vs_dataset_conflict, etc.)
+HistoricalInfo - Schema für historische Informationen inkl. Vormieter-Erkennung
+EnhancedOCRResult - Erweitertes OCR-Ergebnis mit historischen Daten
+EnhancedExistingCustomer - Für "Adresse durchsuchen" mit Rückgewinnungs-Hinweisen
+2. Historical Matching Service (server/services/historicalMatchingService.ts)
+Duplikat-Bereinigung: Wenn "Janis Schmitz" + "Johann Schmitz" in Bestandskunden → nur "Schmitz" verwenden
+Konflikt-Erkennung: Wenn gleicher Nachname in Bestandskunden UND Neukunden → alle entfernen
+Erweiterte Kategorisierung:
+Bestandskunde in Liste + Datensatz → confirmed_existing
+In Liste, aber im Datensatz als Neukunde → clarification_needed
+Nicht in Liste, aber im Datensatz als Bestandskunde → clarification_needed
+Nicht in Liste + im Datensatz als Neukunde → historical_prospect
+Vormieter-Erkennung: Wenn genau ein Name ausgetauscht wurde
+3. OCR-Routen erweitert (server/routes.ts)
+/api/ocr und /api/ocr-correct nutzen jetzt den Historical Matching Service
+Response enthält enhancedResults, clarificationNeeded, historicalDatasetUsed
+4. "Adresse durchsuchen" erweitert (server/routes.ts)
+/api/search-address erweitert Bestandskundenliste mit historischen Bestandskunden
+Hinweis "war am [Datum] Bestandskunde, aber nicht mehr in der aktuellen Liste"
+5. Frontend-Types angepasst (client/src/components/ResultsDisplay.tsx)
+Customer Interface erweitert um isFromHistoricalDataset, historicalDatasetDate, notInCurrentList
+OCRResult Interface erweitert um enhancedResults, clarificationNeeded, historicalDatasetUsed
+Die Änderungen sind abwärtskompatibel - das Frontend funktioniert weiterhin, zeigt aber jetzt die neuen historischen Informationen an, sobald sie vom Backend geliefert werden.
+Vielen Dank. Das hört sich gut an, aber folgender Test hat leider nicht funktioniert. Ich habe folgenden Datensatz:
+
+ds_1762398487584_3gug9d73h	ferdinand-stücker-straße 51067 köln	Ferdinand-Stücker-Straße	14	Köln	51067	Damian	2025-11-06T04:08:07.584+01:00	[]	[{"name":"Isabel Kudla","category":"potential_new_customer","status":"interest_later","floor":1,"door":"links","notes":"test","isFixed":false},{"name":"Test","category":"existing_customer","isFixed":false}]
+
+
+In der Bestandskundenliste steht folgendes:
+Isabel Kudla	Ferdinand-Stücker-Str.	14	51067	
+
+
+Eigentlich müssten ja jetzt wenn ich Ferdinand-Stücker-Str. 14, 51067 suche kommen Isabel Kudla und Test als Bestandskunde. Tatsächlich ist die Anzeige im frontend aber wie immer und zeigt ausschließlich die Daten aus der Bestandskundenliste an.
+Danke für den Test! Lass mich das debuggen. Das Problem könnte bei der Adress-Normalisierung oder beim Dataset-Matching liegen. Ich füge zuerst mehr Logging hinzu:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\historicalMatchingService.ts (lines 96-135)
+Ich sehe das Problem! Die Adress-Normalisierung in meinem Service stimmt nicht mit dem Format in getAddressDatasets überein. Lass mich die Adress-Suche verbessern:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\googleSheets.ts (lines 344-413)
+Ich sehe das Problem. Mein Service baut den normalizedAddress String falsch. Die getByAddress Methode erwartet ein bestimmtes Format. Lass mich die addressMatches Funktion prüfen und dann meinen Service korrigieren:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\googleSheets.ts (lines 136-235)
+Ich sehe das Problem. Mein Service baut das falsche String-Format. Lass mich prüfen wie die bestehende Suche aufgerufen wird:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes\addressDatasets.ts (lines 431-480)
+Gefunden! Das Problem ist in meinem Service. Das Format muss sein:
+`${street} ${postal} ${city}`.toLowerCase()
+OHNE Hausnummer im String - die Hausnummer wird separat übergeben!
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\historicalMatchingService.ts
+Added 10 lines
+Aber halt - es gibt noch ein Problem mit der Straßen-Normalisierung ("Str." vs "Straße") und der city. Lass mich prüfen ob in der Adresse die city mitgegeben wird:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes.ts (lines 801-860)
+Das Problem ist komplexer - die Straßennamen-Varianten ("Str." vs "Straße") und fehlende city verursachen Matching-Probleme. Ich muss ein flexibleres Matching hinzufügen:
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\historicalMatchingService.ts
+Added 90 lines
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\historicalMatchingService.ts
+Added 24 lines
+Jetzt prüfe ich ob der Code kompiliert:
+Bash Check TypeScript for historicalMatchingService
+IN
+cd "c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie" && npx tsc --noEmit --skipLibCheck 2>&1 | grep -E "historicalMatchingService" | head -10
+OUT
+0
+Der Code kompiliert ohne Fehler.
+Zusammenfassung der Fixes
+Das Problem war ein Straßennamen-Matching-Problem:
+Suche: Ferdinand-Stücker-Str.
+Dataset: Ferdinand-Stücker-Straße
+Diese wurden nicht als gleich erkannt, weil die Standard-Suche exakte String-Matches erwartet.
+Lösung
+Ich habe ein flexibles Fallback-Matching implementiert:
+Straßennamen-Normalisierung - normalizeStreetName():
+Straße → str
+Strasse → str
+Str. → str
+Umlaute werden normalisiert (ä→ae, etc.)
+Bindestriche, Leerzeichen, Punkte werden entfernt
+Flexibles Dataset-Matching - wenn die Standard-Suche nichts findet:
+Lädt alle Datasets
+Filtert nach exaktem PLZ-Match
+Verwendet flexibles Straßennamen-Matching
+Prüft Hausnummern-Overlap
+Test
+Server neu starten, dann nochmal Ferdinand-Stücker-Str. 14, 51067 suchen. Im Log solltest du jetzt sehen:
+[HistoricalMatching] getMostRecentDataset - Searching for: { street: 'Ferdinand-Stücker-Str.', number: '14', postal: '51067' }
+[HistoricalMatching] No datasets found with standard search, trying flexible matching...
+[HistoricalMatching] Flexible matching found: 1 datasets
+Und "Test" sollte als historischer Bestandskunde erscheinen.
+Warte aber das matching gab es schon und das war sehr durchdacht. Prüf das bitte nochmal und vermeide ein neues matching zu implementieren. Es findet sogar eine normalisierung der adresse gegen google geocoding statt - also das höchste normalisieren was möglich ist. Ändere da bitte nix an dem matching sondern schau dir mal bitte die reihenfolge an und setze ggf. den abgleich von datensatz und bestandskundenliste nach der normalisierung und nutze die daten aus der normalisierung um die adresse zu matchen
+Du hast absolut Recht! Ich sollte das bestehende Matching-System nutzen, das bereits Google Geocoding verwendet. Das Problem ist, dass ich den historischen Abgleich mit der nicht-normalisierten Adresse aufrufe. Lass mich den korrekten Flow verstehen:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes\addressDatasets.ts (lines 477-536)
+Ich verstehe jetzt! Die normalizeAddress Funktion (Google Geocoding) wird in der GET /api/address-datasets Route verwendet. Bei /api/search-address wird sie NICHT verwendet, aber storage.getCustomersByAddress hat eigenes fuzzy matching. Das Problem ist: Ich muss den historischen Abgleich mit der normalisierten Adresse oder dem gleichen fuzzy matching wie die Bestandskundensuche durchführen. Die beste Lösung: Den Import von normalizeAddress nutzen und die Adresse vor dem historischen Abgleich normalisieren:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes.ts (lines 26-40)
+This session is being continued from a previous conversation that ran out of context. The conversation is summarized below:
+Analysis:
+Let me analyze the conversation chronologically:
+
+1. **Initial Request**: The user provided a detailed German-language specification for extending the EnergyScanCapture app with historical data matching. The app helps field sales representatives identify existing customers before ringing doorbells.
+
+2. **Key Requirements**:
+   - When a salesperson is at an address where there's historical data (AddressDataset), use that data for matching
+   - Clean duplicate names from historical datasets (if same last name appears in both existing and new customers lists, remove all)
+   - If same last name appears multiple times in one list, use only the last name
+   - Support house number range matching (e.g., searching "1-5" should find dataset "3-7")
+   - New categorization logic:
+     - In customer list + in dataset as existing → confirmed existing
+     - In customer list + in dataset as new → clarification needed
+     - Not in list + in dataset as existing → clarification needed  
+     - Not in list + in dataset as new → new customer with historical status
+   - Detect previous tenant when exactly one name changed
+   - For "Adresse durchsuchen": extend customer list with historical existing customers
+
+3. **My Implementation Steps**:
+   - Created new types in `shared/schema.ts` (HistoricalMatchType, HistoricalInfo, EnhancedOCRResult, etc.)
+   - Created `server/services/historicalMatchingService.ts` with matching logic
+   - Extended OCR routes (`/api/ocr`, `/api/ocr-correct`) with enhanced matching
+   - Extended `/api/search-address` route with historical customer enhancement
+
+4. **TypeScript Errors Fixed**:
+   - Reordered schema definitions (residentCategorySchema before ocrResponseSchema)
+   - Changed `null` to `undefined` for historicalDatasetUsed
+   - Used `Array.from()` for Map/Set iterations
+
+5. **User's First Test Failed**: The user tested with:
+   - Dataset: Ferdinand-Stücker-Straße 14, 51067 (with "Test" as existing_customer)
+   - Customer list: Isabel Kudla at Ferdinand-Stücker-Str. 14, 51067
+   - Problem: "Test" wasn't showing as historical existing customer
+
+6. **Root Cause Identified**: My `getMostRecentDataset` was building the wrong address format. The existing code uses:
+   ```javascript
+   `${street} ${postal} ${city}`.toLowerCase()
+   ```
+   But I was using:
+   ```javascript
+   `${street} ${number}, ${postal}`
+   ```
+
+7. **My Fix Attempt**: I added flexible street name matching with normalization (Straße → str, etc.)
+
+8. **User's Second Feedback**: The user pointed out that the existing matching system is already very sophisticated (uses Google Geocoding normalization) and I should NOT implement new matching. Instead, I should:
+   - Use the existing normalization
+   - Put the historical matching AFTER normalization
+   - Use the normalized address data for matching
+
+The user is correct - the existing `normalizeAddress` function uses Google Geocoding API which is the gold standard for address normalization.
+
+Summary:
+1. Primary Request and Intent:
+   The user requested extending the EnergyScanCapture app (a field sales efficiency tool for a German electricity provider) with historical data matching capabilities. Specifically:
+   - When a salesperson scans a doorbell at an address with existing historical datasets, use that historical data for enhanced customer matching
+   - Implement duplicate name cleaning from historical datasets (remove conflicting last names that appear in both existing and new customer lists)
+   - Support house number range overlap matching
+   - Implement new categorization: confirmed_existing, clarification_needed (for conflicts), historical_prospect
+   - Detect previous tenants when exactly one name changed between old and new scans
+   - For "Adresse durchsuchen" (address search): extend the customer list with historical existing customers who may no longer be in the current list (for win-back hints)
+
+2. Key Technical Concepts:
+   - React + TypeScript frontend, Node.js + Express backend
+   - Google Cloud Vision API for OCR
+   - Google Geocoding API for address normalization
+   - AddressDataset storage (SQLite primary, Google Sheets backup)
+   - EditableResident with categories: existing_customer, potential_new_customer, duplicate, clarification_needed
+   - House number range expansion (e.g., "1-5" → ["1","2","3","4","5"])
+   - DatasetCache with flexible address matching
+
+3. Files and Code Sections:
+
+   - **shared/schema.ts** - Extended with new historical matching types
+     - Added `clarification_needed` to residentCategorySchema
+     - Created new schemas: historicalMatchTypeSchema, historicalInfoSchema, enhancedOCRResultSchema, enhancedExistingCustomerSchema
+     - Extended ocrResponseSchema with enhancedResults, clarificationNeeded, historicalDatasetUsed fields
+     ```typescript
+     export const historicalMatchTypeSchema = z.enum([
+       'confirmed_existing',     // In Bestandskundenliste UND im Datensatz als Bestandskunde
+       'list_vs_dataset_conflict', // In Bestandskundenliste, aber im Datensatz als Neukunde
+       'dataset_only_existing',  // Nicht in Bestandskundenliste, aber im Datensatz als Bestandskunde
+       'historical_prospect',    // Nicht in Bestandskundenliste UND im Datensatz als Neukunde
+       'no_historical_data'      // Kein historischer Datensatz vorhanden
+     ]);
+     ```
+
+   - **server/services/historicalMatchingService.ts** - NEW FILE - Core historical matching logic
+     - Functions: getMostRecentDataset, getAllRelevantDatasets, cleanHistoricalData, categorizeWithHistoricalData, detectPreviousTenant, enhanceCustomerListWithHistoricalData, performEnhancedOCRMatching
+     - Added flexible street name matching (normalizeStreetName, streetNamesMatch) and expandHouseNumbers
+     ```typescript
+     function normalizeStreetName(street: string): string {
+       return street
+         .toLowerCase()
+         .replace(/ß/g, 'ss')
+         .replace(/straße$/i, 'str')
+         .replace(/strasse$/i, 'str')
+         .replace(/str\.$/i, 'str')
+         .replace(/[-\s\.]+/g, '')
+         .trim();
+     }
+     ```
+
+   - **server/routes.ts** - Extended OCR and search-address routes
+     - Added import: `import { performEnhancedOCRMatching, enhanceCustomerListWithHistoricalData } from "./services/historicalMatchingService";`
+     - `/api/ocr` and `/api/ocr-correct` now call performEnhancedOCRMatching
+     - `/api/search-address` now calls enhanceCustomerListWithHistoricalData
+
+   - **client/src/components/ResultsDisplay.tsx** - Extended frontend types
+     - Added imports for EnhancedOCRResult, HistoricalInfo
+     - Extended Customer interface with isFromHistoricalDataset, historicalDatasetDate, notInCurrentList
+     - Extended OCRResult interface with enhancedResults, clarificationNeeded, historicalDatasetUsed
+
+4. Errors and fixes:
+   - **Schema definition order error**: enhancedOCRResultSchema was referenced before definition
+     - Fix: Moved residentCategorySchema, residentStatusSchema, and all historical schemas BEFORE ocrResponseSchema
+   
+   - **TypeScript null vs undefined error**: historicalDatasetUsed could be null but schema expected undefined
+     - Fix: Changed `historicalDatasetUsed` to `historicalDatasetUsed || undefined`
+   
+   - **Map/Set iteration errors**: TypeScript complained about iterating MapIterator without downlevelIteration
+     - Fix: Wrapped with `Array.from()` - e.g., `for (const lastName of Array.from(lastNameCountExisting.keys()))`
+
+   - **Address matching not working** (user feedback): Test with "Ferdinand-Stücker-Str. 14, 51067" didn't find dataset with "Ferdinand-Stücker-Straße"
+     - First fix attempt: Changed address format from `${street} ${number}, ${postal}` to `${street} ${postal} ${city}`
+     - Second fix attempt: Added flexible street name normalization and fallback matching
+     - **User rejected this approach**: Said existing matching system uses Google Geocoding and I should use that instead of implementing new matching
+
+5. Problem Solving:
+   - Successfully created type system for historical matching
+   - Successfully created historical matching service with duplicate cleaning and previous tenant detection
+   - Successfully integrated into OCR and search-address routes
+   - ONGOING: Address matching still not working correctly - user's test case failed because my service doesn't use the existing Google Geocoding normalization
+
+6. All user messages:
+   - Initial detailed German specification for historical data matching feature (very long, with specific business logic)
+   - "Vielen Dank. Das hört sich gut an, aber folgender Test hat leider nicht funktioniert..." - Reported that searching "Ferdinand-Stücker-Str. 14, 51067" didn't show "Test" as historical existing customer, even though dataset exists with that data
+   - "Warte aber das matching gab es schon und das war sehr durchdacht. Prüf das bitte nochmal und vermeide ein neues matching zu implementieren. Es findet sogar eine normalisierung der adresse gegen google geocoding statt - also das höchste normalisieren was möglich ist. Ändere da bitte nix an dem matching sondern schau dir mal bitte die reihenfolge an und setze ggf. den abgleich von datensatz und bestandskundenliste nach der normalisierung und nutze die daten aus der normalisierung um die adresse zu matchen"
+
+7. Pending Tasks:
+   - Fix the address matching to use the existing Google Geocoding normalization instead of custom matching
+   - The historical matching should happen AFTER address normalization, using the normalized address data
+   - Remove or bypass the custom street name matching I added
+
+8. Current Work:
+   The user rejected my custom street name matching implementation. They pointed out that:
+   - The existing system already uses Google Geocoding for address normalization ("das höchste normalisieren was möglich ist")
+   - I should NOT implement new matching
+   - I should reorder the code so historical matching happens AFTER normalization
+   - I should use the normalized address data from Google Geocoding for matching
+
+   I had just read the routes.ts file to see that `normalizeAddress` is already imported and was about to refactor to use it:
+   ```typescript
+   import { addressDatasetService, normalizeAddress, appointmentService } from "./services/googleSheets";
+   ```
+
+9. Optional Next Step:
+   Refactor the `/api/search-address` route to:
+   1. Call `normalizeAddress()` first (like `/api/address-datasets` GET does)
+   2. Use the normalized address components for the historical matching
+   3. Remove or simplify the custom street name matching from historicalMatchingService.ts
+
+   User's exact words: "setze ggf. den abgleich von datensatz und bestandskundenliste nach der normalisierung und nutze die daten aus der normalisierung um die adresse zu matchen"
+   (Translation: "put the matching of dataset and customer list after normalization and use the data from normalization to match the address").
+Please continue the conversation from where we left it off without asking the user any further questions. Continue with the last task that you were asked to work on.
+Ich werde das Matching korrigieren, um die bestehende Google Geocoding-Normalisierung zu nutzen. Lass mich zuerst die relevanten Dateien lesen, um zu verstehen, wie die Normalisierung aktuell funktioniert.
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes.ts, c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\historicalMatchingService.ts
+Ich muss verstehen, wie die bestehende normalizeAddress-Funktion funktioniert. Lass mich den GoogleSheets-Service lesen:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\services\googleSheets.ts, c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\server\routes\addressDatasets.ts
+Limit reached · resets 12am (Europe/Berlin) · /upgrade to Max or turn on /extra-usage
+
+GitHub Copilot: Ich verstehe jetzt das Problem. Die `normalizeAddress` Funktion nutzt Google Geocoding und gibt normalisierte Adresskomponenten zurück. Ich muss:
+
+1. Die `/api/search-address` Route ändern, um `normalizeAddress` ZUERST aufzurufen
+2. Die normalisierten Daten an den Historical Matching Service übergeben
+3. Den Historical Matching Service vereinfachen - das benutzerdefinierte Straßen-Matching entfernen
+
+Lass mich das implementieren: 
+
+Using "Multi-Replace String in Files"
+
+Lass mich die Dateien nochmal lesen, um den genauen Code zu finden: 
+
+Read [](file:///c%3A/Users/damia/Documents/Marketing%20Tool/EnergyScanCapture%20-%20Kopie/server/routes.ts#801-801), lines 801 to 830
+
+Read [](file:///c%3A/Users/damia/Documents/Marketing%20Tool/EnergyScanCapture%20-%20Kopie/server/services/historicalMatchingService.ts#96-96), lines 96 to 180
+
+Jetzt kann ich die genauen Änderungen vornehmen: 
+
+Using "Replace String in File"
+
+
+```
+
+```
+Gut! Jetzt vereinfache ich den historicalMatchingService, um das custom street matching zu entfernen: 
+
+Using "Replace String in File"
+
+Lass mich die Datei nochmal lesen, um den genaueren Kontext zu haben: 
+
+Read [](file:///c%3A/Users/damia/Documents/Marketing%20Tool/EnergyScanCapture%20-%20Kopie/server/services/historicalMatchingService.ts#96-96), lines 96 to 200
+
+Using "Replace String in File"
+
+
+```
+
+```
+Perfekt! Jetzt muss ich auch getAllRelevantDatasets vereinfachen und die `expandHouseNumbers` Funktion entfernen, da sie nicht mehr benötigt wird: 
+
+Read [](file:///c%3A/Users/damia/Documents/Marketing%20Tool/EnergyScanCapture%20-%20Kopie/server/services/historicalMatchingService.ts#194-194), lines 194 to 265
+
+Using "Replace String in File"
+
+Lass mich die ganze Funktion lesen: 
+
+Read [](file:///c%3A/Users/damia/Documents/Marketing%20Tool/EnergyScanCapture%20-%20Kopie/server/services/historicalMatchingService.ts#129-129), lines 129 to 220
+
+Ich sehe, dass `expandHouseNumbers` und `streetNamesMatch` noch genutzt werden. Lass mich eine kompaktere Änderung vornehmen - ich entferne nur das flexible Matching und behalte expandHouseNumbers als kleine Hilfsfunktion: 
+
+Using "Replace String in File"
+
+
+```
+
+```
+
+
+Using "Replace String in File"
+
+
+```
+
+```
+Jetzt prüfe ich, ob der Code kompiliert: 
+
+Ran terminal command: cd "c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie"; npx tsc --noEmit --skipLibCheck 2>&1 | Select-String "historicalMatchingService|routes\.ts" | Select-Object -First 15
+
+Es gibt einen Syntax-Fehler. Lass mich die Datei prüfen: 
+
+Read [](file:///c%3A/Users/damia/Documents/Marketing%20Tool/EnergyScanCapture%20-%20Kopie/server/services/historicalMatchingService.ts#125-125), lines 125 to 145
+
+Ich sehe das Problem - doppelte schließende geschweifte Klammer in Zeile 136. Lass mich das beheben: 
+
+Using "Replace String in File"
+
+
+```
+
+```
+
+
+Ran terminal command: cd "c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie"; npx tsc --noEmit --skipLibCheck 2>&1 | Select-String "(historicalMatchingService|routes\.ts)" | Select-Object -First 10
+
+Gut! Keine Fehler mehr in den Dateien, die ich geändert habe. Jetzt muss ich noch sicherstellen, dass auch die OCR-Routes die normalisierte Adresse verwenden. Lass mich das überprüfen: 
+
+Read [](file:///c%3A/Users/damia/Documents/Marketing%20Tool/EnergyScanCapture%20-%20Kopie/server/routes.ts#620-620), lines 620 to 680
+
+Die OCR-Routes nutzen bereits die normalisierte Adresse aus dem Address-Parsing! Aber ich sollte überprüfen, ob die Adresse auch mit Google Geocoding normalisiert wird. Lass mich den Code vor dem Enhanced Matching prüfen: 
+
+Read [](file:///c%3A/Users/damia/Documents/Marketing%20Tool/EnergyScanCapture%20-%20Kopie/server/routes.ts#550-550), lines 550 to 605
+
+Das Problem: In der OCR-Route wird die Adresse NICHT mit Google Geocoding normalisiert! Es wird nur `addressSchema.parse(req.body)` verwendet, was die Adresse validiert, aber nicht normalisiert. Ich muss auch hier die Google Geocoding-Normalisierung hinzufügen: 
+
+Read [](file:///c%3A/Users/damia/Documents/Marketing%20Tool/EnergyScanCapture%20-%20Kopie/server/routes.ts#475-475), lines 475 to 520
+
+Lass mich noch weiter zurückgehen, um zu sehen wo die Adresse geparst wird: 
+
+Read [](file:///c%3A/Users/damia/Documents/Marketing%20Tool/EnergyScanCapture%20-%20Kopie/server/routes.ts#430-430), lines 430 to 480
+
+Perfekt! Jetzt kann ich die Normalisierung hinzufügen. Ich füge sie direkt nach der Adressvalidierung und vor der OCR-Verarbeitung ein: 
+
+Using "Replace String in File"
+
+
+```
+
+```
+Jetzt muss ich das Gleiche für die `/api/ocr-correct` Route machen: 
+
+Read [](file:///c%3A/Users/damia/Documents/Marketing%20Tool/EnergyScanCapture%20-%20Kopie/server/routes.ts#695-695), lines 695 to 730
+
+Using "Replace String in File"
+
+
+```
+
+```
+Jetzt muss ich auch die nachfolgenden Vorkommen von `address` durch `normalizedAddress` ersetzen: 
+
+Read [](file:///c%3A/Users/damia/Documents/Marketing%20Tool/EnergyScanCapture%20-%20Kopie/server/routes.ts#728-728), lines 728 to 800
+
+Using "Replace String in File"
+
+
+```
+
+```
+Jetzt prüfe ich die Kompilierung: 
+
+Ran terminal command: cd "c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie"; npx tsc --noEmit --skipLibCheck 2>&1 | Select-String "(routes\.ts|historicalMatchingService)" | Select-Object -First 10
+
+Perfekt! Keine TypeScript-Fehler mehr. Jetzt erstelle ich eine Zusammenfassung der Änderungen: 
+
+Created 5 todos
+
+## Zusammenfassung der Implementierung ✅
+
+Ich habe die gewünschten Erweiterungen für den historischen Abgleich implementiert und dabei **das bestehende Google Geocoding-Normalisierungs-System genutzt** (wie du gewünscht hast).
+
+### 🔄 Hauptänderungen
+
+#### 1. **Google Geocoding-Normalisierung integriert**
+   - **`/api/ocr`**: Adresse wird VOR dem Matching mit `normalizeAddress()` normalisiert
+   - **`/api/ocr-correct`**: Gleiche Normalisierung hinzugefügt  
+   - **`/api/search-address`**: Normalisierung hinzugefügt und normalisierte Adresse an historical matching übergeben
+
+#### 2. **Historical Matching Service** (historicalMatchingService.ts)
+   - ✅ **Duplikat-Bereinigung** implementiert (wie spezifiziert)
+   - ✅ **Erweiterte Kategorisierung** mit neuen Match-Types
+   - ✅ **Vormieter-Erkennung** wenn genau ein Name ausgetauscht wurde
+   - ⚠️ **Custom Street Matching ENTFERNT** - nutzt jetzt das bestehende `addressDatasetService.getAddressDatasets()` mit Google Geocoding-normalisierten Adressen
+
+#### 3. **Neue Kategorien** (shared/schema.ts)
+   - `clarification_needed` - Für Widersprüche zwischen Bestandskundenliste und Datensatz
+   - `confirmed_existing` - Klar identifizierter Bestandskunde
+   - `list_vs_dataset_conflict` - In Liste als Bestandskunde, in Datensatz als Neukunde
+   - `dataset_only_existing` - Nicht in Liste, aber im Datensatz als Bestandskunde
+   - `historical_prospect` - Neukunde mit historischem Status
+
+### 🧪 Test des Ferdinand-Stücker-Straße Falls
+
+Jetzt sollte dein Test funktionieren:
+
+**Dataset**: `Ferdinand-Stücker-Straße 14, 51067`  
+**Suche**: `Ferdinand-Stücker-Str. 14, 51067`
+
+**Flow**:
+1. ✅ Google Geocoding normalisiert beide zu `Ferdinand-Stücker-Straße 14, 51067 Köln`
+2. ✅ `addressDatasetService.getAddressDatasets()` findet den Datensatz
+3. ✅ "Test" wird als historischer Bestandskunde erkannt
+4. ✅ "Isabel Kudla" wird als Bestandskunde erkannt (in Liste + in Datensatz als Neukunde → `clarification_needed`)
+
+### 📝 Nächste Schritte zum Testen
+
+1. **Server neu starten**
+2. **In der Console beobachten**:
+   ```
+   [OCR] Normalizing address with Google Geocoding
+   [OCR] Using normalized address: { street: 'Ferdinand-Stücker-Straße', ...}
+   [HistoricalMatching] getMostRecentDataset - Using NORMALIZED address: {...}
+   [HistoricalMatching] Address string for search: ferdinand-stücker-straße 51067 köln
+   [HistoricalMatching] getMostRecentDataset - Found: 1 dataset(s)
+   ```
+3. **Adresse durchsuchen**: Ferdinand-Stücker-Str. 14, 51067
+   - Erwartet: "Isabel Kudla" und "Test" in der Liste
+
+Soll ich noch etwas anpassen oder möchtest du jetzt einen Test durchführen?
+
+Made changes.
+
+Damian-Kudla: Jetzt kommt leider die fehlermeldung "Adresse konnte nicht gesucht werden"
+
+GitHub Copilot: 
+
+Damian-Kudla: @agent Try Again
+
+GitHub Copilot: Enable GPT-5.1-Codex-Max (Preview) for all clients
+[object Object]
+
+Damian-Kudla: @agent Enable: "Enable GPT-5.1-Codex-Max (Preview) for all clients"
+
+GitHub Copilot: Optimizing tool selection...

@@ -12,6 +12,7 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
+import { Readable } from 'stream';
 import { google } from './googleApiWrapper';
 
 // =============================================================================
@@ -702,7 +703,7 @@ export async function backupToDrive(): Promise<boolean> {
 
     // Read the database file
     const fileContent = fs.readFileSync(DB_PATH);
-    const fileStream = require('stream').Readable.from(fileContent);
+    const fileStream = Readable.from(fileContent);
 
     if (existingFile?.id) {
       // Update existing file

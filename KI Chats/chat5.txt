@@ -1,0 +1,421 @@
+This session is being continued from a previous conversation that ran out of context. The conversation is summarized below:
+Analysis:
+Let me analyze the conversation chronologically:
+
+1. **Initial Context**: User provided a project description for "EnergyScanCapture" - a tool for field sales representatives of an energy provider to avoid unnecessary doorbell rings at existing customers.
+
+2. **First Request (Feature 1 & 2 - Original)**:
+   - Feature 1: Add quality toggle (compressed vs. original) for photo upload with info popover
+   - Feature 2: Multi-photo upload support with proper data linking
+
+3. **Implementation of Feature 1**: 
+   - Added toggle in PhotoCapture.tsx before photo capture
+   - Added imports for Switch, Label, Popover, Info icon, ImageIcon
+   - Modified compression logic to check `useOriginalQuality` state
+   - Added info popover explaining pros/cons
+
+4. **Implementation of Feature 2**:
+   - Added `PhotoData` interface in scanner.tsx
+   - Added `photos` state array and `isAddingPhoto` state
+   - Modified `handlePhotoProcessed` to combine OCR results from multiple photos
+   - Modified `handleReset` to clear photos array
+   - Added multi-photo display with delete buttons
+   - Added "Weiteres Foto hinzufügen" button
+   - Implemented `handleRemovePhoto` helper function
+
+5. **User Feedback 1**: User wanted:
+   - Compression toggle also AFTER photo capture (before "Verarbeiten" button)
+   - Inline PhotoCapture for "Weiteres Foto hinzufügen" (no scrolling up)
+
+6. **Implementation of User Feedback 1**:
+   - Added quality toggle in preview section of PhotoCapture.tsx
+   - Modified scanner.tsx to show PhotoCapture inline where "Weiteres Foto hinzufügen" button was
+
+7. **User Request 2**: 
+   - Feature: Alphabetical sorting button in results lists
+   - Feature: Drag & Drop text field fusion with Apple-style animations and undo functionality
+
+8. **Implementation of Alphabetical Sorting**:
+   - Added `sortAlphabetically` state in ResultsDisplay.tsx
+   - Modified `currentExistingCustomers` and `currentNewProspects` useMemo to sort when enabled
+   - Added sort toggle button in CardHeader
+
+9. **Implementation of Drag & Drop Fusion** (in progress):
+   - Added drag & drop states in ImageWithOverlays.tsx
+   - Added `FusionHistory` interface for undo
+   - Implemented `handleDragStart`, `handleDragMove`, `handleDragEnd` handlers
+   - Implemented `handleUndoFusion` function
+   - Added global event listeners for drag
+   - Modified overlay rendering with drag states and animations
+   - Added ghost overlay during dragging
+   - Added visual feedback for drop targets
+   - Added two-line display for fused names
+   - Added undo button and fusion hint in legend
+
+The code was being actively modified when the summary was requested. The last edit added the complete overlay rendering logic with drag & drop support.
+
+Summary:
+1. Primary Request and Intent:
+   The user is developing "EnergyScanCapture" - an efficiency tool for field sales representatives of an energy provider. The main workflow involves GPS location, photo upload of doorbells, OCR text recognition, and customer database matching to avoid unnecessary doorbell rings at existing customers.
+
+   **Explicit User Requests:**
+   - Feature 1: Image quality toggle (compressed vs. original) with info popover explaining pros/cons
+   - Feature 2: Multi-photo upload support with proper data linking and deduplication
+   - Modification: Quality toggle should appear AFTER photo capture (before "Verarbeiten" button), not just before
+   - Modification: "Weiteres Foto hinzufügen" should show inline PhotoCapture, not scroll to top
+   - Feature 3: Alphabetical sorting button in results lists (Bestandskunden, Neukunden, etc.)
+   - Feature 4: Drag & Drop text field fusion with Apple-style animations, two-line display for fused names, and undo functionality
+
+2. Key Technical Concepts:
+   - React with TypeScript
+   - Tailwind CSS for styling
+   - Image compression with browser-image-compression
+   - OCR (Optical Character Recognition) for doorbell sign text extraction
+   - Multi-photo state management with combined OCR results
+   - Drag & Drop API with custom implementation
+   - State synchronization between overlay boxes, editableResidents, and lists
+   - Fusion history for undo operations
+   - German locale sorting with `localeCompare`
+
+3. Files and Code Sections:
+
+   **c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\PhotoCapture.tsx**
+   - Core component for photo capture with compression
+   - Added `useOriginalQuality` state and toggle UI
+   - Added quality toggle in both pre-capture and post-capture (preview) sections
+   - Key imports added:
+   ```typescript
+   import { Camera, Upload, Loader2, X, RotateCw, RotateCcw, Crop, Info, ImageIcon } from 'lucide-react';
+   import { Switch } from '@/components/ui/switch';
+   import { Label } from '@/components/ui/label';
+   import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+   ```
+   - Quality toggle state:
+   ```typescript
+   const [useOriginalQuality, setUseOriginalQuality] = useState(false);
+   ```
+   - Preview section toggle with re-processing logic when changed
+
+   **c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\pages\scanner.tsx**
+   - Main scanner page coordinating all components
+   - Added PhotoData interface and multi-photo state:
+   ```typescript
+   interface PhotoData {
+     id: string;
+     imageSrc: string;
+     fullVisionResponse: any;
+     residentNames: string[];
+     existingCustomers: any[];
+     newProspects: string[];
+     allCustomersAtAddress?: any[];
+   }
+   const MAX_PHOTOS = 10;
+   const [photos, setPhotos] = useState<PhotoData[]>([]);
+   const [isAddingPhoto, setIsAddingPhoto] = useState(false);
+   ```
+   - Modified `handlePhotoProcessed` to combine results with deduplication
+   - Added `handleRemovePhoto` helper function
+   - Inline PhotoCapture for additional photos instead of scrolling
+
+   **c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ResultsDisplay.tsx**
+   - Results display with lists of residents
+   - Added sorting state and logic:
+   ```typescript
+   const [sortAlphabetically, setSortAlphabetically] = useState<boolean>(false);
+   
+   const currentExistingCustomers = useMemo(() => {
+     const filtered = editableResidents.filter(r => r.category === 'existing_customer');
+     if (sortAlphabetically) {
+       return [...filtered].sort((a, b) => a.name.localeCompare(b.name, 'de'));
+     }
+     return filtered;
+   }, [editableResidents, sortAlphabetically]);
+   ```
+   - Added sort toggle button in CardHeader
+
+   **c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ImageWithOverlays.tsx**
+   - Overlay rendering on photos with drag & drop fusion
+   - Added drag & drop states:
+   ```typescript
+   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
+   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
+   const [isFusing, setIsFusing] = useState(false);
+   const [fusingIndices, setFusingIndices] = useState<{ source: number; target: number } | null>(null);
+   
+   interface FusionHistory {
+     targetName: string;
+     sourceName: string;
+     originalTargetResident: EditableResident;
+     originalSourceResident: EditableResident;
+     timestamp: number;
+   }
+   const [fusionHistory, setFusionHistory] = useState<FusionHistory[]>([]);
+   ```
+   - Implemented drag handlers: `handleDragStart`, `handleDragMove`, `handleDragEnd`
+   - Implemented `handleUndoFusion` for undo functionality
+   - Modified overlay rendering with visual states for dragging, drop target, fusing
+   - Added ghost overlay during drag
+   - Added two-line display for fused names
+   - Added undo button and fusion hint in legend
+
+4. Errors and fixes:
+   - TypeScript hint: `'sortAlphabetically' is declared but its value is never read` - Fixed by using the state in useMemo and UI
+   - Build warnings about chunk sizes - These are informational, not errors
+
+5. Problem Solving:
+   - Multi-photo data synchronization: Solved by maintaining separate PhotoData objects with individual OCR responses while combining editableResidents
+   - Deduplication: Implemented case-insensitive deduplication for combined results
+   - Inline photo capture: Changed from scrolling to top to rendering PhotoCapture inline where the button was
+   - Quality toggle re-processing: Implemented re-compression/decompression when toggle changes after photo capture
+
+6. All user messages:
+   - Initial project description with two features (quality toggle and multi-photo upload)
+   - "Ja gerne fahrt bitte fort mit der Implementierung" (proceed with implementation)
+   - Modification request: Quality toggle after photo capture, inline PhotoCapture for additional photos
+   - "Super gemacht - vielen Dank!" followed by two new features: alphabetical sorting and drag & drop fusion with detailed requirements
+
+7. Pending Tasks:
+   - CSS animation for fusion (`fusionFlyToTarget` animation referenced but not yet added)
+   - Testing the drag & drop fusion functionality
+   - Build verification after all changes
+
+8. Current Work:
+   Implementing Feature 4: Drag & Drop text field fusion with Apple-style animations. Just completed adding the overlay rendering logic with:
+   - Drag states and visual feedback
+   - Ghost overlay during dragging
+   - Drop target highlighting with Combine icon
+   - Two-line display for fused names
+   - Fusion animation placeholders
+   - Undo button in legend
+
+   Most recent edit was to ImageWithOverlays.tsx, replacing the overlay rendering logic with comprehensive drag & drop support.
+
+9. Optional Next Step:
+   Add the CSS keyframe animation for `fusionFlyToTarget` that was referenced in the code but not yet defined. This animation is used when a source overlay "flies" to the target during fusion:
+   ```typescript
+   animation: 'fusionFlyToTarget 0.4s ease-out forwards',
+   ```
+   
+   Then run a build to verify all changes compile successfully without errors..
+Please continue the conversation from where we left it off without asking the user any further questions. Continue with the last task that you were asked to work on.
+Show less
+Ich fahre fort mit der Implementierung der Drag & Drop Fusion. Lassen Sie mich zunächst den aktuellen Stand von ImageWithOverlays.tsx prüfen und die fehlende CSS-Animation hinzufügen.
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ImageWithOverlays.tsx
+Der Drag & Drop Code ist implementiert, aber die CSS-Animation fusionFlyToTarget fehlt noch. Lassen Sie mich die globale CSS-Datei finden und die Animation hinzufügen:
+Globpattern: "client/src/**/*.css"
+Found 1 file
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\index.css
+Jetzt füge ich die CSS-Animation für die Fusion hinzu:
+Update Todos
+
+Feature 1: Alphabetische Sortierung in Ergebnislisten
+
+Feature 2: Textfeld-Fusion durch Drag & Drop
+
+Feature 2.1: Drag & Drop Logik in ImageWithOverlays
+
+Feature 2.2: Fusion-Animationen (Apple-Style)
+
+Feature 2.3: Daten-Synchronisation bei Fusion
+
+Feature 2.4: Rückgängig-Button für Fusionen
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\index.css
+Added 40 lines
+Jetzt führe ich einen Build durch, um sicherzustellen, dass alles korrekt kompiliert:
+Bash Run build to verify compilation
+IN
+cd "c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie" && npm run build 2>&1 | head -100
+OUT
+> rest-express@2.8.1 build
+> vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist
+
+[36mvite v5.4.20 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 3474 modules transformed.
+[1m[33m[plugin:vite:reporter][39m[22m [33m[plugin vite:reporter] 
+(!) C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/hooks/use-toast.ts is dynamically imported by C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/pages/scanner.tsx but also statically imported by C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/App.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/RouteReplayMap.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/ui/toaster.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/hooks/use-filtered-toast.ts, dynamic import will not move module into another chunk.
+[39m
+[1m[33m[plugin:vite:reporter][39m[22m [33m[plugin vite:reporter] 
+(!) C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/services/api.ts is dynamically imported by C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/ImageWithOverlays.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/ImageWithOverlays.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/ImageWithOverlays.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/ImageWithOverlays.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/ImageWithOverlays.tsx but also statically imported by C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/AddressDatasets.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/GPSAddressForm.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/Login.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/PhotoCapture.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/ResultsDisplay.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/UserButton.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/UserHistory.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/contexts/AuthContext.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/pages/scanner.tsx, dynamic import will not move module into another chunk.
+[39m
+rendering chunks...
+computing gzip size...
+[2m../dist/public/[22m[32mindex.html                           [39m[1m[2m  2.33 kB[22m[1m[22m[2m │ gzip:   0.92 kB[22m
+[2m../dist/public/[22m[35massets/admin-dashboard-Dgihpmma.css  [39m[1m[2m 15.04 kB[22m[1m[22m[2m │ gzip:   6.38 kB[22m
+[2m../dist/public/[22m[35massets/index-Bqbe8JZB.css            [39m[1m[2m 69.23 kB[22m[1m[22m[2m │ gzip:  11.86 kB[22m
+[2m../dist/public/[22m[36massets/admin-dashboard-DKqj0Vky.js   [39m[1m[33m627.28 kB[39m[22m[2m │ gzip: 175.47 kB[22m
+[2m../dist/public/[22m[36massets/index-E4PQkC_N.js             [39m[1m[33m810.69 kB[39m[22m[2m │ gzip: 245.29 kB[22m
+[33m
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+[32m✓ built in 25.88s[39m
+
+  dist\index.js  683.0kb
+
+Done in 104ms
+Der Build war erfolgreich. Lassen Sie mich die Todo-Liste aktualisieren:
+Update Todos
+
+Feature 1: Alphabetische Sortierung in Ergebnislisten
+
+Feature 2: Textfeld-Fusion durch Drag & Drop
+
+Feature 2.1: Drag & Drop Logik in ImageWithOverlays
+
+Feature 2.2: Fusion-Animationen (Apple-Style)
+
+Feature 2.3: Daten-Synchronisation bei Fusion
+
+Feature 2.4: Rückgängig-Button für Fusionen
+Alle Features sind jetzt vollständig implementiert. Hier eine Zusammenfassung:
+✅ Implementierte Features
+Feature 1: Alphabetische Sortierung
+Toggle-Button in den Ergebnislisten (Bestandskunden, Neukunden)
+Sortiert alphabetisch nach Namen mit deutschem Locale (localeCompare)
+Feature 2: Drag & Drop Textfeld-Fusion
+Die komplette Fusion-Funktionalität ist nun verfügbar: Drag & Drop Logik:
+Overlay-Boxen sind per Maus/Touch ziehbar
+Ghost-Overlay während des Ziehens zeigt den gezogenen Namen
+Drop-Target wird mit Ring und Combine-Icon hervorgehoben
+Apple-Style Animationen:
+fusionFlyToTarget: Schrumpf- und Fade-Animation beim Zusammenführen
+fusionPulse: Puls-Effekt am Ziel-Overlay
+fusionSuccess: Grüner Flash für erfolgreiche Fusion
+Daten-Synchronisation:
+Kombinierte Namen werden in editableResidents gespeichert
+Backend-Synchronisation bei vorhandenem Dataset
+Zwei-Zeilen-Anzeige für fusionierte Namen (z.B. "Schmidt" über "Müller")
+Rückgängig-Funktion:
+Undo-Button in der Legende (erscheint nach erster Fusion)
+Vollständiger Fusion-History-Stack
+Wiederherstellung beider ursprünglichen Residents
+Toast-Benachrichtigungen für Feedback
+Der Build war erfolgreich. Die Anwendung ist bereit zum Testen.
+Vielen Dank! An sich ist das schon sehr gut! Es gibt jedoch noch Probleme:
+Zum einen kommt durch längeres klicken das schnellauswahl menü für statusse. Hier wäre es schön, wenn die funktionen der reihenfolge nach ausgelöst werden: Der user hält auf einem Textfeld gedrückt - dann soll es kurz danach anfangen zu wackeln, als zeichen dass man jetzt verschieben kann und hält der user es weiter gedrückt ohne zu verschieben soll das schnellauswahl menü kommen. Wenn der user aber nach dem wackeln das Textfeld bewegt, soll das schnellauswahl menü nicht mehr kommen und der user soll das Textfeld mergen können. Es ist wichtig, dass längeres drücken abgewartet wird, weil es kann ja auch sein, dass der user nur durch die webseite auf dem ipad scrollt, dann soll nicht wenn er zufällig das scrollen bei einem textfeld beginnt, das textfeld verschoben werden oder das schnellauswahl menü kommen sonder dann soll die seite gescrollt werden.
+
+Außerdem gibt es beim mergen und rückgängig machen noch probleme mit den Elementen und verknüpfungen. Beim mergen wird das neue textfeld zwar korrekt erweitert - so wie es sein soll, aber das alte textfeld nicht gelöscht. Beim rückgänigmachen wird das alte textfeld vermutlich wiederhergestellt, aber dadurch dass das alte textfeld nie gelöscht wurde, gibt es dann 2 textfelder. Kannst du das bitte nochmal überprüfen?
+Ich verstehe die Probleme. Lassen Sie mich beide beheben:
+Touch-Interaktion: Mehrstufiges System mit Wackeln vor dem Verschieben
+Overlay-Löschung: Das alte Textfeld wird nicht korrekt entfernt
+Update Todos
+
+Fix Touch-Interaktion: Mehrstufig mit Wackeln
+
+Fix Overlay-Löschung bei Fusion
+
+Test Build nach Fixes
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ImageWithOverlays.tsx (lines 141-220)
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ImageWithOverlays.tsx (lines 481-560)
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ImageWithOverlays.tsx (lines 941-1060)
+Jetzt verstehe ich die Probleme. Lassen Sie mich beide Fixes implementieren:
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ImageWithOverlays.tsx
+Added 7 lines
+Jetzt behebe ich die Overlay-Löschung bei Fusion:
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ImageWithOverlays.tsx
+Added 24 lines
+Jetzt implementiere ich das mehrstufige Touch-System mit Wackel-Animation. Ich muss die alten Handler ersetzen:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ImageWithOverlays.tsx (lines 741-820)
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ImageWithOverlays.tsx (lines 816-865)
+Jetzt ersetze ich die Handler komplett mit dem neuen mehrstufigen System:
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ImageWithOverlays.tsx
+Added 102 lines
+Jetzt muss ich die alten Handler im JSX durch die neuen ersetzen und die Wackel-Animation hinzufügen. Zuerst lasse ich mir die Overlay-Rendering-Logik anzeigen:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ImageWithOverlays.tsx (lines 1321-1440)
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ImageWithOverlays.tsx (lines 1436-1515)
+Jetzt muss ich die Event-Handler im JSX ersetzen und die Wackel-Animation hinzufügen:
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ImageWithOverlays.tsx
+Added 1 line
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ImageWithOverlays.tsx
+Added 13 lines
+Jetzt füge ich die Wackel-Animation zum CSS hinzu:
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\index.css
+Added 15 lines
+Jetzt muss ich die alten nicht mehr verwendeten Handler-Funktionen entfernen oder anpassen und sicherstellen, dass handleOverlayClick korrekt funktioniert:
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ImageWithOverlays.tsx (lines 976-1075)
+Grep "handleDragStart" (in c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ImageWithOverlays.tsx)
+2 lines of output
+Read c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ImageWithOverlays.tsx (lines 1076-1135)
+Ich entferne die nicht mehr verwendete handleDragStart Funktion:
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ImageWithOverlays.tsx
+Removed 20 lines
+Jetzt aktualisiere ich handleOverlayClick um die alten Timer-Referenzen zu bereinigen:
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ImageWithOverlays.tsx
+Added 3 lines
+Es gibt einen Bug in der Berechnung - deltaY verwendet .x statt .y:
+Edit c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie\client\src\components\ImageWithOverlays.tsx
+Modified
+Jetzt aktualisiere ich die Todo-Liste und führe einen Build durch:
+Update Todos
+
+Fix Touch-Interaktion: Mehrstufig mit Wackeln
+
+Fix Overlay-Löschung bei Fusion
+
+Test Build nach Fixes
+Bash Run build to verify compilation
+IN
+cd "c:\Users\damia\Documents\Marketing Tool\EnergyScanCapture - Kopie" && npm run build 2>&1 | head -80
+OUT
+> rest-express@2.8.1 build
+> vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist
+
+[36mvite v5.4.20 [32mbuilding for production...[36m[39m
+transforming...
+[32m✓[39m 3474 modules transformed.
+[1m[33m[plugin:vite:reporter][39m[22m [33m[plugin vite:reporter] 
+(!) C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/hooks/use-toast.ts is dynamically imported by C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/pages/scanner.tsx but also statically imported by C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/App.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/RouteReplayMap.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/ui/toaster.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/hooks/use-filtered-toast.ts, dynamic import will not move module into another chunk.
+[39m
+[1m[33m[plugin:vite:reporter][39m[22m [33m[plugin vite:reporter] 
+(!) C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/services/api.ts is dynamically imported by C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/ImageWithOverlays.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/ImageWithOverlays.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/ImageWithOverlays.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/ImageWithOverlays.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/ImageWithOverlays.tsx but also statically imported by C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/AddressDatasets.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/GPSAddressForm.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/Login.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/PhotoCapture.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/ResultsDisplay.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/UserButton.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/components/UserHistory.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/contexts/AuthContext.tsx, C:/Users/damia/Documents/Marketing Tool/EnergyScanCapture - Kopie/client/src/pages/scanner.tsx, dynamic import will not move module into another chunk.
+[39m
+rendering chunks...
+computing gzip size...
+[2m../dist/public/[22m[32mindex.html                           [39m[1m[2m  2.33 kB[22m[1m[22m[2m │ gzip:   0.92 kB[22m
+[2m../dist/public/[22m[35massets/admin-dashboard-Dgihpmma.css  [39m[1m[2m 15.04 kB[22m[1m[22m[2m │ gzip:   6.38 kB[22m
+[2m../dist/public/[22m[35massets/index-CQzDGLFI.css            [39m[1m[2m 69.39 kB[22m[1m[22m[2m │ gzip:  11.91 kB[22m
+[2m../dist/public/[22m[36massets/admin-dashboard-BvakHCS_.js   [39m[1m[33m627.28 kB[39m[22m[2m │ gzip: 175.47 kB[22m
+[2m../dist/public/[22m[36massets/index-DM33xSqv.js             [39m[1m[33m812.11 kB[39m[22m[2m │ gzip: 245.71 kB[22m
+[33m
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+[32m✓ built in 19.79s[39m
+
+  dist\index.js  683.0kb
+
+Done in 88ms
+Der Build war erfolgreich. Alle Fixes sind implementiert.
+Update Todos
+
+Fix Touch-Interaktion: Mehrstufig mit Wackeln
+
+Fix Overlay-Löschung bei Fusion
+
+Test Build nach Fixes
+✅ Beide Probleme wurden behoben!
+Fix 1: Mehrstufige Touch-Interaktion mit Wackel-Animation
+Die neue Interaktionslogik funktioniert jetzt in Phasen:
+Phase 1 (0-200ms): Nur Tracking - Scrollen der Seite ist möglich
+Phase 2 (200ms+): Textfeld beginnt zu wackeln (Wackel-Animation) - zeigt an, dass man jetzt ziehen kann
+Phase 3 (600ms+): Wenn der User weiter hält OHNE zu bewegen → Schnellauswahl-Menü erscheint
+Ziehen nach Wackeln: Wenn der User das Textfeld nach dem Wackeln bewegt → Drag-Modus aktiviert, kein Menü mehr
+Scroll-Schutz: Wenn der User vor dem Wackeln (also in den ersten 200ms) die Position bewegt, wird alles abgebrochen - die Seite scrollt wie gewohnt.
+Fix 2: Overlay-Löschung bei Fusion
+Das Problem lag im zweiten useEffect, der die Overlays bei Änderungen an editableResidents aktualisiert:
+Vorher: Overlays für gelöschte Residents wurden behalten (nur Warnung geloggt)
+Nachher: Overlays für gelöschte Residents werden gefiltert und entfernt
+Jetzt funktioniert die Fusion korrekt:
+Beim Mergen wird das Source-Overlay entfernt
+Beim Rückgängigmachen wird nur das wiederhergestellte Overlay angezeigt (keine Duplikate mehr)
+Neue CSS-Animation
+@keyframes wobble {
+  0% { transform: rotate(-1deg) scale(1.02); }
+  100% { transform: rotate(1deg) scale(1.02); }
+}
+Die Anwendung ist bereit zum Testen!

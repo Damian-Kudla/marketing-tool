@@ -463,6 +463,8 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
   const contractPauseRef = useRef<{ paused: boolean; resumeAt: number | null }>({ paused: false, resumeAt: null }); // Contract pause state
   const animationGPSStartRef = useRef(0); // GPS timestamp when animation segment started
   const lastBoundsRef = useRef<{ latRange: number; lngRange: number } | null>(null); // Letzte Bounds für Vergleich
+  const cameraAdjustingRef = useRef(false); // Animation wartet auf Kamera-Anpassung
+  const cameraReadyCallbackRef = useRef<(() => void) | null>(null); // Callback wenn Kamera bereit ist
   const cameraStateRef = useRef<{
     datasetSignature: string;
     lastPosition: GPSPoint | null;
@@ -2042,20 +2044,39 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
 
   // Intelligente Kamera-Steuerung mit prädiktivem Auto-Zoom
   // WICHTIG: Keine Dependencies außer Refs, um Endlosschleife zu vermeiden
-  const updateCameraView = useCallback((forceUpdate = false) => {
+  // 
+  // Algorithmus:
+  // 1. Berechne aktuelle Position des Users
+  // 2. Berechne Lookahead-Punkte (nächste 3 Anzeige-Sekunden)
+  // 3. Zoom so setzen, dass User nie näher als 20% an den Rand kommt
+  // 4. Zentrum auf aktueller User-Position halten
+  // 5. Kamera-Updates nur alle 3 Sekunden, es sei denn Emergency (User am Rand)
+  const updateCameraView = useCallback((forceUpdate = false, onComplete?: () => void) => {
     const map = mapRef.current;
-    if (!map) return;
-    if (!window.google?.maps) return;
+    if (!map) {
+      onComplete?.();
+      return;
+    }
+    if (!window.google?.maps) {
+      onComplete?.();
+      return;
+    }
 
     // Im Pause-Modus verwende displayPoints (gefilterte externe GPS-Punkte)
     // Ansonsten verwende basePoints - verwende refs für aktuelle Werte
     const points = pauseModeRef.current.active ? displayPointsRef.current : basePointsRef.current;
-    if (points.length === 0) return;
+    if (points.length === 0) {
+      onComplete?.();
+      return;
+    }
 
     // Aktuelle Position basierend auf currentTimestampRef berechnen (nicht aus Closure!)
     const currentTime = currentTimestampRef.current;
     const currentIdx = points.findIndex(p => p.timestamp >= currentTime);
-    if (currentIdx === -1) return;
+    if (currentIdx === -1) {
+      onComplete?.();
+      return;
+    }
 
     // Interpoliere Position für genauen Timestamp
     let position: GPSPoint;
@@ -2077,155 +2098,148 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
 
     const now = Date.now();
 
-    // Pre-Check: Ist der Nutzer bereits zu nah am Rand? (Emergency Zoom)
-    // Berechne erstmal grob die Lookahead-Punkte für Edge-Detection
+    // Berechne Lookahead-Punkte für die nächsten 3 Anzeige-Sekunden
     const msPerHour = 3600000;
     const sph = secondsPerHour;
-    const animationSpeedMsPerSec = msPerHour / sph;
-    const lookaheadWindowMs = animationSpeedMsPerSec * 3;
+    const animationSpeedMsPerSec = msPerHour / sph; // GPS-ms pro Anzeige-Sekunde
+    const lookaheadWindowMs = animationSpeedMsPerSec * 3; // 3 Anzeige-Sekunden vorausschauen
 
-    let preliminaryLookaheadPoints = points.filter(p =>
+    let lookaheadPoints = points.filter(p =>
       p.timestamp >= currentTime && p.timestamp <= currentTime + lookaheadWindowMs
     );
 
-    if (preliminaryLookaheadPoints.length < 10) {
+    // Fallback: Mindestens 15 Punkte verwenden wenn zu wenige im Zeitfenster
+    if (lookaheadPoints.length < 15) {
       const currentIndex = points.findIndex(p => p.timestamp >= currentTime);
       if (currentIndex !== -1) {
-        preliminaryLookaheadPoints = points.slice(currentIndex, Math.min(currentIndex + 20, points.length));
+        lookaheadPoints = points.slice(currentIndex, Math.min(currentIndex + 25, points.length));
       }
     }
 
-    const preliminaryMaxLatDiff = preliminaryLookaheadPoints.length > 0
-      ? Math.max(...preliminaryLookaheadPoints.map(p => Math.abs(p.latitude - position.latitude)), 0)
-      : 0;
-    const preliminaryMaxLngDiff = preliminaryLookaheadPoints.length > 0
-      ? Math.max(...preliminaryLookaheadPoints.map(p => Math.abs(p.longitude - position.longitude)), 0)
-      : 0;
+    if (lookaheadPoints.length === 0) {
+      onComplete?.();
+      return;
+    }
 
+    // Berechne maximale Distanz aller Lookahead-Punkte von aktueller Position
+    const maxLatDiff = Math.max(...lookaheadPoints.map(p => Math.abs(p.latitude - position.latitude)), 0);
+    const maxLngDiff = Math.max(...lookaheadPoints.map(p => Math.abs(p.longitude - position.longitude)), 0);
+
+    // Emergency-Check: User näher als 20% am Rand?
+    // Bei 20% Randabstand bedeutet das: maxDiff / (range/2) > 0.6 (da 50% - 20% = 30% vom Zentrum)
     let isEmergencyZoom = false;
     if (lastBoundsRef.current) {
-      const latEdgeRatio = preliminaryMaxLatDiff / (lastBoundsRef.current.latRange / 2);
-      const lngEdgeRatio = preliminaryMaxLngDiff / (lastBoundsRef.current.lngRange / 2);
-      isEmergencyZoom = latEdgeRatio > 0.7 || lngEdgeRatio > 0.7;
+      const latEdgeRatio = maxLatDiff / (lastBoundsRef.current.latRange / 2);
+      const lngEdgeRatio = maxLngDiff / (lastBoundsRef.current.lngRange / 2);
+      // Emergency wenn User in der "Gefahrenzone" (näher als 20% am Rand = mehr als 60% vom Zentrum)
+      isEmergencyZoom = latEdgeRatio > 0.6 || lngEdgeRatio > 0.6;
     }
 
     // 3-Sekunden-Regel: Keine Änderung öfter als alle 3 Sekunden
     // ABER: Überspringen bei forceUpdate, erstem Zoom (lastBoundsRef === null), oder Emergency
     const timeSinceLastChange = now - lastViewportChange.current;
     if (!forceUpdate && !isEmergencyZoom && lastBoundsRef.current !== null && timeSinceLastChange < 3000) {
-      console.log('[RouteReplay] Camera update skipped (3s cooldown)', {
-        timeSinceLastChange: (timeSinceLastChange / 1000).toFixed(1) + 's'
-      });
+      onComplete?.();
       return;
     }
 
     if (isEmergencyZoom) {
-      console.log('[RouteReplay] 🚨 Emergency zoom triggered - skipping cooldown');
+      console.log('[RouteReplay] 🚨 Emergency zoom triggered - User near edge');
     }
 
-    // 1. Lookahead-Punkte verwenden (bereits berechnet für Emergency Check)
-    let lookaheadPoints = preliminaryLookaheadPoints;
-
-    if (lookaheadPoints.length === 0) return;
-
-    // 3. Aktuelle Position muss auch berücksichtigt werden
-    const allPointsToShow = [position, ...lookaheadPoints];
-
-    const lats = allPointsToShow.map(p => p.latitude);
-    const lngs = allPointsToShow.map(p => p.longitude);
-
-    const minLat = Math.min(...lats);
-    const maxLat = Math.max(...lats);
-    const minLng = Math.min(...lngs);
-    const maxLng = Math.max(...lngs);
-
-    // 4. Berechne Bounds mit aktuelle Position als Zentrum
-    // Der Zoom soll so gewählt werden, dass:
-    // - Die aktuelle Position im Zentrum ist
-    // - Alle Lookahead-Punkte mindestens 20% vom Rand entfernt sind
-
-    // Finde den am weitesten entfernten Punkt von der aktuellen Position
-    const latDiffs = lookaheadPoints.map(p => Math.abs(p.latitude - position.latitude));
-    const lngDiffs = lookaheadPoints.map(p => Math.abs(p.longitude - position.longitude));
-
-    const maxLatDiff = Math.max(...latDiffs, 0);
-    const maxLngDiff = Math.max(...lngDiffs, 0);
-
-    // 20%-Regel: Weitester Lookahead-Punkt soll 20% vom Rand entfernt sein
+    // 20%-Regel: Alle Punkte sollen mindestens 20% vom Rand entfernt sein
     // Mathematik:
-    // - Nutzer ist im Zentrum (50% der Höhe/Breite)
-    // - 20% vom Rand = 80% vom unteren/rechten Rand = 30% vom Zentrum
-    // - Wenn weitester Punkt X Grad entfernt ist und bei 30% vom Zentrum liegen soll:
-    //   X / (visibleRange / 2) = 0.30  =>  visibleRange = X / 0.30 = X * 3.33
-    // - ABER: Etwas engerer Zoom (Faktor 2.0) für bessere Sicht = ~25% vom Zentrum = ~25% vom Rand
-    const ZOOM_FACTOR = 2.0;  // Weitester Punkt bei 25% vom Zentrum = 25% vom Rand
-    const MIN_VISIBLE_RANGE = 0.0008; // ca. 80m - verhindert zu starkes Ranzoomen
+    // - User ist im Zentrum (50% der Höhe/Breite)
+    // - 20% vom Rand = 80% von links/unten = 30% vom Zentrum Richtung Rand
+    // - Wenn weitester Punkt X Grad entfernt ist und bei max 30% vom Zentrum liegen soll:
+    //   X / (visibleRange / 2) = 0.30  =>  visibleRange = X * 2 / 0.30 = X * 6.67
+    // - Faktor 3.33 (für einen etwas engeren Zoom und etwas Spielraum)
+    const EDGE_BUFFER = 0.30; // 30% vom Zentrum = 20% vom Rand
+    const ZOOM_FACTOR = 1 / EDGE_BUFFER; // ~3.33
+    const MIN_VISIBLE_RANGE = 0.001; // ca. 100m - verhindert zu starkes Ranzoomen
     
-    const visibleLatRange = Math.max(maxLatDiff * ZOOM_FACTOR, MIN_VISIBLE_RANGE);
-    const visibleLngRange = Math.max(maxLngDiff * ZOOM_FACTOR, MIN_VISIBLE_RANGE);
+    const visibleLatRange = Math.max(maxLatDiff * ZOOM_FACTOR * 2, MIN_VISIBLE_RANGE);
+    const visibleLngRange = Math.max(maxLngDiff * ZOOM_FACTOR * 2, MIN_VISIBLE_RANGE);
 
-    // 5. Prüfe ob sich die Bounds signifikant geändert haben (> 30% Änderung in IRGENDEINER Dimension)
-    // ABER: Emergency Zoom überspringt diese Prüfung (bereits oben geprüft)
+    // Prüfe ob sich die Bounds signifikant geändert haben (> 25% Änderung)
     const lastBoundsData = lastBoundsRef.current;
     if (!forceUpdate && !isEmergencyZoom && lastBoundsData) {
       const latChange = Math.abs(visibleLatRange - lastBoundsData.latRange) / lastBoundsData.latRange;
       const lngChange = Math.abs(visibleLngRange - lastBoundsData.lngRange) / lastBoundsData.lngRange;
-
-      // Zoom nur wenn BEIDE Dimensionen sich weniger als 30% ändern
-      // Wenn eine sich > 30% ändert, zoomen wir
       const maxChange = Math.max(latChange, lngChange);
 
-      if (maxChange < 0.3) {
-        console.log('[RouteReplay] Camera update skipped (bounds change < 30%)', {
-          latChange: (latChange * 100).toFixed(1) + '%',
-          lngChange: (lngChange * 100).toFixed(1) + '%',
-          maxChange: (maxChange * 100).toFixed(1) + '%'
-        });
+      // Nur zoomen wenn Änderung > 25%
+      if (maxChange < 0.25) {
+        onComplete?.();
         return;
       }
     }
 
-    // 6. Bounds setzen
+    // Markiere dass Kamera angepasst wird
+    cameraAdjustingRef.current = true;
+
+    // Bounds setzen - zentriert auf aktuelle Position
     const bounds = new window.google.maps.LatLngBounds(
       { lat: position.latitude - visibleLatRange / 2, lng: position.longitude - visibleLngRange / 2 },
       { lat: position.latitude + visibleLatRange / 2, lng: position.longitude + visibleLngRange / 2 }
     );
 
-    // 7. Zoom und Zentrum setzen
-    // Die Karte ist bereits unter der Timeline positioniert (top: timelineHeight),
-    // daher brauchen wir kein extra Top-Padding mehr
+    // fitBounds mit Padding für UI-Elemente (Einstellungen und Info-Panels links/rechts)
     map.fitBounds(bounds, {
-      top: 20,
-      bottom: 50,
-      left: 50,
-      right: 50
+      top: 30,
+      bottom: 60,
+      left: 80,  // Mehr Platz links für Einstellungen-Panel
+      right: 80  // Mehr Platz rechts für Info-Panel
     });
 
-    // 8. Bounds speichern und Timestamp aktualisieren
+    // Bounds und Timestamp speichern
     lastBoundsRef.current = { latRange: visibleLatRange, lngRange: visibleLngRange };
     lastViewportChange.current = now;
 
     console.log('[RouteReplay] Camera updated:', {
+      forceUpdate,
+      isEmergencyZoom,
       currentPos: { lat: position.latitude.toFixed(5), lng: position.longitude.toFixed(5) },
       lookaheadPoints: lookaheadPoints.length,
-      windowMs: lookaheadWindowMs,
-      maxLatDiff: maxLatDiff.toFixed(5),
-      maxLngDiff: maxLngDiff.toFixed(5),
-      visibleLatRange: visibleLatRange.toFixed(5),
-      visibleLngRange: visibleLngRange.toFixed(5)
+      maxLatDiff: maxLatDiff.toFixed(6),
+      maxLngDiff: maxLngDiff.toFixed(6),
+      visibleLatRange: visibleLatRange.toFixed(6),
+      visibleLngRange: visibleLngRange.toFixed(6)
     });
+
+    // Warte auf idle-Event der Karte bevor Animation fortgesetzt wird
+    // (Karte hat fertig gerendert und Tiles geladen)
+    const idleListener = map.addListener('idle', () => {
+      idleListener.remove();
+      cameraAdjustingRef.current = false;
+      console.log('[RouteReplay] Camera idle - ready to continue');
+      onComplete?.();
+    });
+
+    // Fallback-Timeout falls idle nicht feuert (z.B. bei schnellen Änderungen)
+    setTimeout(() => {
+      if (cameraAdjustingRef.current) {
+        idleListener.remove();
+        cameraAdjustingRef.current = false;
+        console.log('[RouteReplay] Camera timeout - forcing continue');
+        onComplete?.();
+      }
+    }, 800); // Max 800ms warten
   }, []); // Keine Dependencies - verwendet nur refs für aktuelle Werte
 
   // Periodische Kamera-Updates alle 3 Sekunden während Animation
+  // Die Animation wird während Kamera-Anpassungen automatisch pausiert (via cameraAdjustingRef)
   useEffect(() => {
     if (!isPlaying || !mapRef.current || !autoZoomEnabled) return;
 
-    // Sofort beim Start ausführen (erzwungen, ignoriert 3s-Regel)
-    console.log('[RouteReplay] Animation started - forcing initial camera update');
-    updateCameraView(true);
-
-    // Dann alle 3 Sekunden wiederholen
-    const interval = setInterval(() => updateCameraView(false), 3000);
+    // Periodische Updates alle 3 Sekunden
+    const interval = setInterval(() => {
+      // Kein Update wenn gerade angepasst wird
+      if (!cameraAdjustingRef.current) {
+        updateCameraView(false);
+      }
+    }, 3000);
+    
     return () => clearInterval(interval);
   }, [isPlaying, autoZoomEnabled]); // isPlaying und autoZoomEnabled als Dependencies
 
@@ -2599,118 +2613,144 @@ export default function RouteReplayMap({ username, gpsPoints: rawGpsPoints, phot
       currentTimestamp,
       startTime,
       endTime,
-      duration: endTime - startTime
+      duration: endTime - startTime,
+      autoZoomEnabled
     });
 
-    // Center on current position if auto-zoom is enabled
-    if (autoZoomEnabled && currentPosition && mapRef.current) {
-      mapRef.current.panTo({
-        lat: currentPosition.latitude,
-        lng: currentPosition.longitude
-      });
-      console.log('[RouteReplay] Centered on current position', {
-        lat: currentPosition.latitude,
-        lng: currentPosition.longitude
-      });
-    }
+    // Funktion die die eigentliche Animation startet
+    const beginAnimationLoop = () => {
+      setIsPlaying(true);
+      startTimeRef.current = Date.now();
 
-    setIsPlaying(true);
-    startTimeRef.current = Date.now();
+      // Current GPS timestamp (where we're resuming from)
+      // Store GPS start timestamp in ref so it can be updated after contract pause
+      animationGPSStartRef.current = currentTimestamp;
 
-    // Current GPS timestamp (where we're resuming from)
-    // Store GPS start timestamp in ref so it can be updated after contract pause
-    animationGPSStartRef.current = currentTimestamp;
+      // Ref um zu tracken wann Kamera-Pause begann
+      let cameraPauseStart: number | null = null;
 
-    const animate = () => {
-      if (!startTimeRef.current) {
-        console.log('[RouteReplay] animate() aborted: no startTimeRef');
-        return;
-      }
+      const animate = () => {
+        if (!startTimeRef.current) {
+          console.log('[RouteReplay] animate() aborted: no startTimeRef');
+          return;
+        }
 
-      // Check if we're paused for a contract
-      if (contractPauseRef.current.paused) {
-        const now = Date.now();
-        if (contractPauseRef.current.resumeAt && now >= contractPauseRef.current.resumeAt) {
-          // Resume animation after contract pause
-          console.log('[RouteReplay] 📝 Contract pause ended, resuming from GPS time:', new Date(currentTimestampRef.current).toLocaleTimeString());
-          contractPauseRef.current = { paused: false, resumeAt: null };
-          setActiveContractFlash(null);
-          // CRITICAL: Update GPS start to current position, reset real time start
-          animationGPSStartRef.current = currentTimestampRef.current;
-          startTimeRef.current = Date.now();
-        } else {
-          // Still paused, continue waiting
+        // Pausiere Animation wenn Kamera gerade angepasst wird (bei Auto-Zoom)
+        if (cameraAdjustingRef.current) {
+          // Merke Start der Kamera-Pause
+          if (cameraPauseStart === null) {
+            cameraPauseStart = Date.now();
+          }
+          // Weiter warten, aber Animation nicht fortsetzen
           animationRef.current = requestAnimationFrame(animate);
           return;
+        } else if (cameraPauseStart !== null) {
+          // Kamera-Anpassung beendet - Zeit kompensieren
+          const pauseDuration = Date.now() - cameraPauseStart;
+          startTimeRef.current += pauseDuration; // Startzeit nach hinten verschieben
+          cameraPauseStart = null;
+          console.log('[RouteReplay] Camera adjustment done - compensated', pauseDuration, 'ms');
         }
-      }
 
-      // Elapsed real time since animation started
-      const elapsedRealTime = Date.now() - startTimeRef.current;
+        // Check if we're paused for a contract
+        if (contractPauseRef.current.paused) {
+          const now = Date.now();
+          if (contractPauseRef.current.resumeAt && now >= contractPauseRef.current.resumeAt) {
+            // Resume animation after contract pause
+            console.log('[RouteReplay] 📝 Contract pause ended, resuming from GPS time:', new Date(currentTimestampRef.current).toLocaleTimeString());
+            contractPauseRef.current = { paused: false, resumeAt: null };
+            setActiveContractFlash(null);
+            // CRITICAL: Update GPS start to current position, reset real time start
+            animationGPSStartRef.current = currentTimestampRef.current;
+            startTimeRef.current = Date.now();
+          } else {
+            // Still paused, continue waiting
+            animationRef.current = requestAnimationFrame(animate);
+            return;
+          }
+        }
 
-      // Calculate how much GPS time has passed based on animation speed
-      const realTimePerGPSHour = secondsPerHour * 1000; // milliseconds
-      const gpsTimePerRealTime = (60 * 60 * 1000) / realTimePerGPSHour; // GPS ms per real ms
-      const elapsedGPSTime = elapsedRealTime * gpsTimePerRealTime;
+        // Elapsed real time since animation started
+        const elapsedRealTime = Date.now() - startTimeRef.current;
 
-      // Current GPS timestamp in the animation (use ref instead of closure variable)
-      const targetGPSTimestamp = animationGPSStartRef.current + elapsedGPSTime;
+        // Calculate how much GPS time has passed based on animation speed
+        const realTimePerGPSHour = secondsPerHour * 1000; // milliseconds
+        const gpsTimePerRealTime = (60 * 60 * 1000) / realTimePerGPSHour; // GPS ms per real ms
+        const elapsedGPSTime = elapsedRealTime * gpsTimePerRealTime;
 
-      if (import.meta.env.VITE_DEBUG_ROUTE_REPLAY === 'true' && elapsedRealTime % 1000 < 16) { // Log ungefähr jede Sekunde
-        console.log('[RouteReplay] animate()', {
-          elapsedRealTime,
-          elapsedGPSTime,
-          targetGPSTimestamp,
-          startGPSTimestamp: animationGPSStartRef.current,
-          endTime,
-          progress: ((targetGPSTimestamp - animationGPSStartRef.current) / (endTime - animationGPSStartRef.current) * 100).toFixed(1) + '%'
-        });
-      }
+        // Current GPS timestamp in the animation (use ref instead of closure variable)
+        const targetGPSTimestamp = animationGPSStartRef.current + elapsedGPSTime;
 
-      // Update timestamp for smooth interpolation
-      setCurrentTimestamp(targetGPSTimestamp);
-      pausedTimestampRef.current = targetGPSTimestamp;
-      currentTimestampRef.current = targetGPSTimestamp; // Für Auto-Zoom
+        if (import.meta.env.VITE_DEBUG_ROUTE_REPLAY === 'true' && elapsedRealTime % 1000 < 16) { // Log ungefähr jede Sekunde
+          console.log('[RouteReplay] animate()', {
+            elapsedRealTime,
+            elapsedGPSTime,
+            targetGPSTimestamp,
+            startGPSTimestamp: animationGPSStartRef.current,
+            endTime,
+            progress: ((targetGPSTimestamp - animationGPSStartRef.current) / (endTime - animationGPSStartRef.current) * 100).toFixed(1) + '%'
+          });
+        }
 
-      // Update index for compatibility
-      const newIndex = findIndexByTimestamp(targetGPSTimestamp);
-      setCurrentIndex(newIndex);
-      pausedIndexRef.current = newIndex;
+        // Update timestamp for smooth interpolation
+        setCurrentTimestamp(targetGPSTimestamp);
+        pausedTimestampRef.current = targetGPSTimestamp;
+        currentTimestampRef.current = targetGPSTimestamp; // Für Auto-Zoom
 
-      // Kamera-Steuerung erfolgt über updateCameraView (alle 3 Sekunden)
-      // Keine redundante Pan-Logik hier im Animationsloop
+        // Update index for compatibility
+        const newIndex = findIndexByTimestamp(targetGPSTimestamp);
+        setCurrentIndex(newIndex);
+        pausedIndexRef.current = newIndex;
 
-      // Check if we've reached the END of pause in pause mode (not the start)
-      if (pauseMode.active && pauseMode.periodIndex !== null && breaks.length > pauseMode.periodIndex) {
-        const breakData = breaks[pauseMode.periodIndex];
-        console.log('[RouteReplay] 🔍 Pause mode check:', { 
-          targetGPSTimestamp, 
-          breakEnd: breakData?.end,
-          shouldStop: breakData && targetGPSTimestamp >= breakData.end 
-        });
-        
-        if (breakData && targetGPSTimestamp >= breakData.end) {
-          console.log('[RouteReplay] 🛑 Reached end of pause, stopping animation');
+        // Kamera-Steuerung erfolgt über updateCameraView (alle 3 Sekunden)
+        // Keine redundante Pan-Logik hier im Animationsloop
+
+        // Check if we've reached the END of pause in pause mode (not the start)
+        if (pauseMode.active && pauseMode.periodIndex !== null && breaks.length > pauseMode.periodIndex) {
+          const breakData = breaks[pauseMode.periodIndex];
+          console.log('[RouteReplay] 🔍 Pause mode check:', { 
+            targetGPSTimestamp, 
+            breakEnd: breakData?.end,
+            shouldStop: breakData && targetGPSTimestamp >= breakData.end 
+          });
+          
+          if (breakData && targetGPSTimestamp >= breakData.end) {
+            console.log('[RouteReplay] 🛑 Reached end of pause, stopping animation');
+            setIsPlaying(false);
+            startTimeRef.current = null;
+            setCurrentTimestamp(breakData.end);
+            return;
+          }
+        }
+
+        // Check if we've reached the end
+        if (targetGPSTimestamp >= endTime) {
+          console.log('[RouteReplay] Animation reached end', { targetGPSTimestamp, endTime });
           setIsPlaying(false);
           startTimeRef.current = null;
-          setCurrentTimestamp(breakData.end);
-          return;
+          setCurrentTimestamp(endTime);
+        } else {
+          animationRef.current = requestAnimationFrame(animate);
         }
-      }
+      };
 
-      // Check if we've reached the end
-      if (targetGPSTimestamp >= endTime) {
-        console.log('[RouteReplay] Animation reached end', { targetGPSTimestamp, endTime });
-        setIsPlaying(false);
-        startTimeRef.current = null;
-        setCurrentTimestamp(endTime);
-      } else {
-        animationRef.current = requestAnimationFrame(animate);
-      }
+      console.log('[RouteReplay] Starting animation frame');
+      animationRef.current = requestAnimationFrame(animate);
     };
 
-    console.log('[RouteReplay] Starting animation frame');
-    animationRef.current = requestAnimationFrame(animate);
+    // Wenn Auto-Zoom aktiviert ist: Erst Kamera zentrieren, dann Animation starten
+    if (autoZoomEnabled && mapRef.current) {
+      console.log('[RouteReplay] Auto-Zoom enabled - centering camera before animation');
+      
+      // Erzwinge sofortige Kamera-Zentrierung, warte auf Fertigstellung
+      updateCameraView(true, () => {
+        console.log('[RouteReplay] Camera ready - starting animation');
+        beginAnimationLoop();
+      });
+    } else {
+      // Ohne Auto-Zoom sofort starten
+      beginAnimationLoop();
+    }
   };
 
   // Pause animation

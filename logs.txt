@@ -1,0 +1,239 @@
+2025-12-09T23:03:11.862603866Z [inf]  [UserAuthCache] Syncing user data from Google Sheets...
+2025-12-09T23:03:12.880754510Z [inf]  [UserAuthCache] Synced 36 users (8 with FollowMee devices)
+2025-12-09T23:03:14.311559115Z [inf]  [CronJobService] Running failed logs retry job...
+2025-12-09T23:03:14.311567802Z [inf]  [FollowMee] 8 users with FollowMee devices
+2025-12-09T23:03:14.311579307Z [inf]  [FollowMee Scheduler] Running PERIODIC SYNC...
+2025-12-09T23:03:14.311583643Z [inf]  [FollowMee] Fetching 24h history for all devices...
+2025-12-09T23:03:14.311587765Z [inf]  [RetryFailedLogs] No failed logs to retry
+2025-12-09T23:03:14.863784328Z [inf]  [FollowMee] Received 204 location points
+2025-12-09T23:03:14.863789449Z [inf]  [FollowMee Scheduler] ✅ Sync completed successfully
+2025-12-09T23:03:34.382042601Z [inf]  [Admin API] Fetching live dashboard data
+2025-12-09T23:03:34.382052697Z [inf]  [Admin API LIVE] 📝 Users with resellerNames:
+2025-12-09T23:03:34.382059481Z [inf]    - David (userId: a519d9e2) → resellerName: "David Rietberg"
+2025-12-09T23:03:34.382065483Z [inf]    - Imi (userId: 8fd1f6d0) → resellerName: "Imela Dias Castanheira"
+2025-12-09T23:03:34.382071028Z [inf]    - Stefan (userId: e9ef2d70) → resellerName: "Stefan Hoefer"
+2025-12-09T23:03:34.382080502Z [inf]    - Nic (userId: 8383c09c) → resellerName: "Nicolas Grandezka"
+2025-12-09T23:03:34.382089874Z [inf]    - Julie (userId: 97fd5efe) → resellerName: "Julie Sasse"
+2025-12-09T23:03:34.382099861Z [inf]    - Lisandra (userId: 341b10db) → resellerName: "Lisandra Emma Maria Gundlach"
+2025-12-09T23:03:34.382106117Z [inf]    - Kiri (userId: 89a6bb94) → resellerName: "Kirillos Hatziathanassiadis"
+2025-12-09T23:03:34.382112127Z [inf]    - Nadine (userId: 19338314) → resellerName: "Nadine Kilic"
+2025-12-09T23:03:34.382118010Z [inf]    - Danyal (userId: e8973b81) → resellerName: "Danyal Tahir"
+2025-12-09T23:03:34.382126657Z [inf]    - Manuel (userId: 2a688562) → resellerName: "Jose-Manuel Ferrer"
+2025-12-09T23:03:34.382132445Z [inf]    - Kevin (userId: 1a4abbb8) → resellerName: "Kevin Pfaff"
+2025-12-09T23:03:34.382138137Z [inf]    - Raphael (userId: f0c3d9ad) → resellerName: "Raphael Rainer Birkner"
+2025-12-09T23:03:34.382143781Z [inf]    - Sarafina (userId: 76fd2558) → resellerName: "Sarafina Zawadi Arlanda"
+2025-12-09T23:03:34.382149654Z [inf]    - Letizia (userId: 1e68b479) → resellerName: "Letizia Pellegrino"
+2025-12-09T23:03:34.382155761Z [inf]    - Bernhard Schauff Artist (userId: ccf1578f) → resellerName: "Bernhard Schauff"
+2025-12-09T23:03:34.382161112Z [inf]    - Maryna (userId: 2cf8c8f7) → resellerName: "Maryna Bondarevska"
+2025-12-09T23:03:34.382166557Z [inf]    - Eva (userId: d28ec53d) → resellerName: "Eva Klostermann"
+2025-12-09T23:03:34.383662643Z [inf]    - Kai (userId: bf04c166) → resellerName: "Kai Külgen"
+2025-12-09T23:03:34.383668944Z [inf]    - Maurice (userId: 4cc03b2b) → resellerName: "Tijan Maurice Darboe"
+2025-12-09T23:03:34.383673389Z [inf]    - Mohamed Kanazoe (userId: 7fbb099f) → resellerName: "Mohamed Kanazoe"
+2025-12-09T23:03:34.383677428Z [inf]    - Marcel Gattung (userId: 33f26f68) → resellerName: "Marcel Gattung"
+2025-12-09T23:03:34.383681221Z [inf]  [Admin API LIVE] 📝 EGON contract counts from DB:
+2025-12-09T23:03:34.383685234Z [inf]  [Admin API LIVE] 📝 EGON contracts loaded: 0 resellers with contracts, 10.12.2025
+2025-12-09T23:04:04.383577780Z [inf]  [Admin API] Fetching live dashboard data
+2025-12-09T23:04:04.383589878Z [inf]  [Admin API LIVE] 📝 Users with resellerNames:
+2025-12-09T23:04:04.383597794Z [inf]    - David (userId: a519d9e2) → resellerName: "David Rietberg"
+2025-12-09T23:04:04.383605142Z [inf]    - Imi (userId: 8fd1f6d0) → resellerName: "Imela Dias Castanheira"
+2025-12-09T23:04:04.383615922Z [inf]    - Stefan (userId: e9ef2d70) → resellerName: "Stefan Hoefer"
+2025-12-09T23:04:04.383623317Z [inf]    - Raphael (userId: f0c3d9ad) → resellerName: "Raphael Rainer Birkner"
+2025-12-09T23:04:04.383623901Z [inf]    - Nic (userId: 8383c09c) → resellerName: "Nicolas Grandezka"
+2025-12-09T23:04:04.383630814Z [inf]    - Julie (userId: 97fd5efe) → resellerName: "Julie Sasse"
+2025-12-09T23:04:04.383631149Z [inf]    - Sarafina (userId: 76fd2558) → resellerName: "Sarafina Zawadi Arlanda"
+2025-12-09T23:04:04.383636899Z [inf]    - Letizia (userId: 1e68b479) → resellerName: "Letizia Pellegrino"
+2025-12-09T23:04:04.383637317Z [inf]    - Lisandra (userId: 341b10db) → resellerName: "Lisandra Emma Maria Gundlach"
+2025-12-09T23:04:04.383641885Z [inf]    - Bernhard Schauff Artist (userId: ccf1578f) → resellerName: "Bernhard Schauff"
+2025-12-09T23:04:04.383643954Z [inf]    - Kiri (userId: 89a6bb94) → resellerName: "Kirillos Hatziathanassiadis"
+2025-12-09T23:04:04.383647181Z [inf]    - Maryna (userId: 2cf8c8f7) → resellerName: "Maryna Bondarevska"
+2025-12-09T23:04:04.383651175Z [inf]    - Nadine (userId: 19338314) → resellerName: "Nadine Kilic"
+2025-12-09T23:04:04.383655255Z [inf]    - Eva (userId: d28ec53d) → resellerName: "Eva Klostermann"
+2025-12-09T23:04:04.383658484Z [inf]    - Danyal (userId: e8973b81) → resellerName: "Danyal Tahir"
+2025-12-09T23:04:04.383663059Z [inf]    - Manuel (userId: 2a688562) → resellerName: "Jose-Manuel Ferrer"
+2025-12-09T23:04:04.383667863Z [inf]    - Kevin (userId: 1a4abbb8) → resellerName: "Kevin Pfaff"
+2025-12-09T23:04:04.386355944Z [inf]    - Kai (userId: bf04c166) → resellerName: "Kai Külgen"
+2025-12-09T23:04:04.386411944Z [inf]    - Maurice (userId: 4cc03b2b) → resellerName: "Tijan Maurice Darboe"
+2025-12-09T23:04:04.386417350Z [inf]    - Mohamed Kanazoe (userId: 7fbb099f) → resellerName: "Mohamed Kanazoe"
+2025-12-09T23:04:04.386422974Z [inf]    - Marcel Gattung (userId: 33f26f68) → resellerName: "Marcel Gattung"
+2025-12-09T23:04:04.386428020Z [inf]  [Admin API LIVE] 📝 EGON contract counts from DB:
+2025-12-09T23:04:04.386433522Z [inf]  [Admin API LIVE] 📝 EGON contracts loaded: 0 resellers with contracts, 10.12.2025
+2025-12-09T23:04:34.386789365Z [inf]  [Admin API] Fetching live dashboard data
+2025-12-09T23:04:34.386794017Z [inf]  [Admin API LIVE] 📝 Users with resellerNames:
+2025-12-09T23:04:34.386798133Z [inf]    - David (userId: a519d9e2) → resellerName: "David Rietberg"
+2025-12-09T23:04:34.386802630Z [inf]    - Imi (userId: 8fd1f6d0) → resellerName: "Imela Dias Castanheira"
+2025-12-09T23:04:34.386806898Z [inf]    - Stefan (userId: e9ef2d70) → resellerName: "Stefan Hoefer"
+2025-12-09T23:04:34.386812839Z [inf]    - Nic (userId: 8383c09c) → resellerName: "Nicolas Grandezka"
+2025-12-09T23:04:34.386817253Z [inf]    - Julie (userId: 97fd5efe) → resellerName: "Julie Sasse"
+2025-12-09T23:04:34.386821310Z [inf]    - Lisandra (userId: 341b10db) → resellerName: "Lisandra Emma Maria Gundlach"
+2025-12-09T23:04:34.386825139Z [inf]    - Kiri (userId: 89a6bb94) → resellerName: "Kirillos Hatziathanassiadis"
+2025-12-09T23:04:34.386829457Z [inf]    - Nadine (userId: 19338314) → resellerName: "Nadine Kilic"
+2025-12-09T23:04:34.386833598Z [inf]    - Danyal (userId: e8973b81) → resellerName: "Danyal Tahir"
+2025-12-09T23:04:34.386837287Z [inf]    - Manuel (userId: 2a688562) → resellerName: "Jose-Manuel Ferrer"
+2025-12-09T23:04:34.386840933Z [inf]    - Kevin (userId: 1a4abbb8) → resellerName: "Kevin Pfaff"
+2025-12-09T23:04:34.386844695Z [inf]    - Raphael (userId: f0c3d9ad) → resellerName: "Raphael Rainer Birkner"
+2025-12-09T23:04:34.386849098Z [inf]    - Sarafina (userId: 76fd2558) → resellerName: "Sarafina Zawadi Arlanda"
+2025-12-09T23:04:34.386852998Z [inf]    - Letizia (userId: 1e68b479) → resellerName: "Letizia Pellegrino"
+2025-12-09T23:04:34.386858300Z [inf]    - Bernhard Schauff Artist (userId: ccf1578f) → resellerName: "Bernhard Schauff"
+2025-12-09T23:04:34.386862241Z [inf]    - Maryna (userId: 2cf8c8f7) → resellerName: "Maryna Bondarevska"
+2025-12-09T23:04:34.386866359Z [inf]    - Eva (userId: d28ec53d) → resellerName: "Eva Klostermann"
+2025-12-09T23:04:34.388727092Z [inf]    - Kai (userId: bf04c166) → resellerName: "Kai Külgen"
+2025-12-09T23:04:34.388734197Z [inf]    - Maurice (userId: 4cc03b2b) → resellerName: "Tijan Maurice Darboe"
+2025-12-09T23:04:34.388739002Z [inf]    - Mohamed Kanazoe (userId: 7fbb099f) → resellerName: "Mohamed Kanazoe"
+2025-12-09T23:04:34.388744434Z [inf]    - Marcel Gattung (userId: 33f26f68) → resellerName: "Marcel Gattung"
+2025-12-09T23:04:34.388748379Z [inf]  [Admin API LIVE] 📝 EGON contract counts from DB:
+2025-12-09T23:04:34.388752584Z [inf]  [Admin API LIVE] 📝 EGON contracts loaded: 0 resellers with contracts, 10.12.2025
+2025-12-09T23:05:04.390682809Z [inf]  [Admin API] Fetching live dashboard data
+2025-12-09T23:05:04.390682909Z [inf]    - Danyal (userId: e8973b81) → resellerName: "Danyal Tahir"
+2025-12-09T23:05:04.390692249Z [inf]  [Admin API LIVE] 📝 Users with resellerNames:
+2025-12-09T23:05:04.390692460Z [inf]    - Manuel (userId: 2a688562) → resellerName: "Jose-Manuel Ferrer"
+2025-12-09T23:05:04.390698300Z [inf]    - David (userId: a519d9e2) → resellerName: "David Rietberg"
+2025-12-09T23:05:04.390702188Z [inf]    - Kevin (userId: 1a4abbb8) → resellerName: "Kevin Pfaff"
+2025-12-09T23:05:04.390704187Z [inf]    - Imi (userId: 8fd1f6d0) → resellerName: "Imela Dias Castanheira"
+2025-12-09T23:05:04.390709531Z [inf]    - Stefan (userId: e9ef2d70) → resellerName: "Stefan Hoefer"
+2025-12-09T23:05:04.390713297Z [inf]    - Raphael (userId: f0c3d9ad) → resellerName: "Raphael Rainer Birkner"
+2025-12-09T23:05:04.390716679Z [inf]    - Nic (userId: 8383c09c) → resellerName: "Nicolas Grandezka"
+2025-12-09T23:05:04.390719814Z [inf]    - Sarafina (userId: 76fd2558) → resellerName: "Sarafina Zawadi Arlanda"
+2025-12-09T23:05:04.390723157Z [inf]    - Julie (userId: 97fd5efe) → resellerName: "Julie Sasse"
+2025-12-09T23:05:04.390725975Z [inf]    - Letizia (userId: 1e68b479) → resellerName: "Letizia Pellegrino"
+2025-12-09T23:05:04.390728165Z [inf]    - Lisandra (userId: 341b10db) → resellerName: "Lisandra Emma Maria Gundlach"
+2025-12-09T23:05:04.390731797Z [inf]    - Bernhard Schauff Artist (userId: ccf1578f) → resellerName: "Bernhard Schauff"
+2025-12-09T23:05:04.390733636Z [inf]    - Kiri (userId: 89a6bb94) → resellerName: "Kirillos Hatziathanassiadis"
+2025-12-09T23:05:04.390738010Z [inf]    - Maryna (userId: 2cf8c8f7) → resellerName: "Maryna Bondarevska"
+2025-12-09T23:05:04.390739828Z [inf]    - Nadine (userId: 19338314) → resellerName: "Nadine Kilic"
+2025-12-09T23:05:04.390745505Z [inf]    - Eva (userId: d28ec53d) → resellerName: "Eva Klostermann"
+2025-12-09T23:05:04.393299740Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-09T23:05:04.393312719Z [inf]    - newProspects from logData: ["000000","gündüz","wiche","blessed amissah","lucke","jammali","aboulkor","wicher","fromme","hecker walther","schmidt","wronski","kesim","dunker","schneyer","ibrahim ihsan","fuad albayati","kücük","kirschey","lebon","kizilkaya","schütt","barutcuoglu","müller","ebelhäuser"]
+2025-12-09T23:05:04.393330196Z [inf]    - Kai (userId: bf04c166) → resellerName: "Kai Külgen"
+2025-12-09T23:05:04.393337599Z [inf]    - Maurice (userId: 4cc03b2b) → resellerName: "Tijan Maurice Darboe"
+2025-12-09T23:05:04.393344425Z [inf]    - Mohamed Kanazoe (userId: 7fbb099f) → resellerName: "Mohamed Kanazoe"
+2025-12-09T23:05:04.393351633Z [inf]    - Marcel Gattung (userId: 33f26f68) → resellerName: "Marcel Gattung"
+2025-12-09T23:05:04.393358011Z [inf]  [Admin API LIVE] 📝 EGON contract counts from DB:
+2025-12-09T23:05:04.393364254Z [inf]  [Admin API LIVE] 📝 EGON contracts loaded: 0 resellers with contracts, 10.12.2025
+2025-12-09T23:05:04.393370522Z [inf]  [DailyReportCron] Generating final daily report for 2025-12-09
+2025-12-09T23:05:04.393376968Z [inf]  [DailyReport] Generating final report for 2025-12-09
+2025-12-09T23:05:04.393382888Z [inf]  [SQLiteHistorical] Loading data for 2025-12-09...
+2025-12-09T23:05:04.393389125Z [inf]  [SQLiteHistorical] Found 7 user(s) for 2025-12-09
+2025-12-09T23:05:04.393393847Z [inf]  [Photo Count] Kevin: 0 unique photos (from 0 total OCR uploads)
+2025-12-09T23:05:04.393398812Z [inf]  [SQLiteHistorical] Kevin activeTime: 0min (no native GPS or session data)
+2025-12-09T23:05:04.393404475Z [inf]  [SQLiteHistorical] Reconstructed Kevin: 0 actions, 204 GPS (0 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-09T23:05:04.393410819Z [inf]  [Photo Debug] First /api/ocr found for Lisandra:
+2025-12-09T23:05:04.393416005Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-09T23:05:04.395630720Z [inf]  [Photo Count] Lisandra: 40 unique photos (from 40 total OCR uploads)
+2025-12-09T23:05:04.395633521Z [inf]  [SQLiteHistorical] Lisandra activeTime: 243min (total span: 484min, breaks: 241min from 657 native GPS points)
+2025-12-09T23:05:04.395640827Z [inf]  [SQLiteHistorical] Lisandra finalStatuses: [
+2025-12-09T23:05:04.395642649Z [inf]  [SQLiteHistorical] Reconstructed Lisandra: 174 actions, 657 GPS (657 native), 40 photos, 80 status changes, 4.49km, 243min active
+2025-12-09T23:05:04.395648717Z [inf]    [ 'nicht_angetroffen', 63 ],
+2025-12-09T23:05:04.395656353Z [inf]    [ 'nicht_interessiert', 6 ],
+2025-12-09T23:05:04.395666785Z [inf]    [ 'interessiert', 5 ],
+2025-12-09T23:05:04.395677498Z [inf]    [ 'geschrieben', 1 ]
+2025-12-09T23:05:04.395682314Z [inf]    interest_later_to_written: 0,
+2025-12-09T23:05:04.395689171Z [inf]  ]
+2025-12-09T23:05:04.395702006Z [inf]  [SQLiteHistorical] Lisandra conversions: {
+2025-12-09T23:05:04.395703366Z [inf]    interest_later_to_no_interest: 0,
+2025-12-09T23:05:04.395711960Z [inf]    interest_later_to_appointment: 0,
+2025-12-09T23:05:04.395719968Z [inf]    interest_later_to_not_reached: 0,
+2025-12-09T23:05:04.395726376Z [inf]    interest_later_total: 6
+2025-12-09T23:05:04.395734800Z [inf]  }
+2025-12-09T23:05:04.395735767Z [inf]    - newProspects from log.data: ["000000","gündüz","wiche","blessed amissah","lucke","jammali","aboulkor","wicher","fromme","hecker walther","schmidt","wronski","kesim","dunker","schneyer","ibrahim ihsan","fuad albayati","kücük","kirschey","lebon","kizilkaya","schütt","barutcuoglu","müller","ebelhäuser"]
+2025-12-09T23:05:04.395743434Z [inf]    - existingCustomers from logData: []
+2025-12-09T23:05:04.395750968Z [inf]    - existingCustomers from log.data: []
+2025-12-09T23:05:04.395758674Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-09T23:05:04.395765419Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-09T23:05:04.399271003Z [inf]  [Photo Count] Imi: 0 unique photos (from 0 total OCR uploads)
+2025-12-09T23:05:04.399284753Z [inf]  [SQLiteHistorical] Imi activeTime: 0min (only 1 native GPS point)
+2025-12-09T23:05:04.399289889Z [inf]  [SQLiteHistorical] Reconstructed Imi: 0 actions, 1 GPS (1 native), 0 photos, 0 status changes, 0.00km, 0min active
+2025-12-09T23:05:04.399294235Z [inf]  [Photo Count] Ibrahim Yilmaz: 0 unique photos (from 0 total OCR uploads)
+2025-12-09T23:05:04.399299100Z [inf]  [SQLiteHistorical] Ibrahim Yilmaz activeTime: 651min (total span: 1356min, breaks: 704min from 1682 native GPS points)
+2025-12-09T23:05:04.399304168Z [inf]  [SQLiteHistorical] Reconstructed Ibrahim Yilmaz: 0 actions, 1682 GPS (1682 native), 0 photos, 0 status changes, 0.07km, 651min active
+2025-12-09T23:05:04.399310911Z [inf]  [Photo Count] Eva: 0 unique photos (from 0 total OCR uploads)
+2025-12-09T23:05:04.399315857Z [inf]  [SQLiteHistorical] Eva activeTime: 1min (total span: 1min, breaks: 0min from 5 native GPS points)
+2025-12-09T23:05:04.399320345Z [inf]  [SQLiteHistorical] Reconstructed Eva: 0 actions, 5 GPS (5 native), 0 photos, 0 status changes, 0.04km, 1min active
+2025-12-09T23:05:04.399324489Z [inf]  [Photo Debug] First /api/ocr found for Leon:
+2025-12-09T23:05:04.399328707Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-09T23:05:04.399333278Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-09T23:05:04.399337428Z [inf]    - newProspects from logData: ["cholewa mathias","dündar","eluvungal viswambharan","kunhikannan ranjini"]
+2025-12-09T23:05:04.399342885Z [inf]    - newProspects from log.data: ["cholewa mathias","dündar","eluvungal viswambharan","kunhikannan ranjini"]
+2025-12-09T23:05:04.399347325Z [inf]    - existingCustomers from logData: []
+2025-12-09T23:05:04.399351504Z [inf]    - existingCustomers from log.data: []
+2025-12-09T23:05:04.399355849Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-09T23:05:04.401683966Z [inf]    [ 'interessiert', 2 ],
+2025-12-09T23:05:04.401685392Z [inf]    - existingCustomers from logData: [{"id":"e32e3176-4053-4ff8-9dec-ca8fe39dda1b","name":"körsgen","street":"Auf dem Streitacker","houseNumber":"47","postalCode":"51149","isExisting":true,"contractType":null},{"id":"d7519a6a-6c90-41ac-99f1-202059ab39c1","name":"köhler","street":"Auf dem Streitacker","houseNumber":"47","postalCode":"51149","isExisting":true,"contractType":null},{"id":"7bb18967-e9e5-4d5a-8189-66ec995f175b","name":"esch","street":"Auf dem Streitacker","houseNumber":"47","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-09T23:05:04.401695451Z [inf]    [ 'termin_vereinbart', 1 ]
+2025-12-09T23:05:04.401701659Z [inf]  ]
+2025-12-09T23:05:04.401707738Z [inf]  [SQLiteHistorical] Leon conversions: {
+2025-12-09T23:05:04.401715018Z [inf]    interest_later_to_written: 0,
+2025-12-09T23:05:04.401722133Z [inf]    interest_later_to_no_interest: 0,
+2025-12-09T23:05:04.401725165Z [inf]  [SQLiteHistorical] Reconstructed Leon: 137 actions, 460 GPS (460 native), 16 photos, 51 status changes, 12.55km, 328min active
+2025-12-09T23:05:04.401730128Z [inf]    interest_later_to_appointment: 0,
+2025-12-09T23:05:04.401737149Z [inf]  [Photo Debug] First /api/ocr found for Raphael:
+2025-12-09T23:05:04.401738545Z [inf]    interest_later_to_not_reached: 1,
+2025-12-09T23:05:04.401745559Z [inf]    - endpoint from logData: "/api/ocr"
+2025-12-09T23:05:04.401746421Z [inf]    interest_later_total: 7
+2025-12-09T23:05:04.401753884Z [inf]    - endpoint from log.data: "/api/ocr"
+2025-12-09T23:05:04.401757649Z [inf]  }
+2025-12-09T23:05:04.401760505Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-09T23:05:04.401765627Z [inf]    - newProspects from logData: ["fam jovanovic"]
+2025-12-09T23:05:04.401771421Z [inf]  [Photo Count] Leon: 16 unique photos (from 16 total OCR uploads)
+2025-12-09T23:05:04.401771629Z [inf]  [SQLiteHistorical] Leon activeTime: 328min (total span: 534min, breaks: 205min from 460 native GPS points)
+2025-12-09T23:05:04.401777717Z [inf]    - newProspects from log.data: ["fam jovanovic"]
+2025-12-09T23:05:04.401783586Z [inf]  [SQLiteHistorical] Leon finalStatuses: [
+2025-12-09T23:05:04.401789766Z [inf]    [ 'nicht_angetroffen', 34 ],
+2025-12-09T23:05:04.401795165Z [inf]    [ 'nicht_interessiert', 7 ],
+2025-12-09T23:05:04.403451807Z [inf]    - existingCustomers from log.data: [{"id":"e32e3176-4053-4ff8-9dec-ca8fe39dda1b","name":"körsgen","street":"Auf dem Streitacker","houseNumber":"47","postalCode":"51149","isExisting":true,"contractType":null},{"id":"d7519a6a-6c90-41ac-99f1-202059ab39c1","name":"köhler","street":"Auf dem Streitacker","houseNumber":"47","postalCode":"51149","isExisting":true,"contractType":null},{"id":"7bb18967-e9e5-4d5a-8189-66ec995f175b","name":"esch","street":"Auf dem Streitacker","houseNumber":"47","postalCode":"51149","isExisting":true,"contractType":null}]
+2025-12-09T23:05:04.403459963Z [inf]    - Full logData keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-09T23:05:04.403470351Z [inf]    - Full log.data keys: endpoint, method, address, newProspects, existingCustomers, userAgent
+2025-12-09T23:05:04.403475798Z [inf]  [Photo Count] Raphael: 26 unique photos (from 26 total OCR uploads)
+2025-12-09T23:05:04.403481515Z [inf]  [SQLiteHistorical] Raphael finalStatuses: [
+2025-12-09T23:05:04.403487427Z [inf]    [ 'nicht_interessiert', 17 ],
+2025-12-09T23:05:04.403493553Z [inf]    [ 'nicht_angetroffen', 42 ],
+2025-12-09T23:05:04.403499680Z [inf]    [ 'geschrieben', 1 ],
+2025-12-09T23:05:04.403504500Z [inf]    [ 'termin_vereinbart', 1 ]
+2025-12-09T23:05:04.403508898Z [inf]  ]
+2025-12-09T23:05:04.403513535Z [inf]  [SQLiteHistorical] Raphael activeTime: 183min (total span: 1519min, breaks: 1336min from 513 native GPS points)
+2025-12-09T23:05:04.403518180Z [inf]  [SQLiteHistorical] Reconstructed Raphael: 141 actions, 513 GPS (513 native), 26 photos, 63 status changes, 2.93km, 183min active
+2025-12-09T23:05:04.403522275Z [inf]  [SQLiteHistorical] ✅ Loaded 7 users for 2025-12-09
+2025-12-09T23:05:04.403526112Z [inf]  [DailyReport] Lisandra: 7 pauses → 0 unique locations (POI lookup)
+2025-12-09T23:05:04.403530749Z [inf]  [DailyReport] Ibrahim Yilmaz: 22 pauses → 0 unique locations (POI lookup)
+2025-12-09T23:05:04.406060077Z [inf]  [DailyReport] Creating new report: daily-report-2025-12-09.json
+2025-12-09T23:05:04.406068806Z [inf]  [DailyReport] Report for 2025-12-09 (final) uploaded successfully
+2025-12-09T23:05:04.406074703Z [inf]  [DailyReportCron] ✅ Final report for 2025-12-09 created successfully
+2025-12-09T23:05:04.406089858Z [inf]  [DailyReport] Eva: 0 pauses → 0 unique locations (POI lookup)
+2025-12-09T23:05:04.406096945Z [inf]  [DailyReport] Leon: 5 pauses → 0 unique locations (POI lookup)
+2025-12-09T23:05:04.406103193Z [inf]  [DailyReport] Raphael: 5 pauses → 0 unique locations (POI lookup)
+2025-12-09T23:05:04.406109732Z [inf]  [DailyReport] POI Cache Performance: {
+2025-12-09T23:05:04.406115768Z [inf]    cacheSize: 127,
+2025-12-09T23:05:04.406121860Z [inf]    initialized: true,
+2025-12-09T23:05:04.406127079Z [inf]    hits: 134,
+2025-12-09T23:05:04.406133086Z [inf]    misses: 562,
+2025-12-09T23:05:04.406137627Z [inf]    hitRate: '19.3%',
+2025-12-09T23:05:04.406142746Z [inf]    apiCalls: 562,
+2025-12-09T23:05:04.406147544Z [inf]    savedPOIs: 12,
+2025-12-09T23:05:04.406151932Z [inf]    estimatedCost: '$9.55'
+2025-12-09T23:05:04.406156534Z [inf]  }
+2025-12-09T23:05:04.406161295Z [err]  The `credentials` option is deprecated. Please use the `auth` object constructor instead. For more details, see https://cloud.google.com/docs/authentication/external/externally-sourced-credentials.
+2025-12-09T23:05:04.406165594Z [err]  The `fromJSON` method is deprecated. Please use the `JWT` constructor instead. For more details, see https://cloud.google.com/docs/authentication/external/externally-sourced-credentials.
+2025-12-09T23:05:34.413303844Z [inf]  [Admin API] Fetching live dashboard data
+2025-12-09T23:05:34.413311099Z [inf]  [Admin API LIVE] 📝 Users with resellerNames:
+2025-12-09T23:05:34.413316983Z [inf]    - David (userId: a519d9e2) → resellerName: "David Rietberg"
+2025-12-09T23:05:34.413321889Z [inf]    - Imi (userId: 8fd1f6d0) → resellerName: "Imela Dias Castanheira"
+2025-12-09T23:05:34.413326476Z [inf]    - Stefan (userId: e9ef2d70) → resellerName: "Stefan Hoefer"
+2025-12-09T23:05:34.413331124Z [inf]    - Nic (userId: 8383c09c) → resellerName: "Nicolas Grandezka"
+2025-12-09T23:05:34.413335893Z [inf]    - Julie (userId: 97fd5efe) → resellerName: "Julie Sasse"
+2025-12-09T23:05:34.413340995Z [inf]    - Lisandra (userId: 341b10db) → resellerName: "Lisandra Emma Maria Gundlach"
+2025-12-09T23:05:34.413345194Z [inf]    - Kiri (userId: 89a6bb94) → resellerName: "Kirillos Hatziathanassiadis"
+2025-12-09T23:05:34.413351578Z [inf]    - Nadine (userId: 19338314) → resellerName: "Nadine Kilic"
+2025-12-09T23:05:34.413356158Z [inf]    - Danyal (userId: e8973b81) → resellerName: "Danyal Tahir"
+2025-12-09T23:05:34.413360493Z [inf]    - Manuel (userId: 2a688562) → resellerName: "Jose-Manuel Ferrer"
+2025-12-09T23:05:34.413365105Z [inf]    - Kevin (userId: 1a4abbb8) → resellerName: "Kevin Pfaff"
+2025-12-09T23:05:34.413369521Z [inf]    - Raphael (userId: f0c3d9ad) → resellerName: "Raphael Rainer Birkner"
+2025-12-09T23:05:34.413373869Z [inf]    - Sarafina (userId: 76fd2558) → resellerName: "Sarafina Zawadi Arlanda"
+2025-12-09T23:05:34.413378187Z [inf]    - Letizia (userId: 1e68b479) → resellerName: "Letizia Pellegrino"
+2025-12-09T23:05:34.413382341Z [inf]    - Bernhard Schauff Artist (userId: ccf1578f) → resellerName: "Bernhard Schauff"
+2025-12-09T23:05:34.413388836Z [inf]    - Maryna (userId: 2cf8c8f7) → resellerName: "Maryna Bondarevska"
+2025-12-09T23:05:34.413393783Z [inf]    - Eva (userId: d28ec53d) → resellerName: "Eva Klostermann"
+2025-12-09T23:05:34.415171676Z [inf]    - Kai (userId: bf04c166) → resellerName: "Kai Külgen"
+2025-12-09T23:05:34.415177967Z [inf]    - Maurice (userId: 4cc03b2b) → resellerName: "Tijan Maurice Darboe"
+2025-12-09T23:05:34.415185002Z [inf]    - Mohamed Kanazoe (userId: 7fbb099f) → resellerName: "Mohamed Kanazoe"
+2025-12-09T23:05:34.415189329Z [inf]    - Marcel Gattung (userId: 33f26f68) → resellerName: "Marcel Gattung"
+2025-12-09T23:05:34.415193381Z [inf]  [Admin API LIVE] 📝 EGON contract counts from DB:
+2025-12-09T23:05:34.415198822Z [inf]  [Admin API LIVE] 📝 EGON contracts loaded: 0 resellers with contracts, 10.12.2025

@@ -1,0 +1,81 @@
+	Agrippastraße	85	50676	Köln					Kiri	2025-11-27T08:02:38.182Z
+	Barbarastraße	36G	51147	Köln					Raphael	2025-11-27T08:36:47.824Z
+	Am Bahnhof	91	51147	Köln					Kiri	2025-11-27T08:37:56.859Z
+	Barbarastraße	36F	51147	Köln					Raphael	2025-11-27T08:41:07.186Z
+	Barbarastraße	36E	51147	Köln					Raphael	2025-11-27T08:42:06.195Z
+	Am Bahnhof	68	51147	Köln					Kiri	2025-11-27T08:51:43.618Z
+	Kleeweg	12	51147	Köln					Kiri	2025-11-27T08:51:51.278Z
+	Berghäuschensweg	189	41468	Neuss					Eva	2025-11-27T09:08:57.708Z
+	Berghäuschensweg	191	41468	Neuss					Eva	2025-11-27T09:09:38.670Z
+	Jasminweg	1A	41468	Neuss					Eva	2025-11-27T09:09:39.837Z
+	Jasminweg	33	41468	Neuss					Eva	2025-11-27T09:10:14.500Z
+	Jasminweg	8	41468	Neuss					Eva	2025-11-27T09:17:35.167Z
+	Barbarastraße	36B	51147	Köln					Raphael	2025-11-27T09:18:57.929Z
+	Im Haferfeld	16	51147	Köln					Kiri	2025-11-27T09:19:18.802Z
+	Kleeweg	14	51147	Köln					Kiri	2025-11-27T09:19:21.727Z
+	Hermann-Löns-Straße	118	51147	Köln					Stefan	2025-11-27T09:22:32.425Z
+	Artilleriestraße	15	51147	Köln					Lisandra	2025-11-27T09:27:45.921Z
+	Im Bodesfeld	18	51147	Köln					Kiri	2025-11-27T09:28:32.375Z
+	Im Bodesfeld	28	51147	Köln					Kiri	2025-11-27T09:28:34.372Z
+	Distelweg	14	51147	Köln					Kiri	2025-11-27T09:28:49.674Z
+	Grüner Weg	28	41468	Neuss					David	2025-11-27T09:29:52.047Z
+	Kornblumenweg	15	51147	Köln					Kiri	2025-11-27T09:41:23.473Z
+	Barbarastraße	42	51147	Köln					Raphael	2025-11-27T09:53:54.386Z
+	Feltenstraße	14	41468	Neuss					Eva	2025-11-27T09:55:31.353Z
+	Jasminweg	20	41468	Neuss					Eva	2025-11-27T09:55:44.887Z
+	Holunderweg	9	41468	Neuss					David	2025-11-27T10:06:02.966Z
+	Gagelweg	1	41468	Neuss					Eva	2025-11-27T10:11:15.158Z
+	Gagelweg	9	41468	Neuss					Eva	2025-11-27T10:13:08.233Z
+	Ginsterweg	14	41468	Neuss					Eva	2025-11-27T10:13:10.025Z
+	Holunderweg	1A	41468	Neuss					David	2025-11-27T10:16:01.593Z
+	Rolandstraße	7	51147	Köln					Lisandra	2025-11-27T10:18:26.615Z
+	Ginsterweg	27	41468	Neuss					Eva	2025-11-27T10:21:06.104Z
+	Ginsterweg	1	41468	Neuss					Eva	2025-11-27T10:21:10.952Z
+	Barbarastraße	44	51147	Köln					Raphael	2025-11-27T10:22:20.454Z
+	Rolandstraße	11	51147	Köln					Lisandra	2025-11-27T10:23:55.455Z
+	Kantstraße	4	51147	Köln					Stefan	2025-11-27T10:25:19.278Z
+	Wacholderweg	6A	41468	Neuss					David	2025-11-27T10:32:10.076Z
+	Hainbuchenweg	17A	41468	Neuss					David	2025-11-27T10:32:10.882Z
+	Gagelweg	15	41468	Neuss					Eva	2025-11-27T10:32:20.204Z
+	Gagelweg	26	41468	Neuss					Eva	2025-11-27T10:39:21.883Z
+	Gagelweg	12	41468	Neuss					Eva	2025-11-27T10:42:41.049Z
+	Barbarastraße	47B	51147	Köln					Raphael	2025-11-27T10:42:43.630Z
+	Barbarastraße	45A	51147	Köln					Raphael	2025-11-27T10:53:28.776Z
+	Barbarastraße	41A	51147	Köln					Raphael	2025-11-27T11:02:52.562Z
+	Magazinstraße	19	51147	Köln					Lisandra	2025-11-27T11:06:27.913Z
+	Grüner Weg	50	41468	Neuss					Eva	2025-11-27T11:08:05.995Z
+	L489	4	51147	Köln					Lisandra	2025-11-27T11:11:47.067Z
+	Grüner Weg	57	41468	Neuss					Nic	2025-11-27T11:13:47.384Z
+	Grüner Weg	40	41468	Neuss					Eva	2025-11-27T11:17:58.803Z
+	Rolandstraße	20a	51147	Köln					Lisandra	2025-11-27T11:17:59.177Z
+	Artilleriestraße	88	51147	Köln					Raphael	2025-11-27T11:20:18.312Z
+	Barbarastraße	37	51147	Köln					Raphael	2025-11-27T11:20:30.207Z
+	Am Heepsgarten	18	51147	Köln					Kiri	2025-11-27T11:30:56.402Z
+	Am Heepsgarten	28	51147	Köln					Kiri	2025-11-27T11:31:24.658Z
+	Am Wolfsgarten	6	51147	Köln					Kiri	2025-11-27T11:35:47.626Z
+	Rotdornweg	8	41468	Neuss					David	2025-11-27T11:40:16.225Z
+	Wacholderweg	1A	41468	Neuss					David	2025-11-27T11:40:21.932Z
+	Wacholderweg	1	41468	Neuss					David	2025-11-27T11:45:46.779Z
+	Wacholderweg	14	41468	Neuss					David	2025-11-27T11:50:05.626Z
+	Grüner Weg	51	41468	Neuss					Nic	2025-11-27T11:50:32.600Z
+	Dietrichstraße	30	41468	Neuss					Eva	2025-11-27T11:54:07.524Z
+	Grüner Weg	34	41468	Neuss					Eva	2025-11-27T11:54:09.615Z
+	Rotdornweg	9	41468	Neuss					Eva	2025-11-27T11:55:16.783Z
+	Am Büllesgarten	10	51147	Köln					Kiri	2025-11-27T11:57:08.147Z
+	Am Büllesgarten	24	51147	Köln					Kiri	2025-11-27T11:58:17.007Z
+	Grüner Weg	47	41468	Neuss					Nic	2025-11-27T11:58:19.799Z
+	Grüner Weg	22	41468	Neuss					Eva	2025-11-27T12:04:03.248Z
+	Am Börschsgarten	2	51147	Köln					Kiri	2025-11-27T12:05:24.500Z
+	Hagebuttenweg	19	41468	Neuss					David	2025-11-27T12:07:21.271Z
+	Grüner Weg	12A	41468	Neuss					Eva	2025-11-27T12:08:56.722Z
+	Am Kuxgarten	4	51147	Köln					Kiri	2025-11-27T12:11:21.859Z
+	Am Kuxgarten	20	51147	Köln					Kiri	2025-11-27T12:13:16.527Z
+	Nachtigallenstraße	8	51147	Köln					Kiri	2025-11-27T12:13:54.957Z
+	Nachtigallenstraße	6	51147	Köln					Kiri	2025-11-27T12:14:22.187Z
+	Magnolienweg	2C	41468	Neuss					David	2025-11-27T12:15:18.734Z
+	Magnolienweg	5	41468	Neuss					David	2025-11-27T12:16:30.696Z
+	Nachtigallenstraße	4A	51147	Köln					Kiri	2025-11-27T12:17:08.203Z
+	Gagelweg	30	41468	Neuss					Eva	2025-11-27T12:19:00.917Z
+	Grüner Weg	2E-F	41468	Neuss					Eva	2025-11-27T12:19:21.166Z
+	Am Distelkampsgarten	14	51147	Köln					Kiri	2025-11-27T12:20:05.164Z
+	Grüner Weg	1	41468	Neuss					Eva	2025-11-27T12:28:13.249Z

@@ -1,0 +1,3517 @@
+[
+  {
+    "datasetId": "ds_1764233045914_e6xdbz3x7",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T08:44:06.220Z",
+    "lastUpdated": "2025-11-27T08:49:48.374Z",
+    "street": "Barbarastraße",
+    "houseNumber": "36f",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "tönnesen"
+      },
+      {
+        "name": "gürses",
+        "status": "no_interest"
+      },
+      {
+        "name": "tsinas",
+        "status": "not_reached"
+      },
+      {
+        "name": "richter",
+        "status": "not_reached"
+      },
+      {
+        "name": "berg",
+        "status": "not_reached"
+      },
+      {
+        "name": "tarneja",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764233449265_os5x0fg9a",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T08:50:49.547Z",
+    "lastUpdated": "2025-11-27T08:56:53.073Z",
+    "street": "Barbarastraße",
+    "houseNumber": "36g",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "reichhardt",
+        "status": "not_reached"
+      },
+      {
+        "name": "sundri luthra sindi",
+        "status": "no_interest"
+      },
+      {
+        "name": "reichert straub",
+        "status": "no_interest"
+      },
+      {
+        "name": "klein",
+        "status": "no_interest"
+      },
+      {
+        "name": "risling mastroiacovo",
+        "status": "no_interest"
+      },
+      {
+        "name": "emetlioglu"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764233610010_kwygwd85u",
+    "username": "Kiri",
+    "firstSeen": "2025-11-27T08:53:30.299Z",
+    "lastUpdated": "2025-11-27T08:56:10.596Z",
+    "street": "Kleeweg",
+    "houseNumber": "10",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "kuebart",
+        "status": "not_reached"
+      },
+      {
+        "name": "erb lech",
+        "status": "not_reached"
+      },
+      {
+        "name": "oswald",
+        "status": "not_reached"
+      },
+      {
+        "name": "schmitz",
+        "status": "not_reached"
+      },
+      {
+        "name": "sahling schwandt"
+      },
+      {
+        "name": "wemhöner"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764233873546_780y295m4",
+    "username": "Kiri",
+    "firstSeen": "2025-11-27T08:57:53.960Z",
+    "lastUpdated": "2025-11-27T08:59:07.897Z",
+    "street": "Kleeweg",
+    "houseNumber": "12",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "woit",
+        "status": "no_interest"
+      },
+      {
+        "name": "kaysim",
+        "status": "not_reached"
+      },
+      {
+        "name": "lehmann diehr",
+        "status": "not_reached"
+      },
+      {
+        "name": "wolf",
+        "status": "no_interest"
+      },
+      {
+        "name": "stäuder"
+      },
+      {
+        "name": "herzog"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764234640854_14to9729r",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T09:10:41.197Z",
+    "lastUpdated": "2025-11-27T09:11:09.442Z",
+    "street": "Jasminweg",
+    "houseNumber": "2",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "solbach",
+        "status": "no_interest"
+      },
+      {
+        "name": "arens",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764234742352_xu7aurrzu",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T09:12:22.631Z",
+    "lastUpdated": "2025-11-27T09:12:28.410Z",
+    "street": "Jasminweg",
+    "houseNumber": "4",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Evers",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764234806064_yioh5ooog",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T09:13:26.440Z",
+    "lastUpdated": "2025-11-27T09:15:35.678Z",
+    "street": "Jasminweg",
+    "houseNumber": "5",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Noname ",
+        "status": "no_interest"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764234975271_tuwpr4dl8",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T09:16:15.563Z",
+    "lastUpdated": "2025-11-27T09:16:25.482Z",
+    "street": "Jasminweg",
+    "houseNumber": "7",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Eilers",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764235032532_ddij7qo5h",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T09:17:12.861Z",
+    "lastUpdated": "2025-11-27T09:17:22.129Z",
+    "street": "Jasminweg",
+    "houseNumber": "8",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Schmeynk",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764235189107_llsdrsk5q",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T09:19:49.429Z",
+    "lastUpdated": "2025-11-27T09:35:07.991Z",
+    "street": "Barbarastraße",
+    "houseNumber": "36e",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "maron",
+        "status": "appointment"
+      },
+      {
+        "name": "egyed",
+        "status": "no_interest"
+      },
+      {
+        "name": "chan",
+        "status": "not_reached"
+      },
+      {
+        "name": "vieres",
+        "status": "no_interest"
+      },
+      {
+        "name": "krewinkel"
+      },
+      {
+        "name": "hahrens"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764235314386_9lauegtwx",
+    "username": "Kiri",
+    "firstSeen": "2025-11-27T09:21:54.672Z",
+    "lastUpdated": "2025-11-27T09:22:22.154Z",
+    "street": "Kleeweg",
+    "houseNumber": "18",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "wienhold janker",
+        "status": "not_reached"
+      },
+      {
+        "name": "jegart dreiucker",
+        "status": "not_reached"
+      },
+      {
+        "name": "bouabid"
+      },
+      {
+        "name": "holzgrewe"
+      },
+      {
+        "name": "kredler"
+      },
+      {
+        "name": "kirch hagenau"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764235366081_o8k4wuo2i",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T09:22:46.394Z",
+    "lastUpdated": "2025-11-27T09:23:22.112Z",
+    "street": "Jasminweg",
+    "houseNumber": "12",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Spicker",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764235389090_zzw5qb5a9",
+    "username": "Stefan",
+    "firstSeen": "2025-11-27T09:23:09.442Z",
+    "lastUpdated": "2025-11-27T09:27:33.566Z",
+    "street": "Hermann-Löns-Straße",
+    "houseNumber": "120",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "hoffmann",
+        "status": "not_reached"
+      },
+      {
+        "name": "köter",
+        "status": "no_interest"
+      },
+      {
+        "name": "byrtus",
+        "status": "not_reached"
+      },
+      {
+        "name": "saxler",
+        "status": "no_interest"
+      },
+      {
+        "name": "akkaya"
+      },
+      {
+        "name": "polotzek"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764235631255_qrmznkql1",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T09:27:11.576Z",
+    "lastUpdated": "2025-11-27T09:27:33.741Z",
+    "street": "Jasminweg",
+    "houseNumber": "14a",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "schmitz tarasenko",
+        "status": "no_interest"
+      },
+      {
+        "name": "ehlert",
+        "status": "not_reached"
+      },
+      {
+        "name": "grundmann",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764235690188_1dk30bzm5",
+    "username": "Stefan",
+    "firstSeen": "2025-11-27T09:28:10.553Z",
+    "lastUpdated": "2025-11-27T09:33:46.426Z",
+    "street": "Hermann-Löns-Straße",
+    "houseNumber": "118",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "bomba",
+        "status": "no_interest"
+      },
+      {
+        "name": "Thiel papalia",
+        "status": "not_reached"
+      },
+      {
+        "name": "domachowski",
+        "status": "not_reached"
+      },
+      {
+        "name": "kernbach"
+      },
+      {
+        "name": "mosiezny"
+      },
+      {
+        "name": "katic"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764235790542_67v123qa9",
+    "username": "Kiri",
+    "firstSeen": "2025-11-27T09:29:50.907Z",
+    "lastUpdated": "2025-11-27T09:30:08.467Z",
+    "street": "Distelweg",
+    "houseNumber": "10",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "nilius",
+        "status": "interest_later"
+      },
+      {
+        "name": "lorenz",
+        "status": "not_reached"
+      },
+      {
+        "name": "trelenberg",
+        "status": "not_reached"
+      },
+      {
+        "name": "vesen"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764235929317_xsisxqk9k",
+    "username": "Kiri",
+    "firstSeen": "2025-11-27T09:32:09.624Z",
+    "lastUpdated": "2025-11-27T09:32:20.781Z",
+    "street": "Distelweg",
+    "houseNumber": "13",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "siebertz",
+        "status": "no_interest"
+      },
+      {
+        "name": "renz"
+      },
+      {
+        "name": "brettschneider"
+      },
+      {
+        "name": "renz"
+      },
+      {
+        "name": "gründel kläs"
+      },
+      {
+        "name": "landers benfer"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764236104803_iiiqdsjb4",
+    "username": "Kiri",
+    "firstSeen": "2025-11-27T09:35:05.083Z",
+    "lastUpdated": "2025-11-27T09:35:11.936Z",
+    "street": "Distelweg",
+    "houseNumber": "6a",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "scheid",
+        "status": "not_reached"
+      },
+      {
+        "name": "scheld",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764236113682_tcdsv7ubl",
+    "username": "Stefan",
+    "firstSeen": "2025-11-27T09:35:14.020Z",
+    "lastUpdated": "2025-11-27T09:42:13.248Z",
+    "street": "Hermann-Löns-Straße",
+    "houseNumber": "116",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "ochotta",
+        "status": "no_interest"
+      },
+      {
+        "name": "veber"
+      },
+      {
+        "name": "fuest renz"
+      },
+      {
+        "name": "weiss"
+      },
+      {
+        "name": "schönenberg"
+      },
+      {
+        "name": "tampier"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764236164710_twihr3vid",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T09:36:05.032Z",
+    "lastUpdated": "2025-11-27T09:42:07.846Z",
+    "street": "Barbarastraße",
+    "houseNumber": "36d",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "windecker",
+        "status": "no_interest"
+      },
+      {
+        "name": "haidery",
+        "status": "no_interest"
+      },
+      {
+        "name": "gilani",
+        "status": "no_interest"
+      },
+      {
+        "name": "hirsch schoprudko"
+      },
+      {
+        "name": "wieczorek linke"
+      },
+      {
+        "name": "berati"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764236589348_elpm0ctcc",
+    "username": "Stefan",
+    "firstSeen": "2025-11-27T09:43:09.678Z",
+    "lastUpdated": "2025-11-27T09:47:42.386Z",
+    "street": "Hermann-Löns-Straße",
+    "houseNumber": "114",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "görs",
+        "status": "no_interest"
+      },
+      {
+        "name": "bräuer",
+        "status": "not_reached"
+      },
+      {
+        "name": "gaitzsch"
+      },
+      {
+        "name": "grgic",
+        "status": "no_interest"
+      },
+      {
+        "name": "heinrichs",
+        "status": "not_reached"
+      },
+      {
+        "name": "wodarz"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764236792229_c7jj07j2u",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T09:46:32.615Z",
+    "lastUpdated": "2025-11-27T09:51:14.082Z",
+    "street": "Barbarastraße",
+    "houseNumber": "34c",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "Lumia",
+        "status": "no_interest"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764236942910_45a009hqa",
+    "username": "Stefan",
+    "firstSeen": "2025-11-27T09:49:03.225Z",
+    "lastUpdated": "2025-11-27T09:53:21.487Z",
+    "street": "Hermann-Löns-Straße",
+    "houseNumber": "112",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "yildirim",
+        "status": "not_reached"
+      },
+      {
+        "name": "gallianer",
+        "status": "no_interest"
+      },
+      {
+        "name": "yagmur",
+        "status": "no_interest"
+      },
+      {
+        "name": "solty",
+        "status": "not_reached"
+      },
+      {
+        "name": "durgut"
+      },
+      {
+        "name": "dittrich"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764237239946_m61iexvk9",
+    "username": "Stefan",
+    "firstSeen": "2025-11-27T09:54:00.246Z",
+    "lastUpdated": "2025-11-27T10:18:20.021Z",
+    "street": "Hermann-Löns-Straße",
+    "houseNumber": "110",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "kobe",
+        "status": "not_reached"
+      },
+      {
+        "name": "scepanski"
+      },
+      {
+        "name": "semper",
+        "status": "no_interest"
+      },
+      {
+        "name": "lüdigk"
+      },
+      {
+        "name": "kleine"
+      },
+      {
+        "name": "möhle"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764237260630_98dhpbpf9",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T09:54:20.969Z",
+    "lastUpdated": "2025-11-27T09:57:18.021Z",
+    "street": "Barbarastraße",
+    "houseNumber": "42",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "inanli",
+        "status": "no_interest"
+      },
+      {
+        "name": "olbrich",
+        "status": "not_reached"
+      },
+      {
+        "name": "hütter",
+        "status": "not_reached"
+      },
+      {
+        "name": "hoffmann"
+      },
+      {
+        "name": "kaschubowski"
+      },
+      {
+        "name": "sprenger"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764237453875_wvs9iguga",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T09:57:34.178Z",
+    "lastUpdated": "2025-11-27T09:57:46.006Z",
+    "street": "Jasminweg",
+    "houseNumber": "21",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Eisbach Elke"
+      },
+      {
+        "name": "Heinemann Renate"
+      },
+      {
+        "name": "Wysocki Natalie"
+      },
+      {
+        "name": "Jas"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764237485201_559mecclf",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T09:58:05.492Z",
+    "lastUpdated": "2025-11-27T09:58:34.233Z",
+    "street": "Barbarastraße",
+    "houseNumber": "40",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "franz",
+        "status": "not_reached"
+      },
+      {
+        "name": "evers"
+      },
+      {
+        "name": "heil"
+      },
+      {
+        "name": "bimberg"
+      },
+      {
+        "name": "breuer"
+      },
+      {
+        "name": "sipala"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764237562410_n2sss8bmr",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T09:59:22.711Z",
+    "lastUpdated": "2025-11-27T09:59:56.198Z",
+    "street": "Barbarastraße",
+    "houseNumber": "38",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "blaskowitz scholz",
+        "status": "not_reached"
+      },
+      {
+        "name": "cala",
+        "status": "not_reached"
+      },
+      {
+        "name": "petrovic"
+      },
+      {
+        "name": "dege"
+      },
+      {
+        "name": "asamoah"
+      },
+      {
+        "name": "plies"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764237690153_a449habw7",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T10:01:30.481Z",
+    "lastUpdated": "2025-11-27T10:01:55.103Z",
+    "street": "Barbarastraße",
+    "houseNumber": "44",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "Reinhard Ziegler"
+      },
+      {
+        "name": "G. P. Lu"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764237712492_njzge7976",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T10:01:52.793Z",
+    "lastUpdated": "2025-11-27T10:02:02.018Z",
+    "street": "Jasminweg",
+    "houseNumber": "23",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Kayser",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764237774614_ckuav37nl",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T10:02:54.922Z",
+    "lastUpdated": "2025-11-27T10:02:54.922Z",
+    "street": "Barbarastraße",
+    "houseNumber": "50",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [],
+    "notes": "",
+    "actions": [
+      "dataset_create"
+    ]
+  },
+  {
+    "datasetId": "ds_1764237988824_j3gi5dtdj",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T10:06:29.140Z",
+    "lastUpdated": "2025-11-27T10:06:38.154Z",
+    "street": "Jasminweg",
+    "houseNumber": "29",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "schmitz",
+        "status": "not_reached"
+      },
+      {
+        "name": "volkmann"
+      },
+      {
+        "name": "cremer"
+      },
+      {
+        "name": "stickel"
+      },
+      {
+        "name": "stickel"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764238038760_5siyati30",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T10:07:19.049Z",
+    "lastUpdated": "2025-11-27T10:08:38.942Z",
+    "street": "Barbarastraße",
+    "houseNumber": "66",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "Steinbach",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764238059487_ic02k37xe",
+    "username": "David",
+    "firstSeen": "2025-11-27T10:07:39.797Z",
+    "lastUpdated": "2025-11-27T10:07:58.192Z",
+    "street": "Holunderweg",
+    "houseNumber": "6",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Thaler",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764238147346_sy1gxkzw5",
+    "username": "David",
+    "firstSeen": "2025-11-27T10:09:07.658Z",
+    "lastUpdated": "2025-11-27T10:09:15.725Z",
+    "street": "Holunderweg",
+    "houseNumber": "4a",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Atajir",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764238394239_4o0gojkl6",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T10:13:14.519Z",
+    "lastUpdated": "2025-11-27T10:13:26.214Z",
+    "street": "Ginsterweg",
+    "houseNumber": "14",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Fülber",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764238404390_73r5g4psc",
+    "username": "David",
+    "firstSeen": "2025-11-27T10:13:24.675Z",
+    "lastUpdated": "2025-11-27T10:13:33.012Z",
+    "street": "Holunderweg",
+    "houseNumber": "3a",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "On",
+        "status": "no_interest"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764238516591_ab61xr3yv",
+    "username": "David",
+    "firstSeen": "2025-11-27T10:15:16.873Z",
+    "lastUpdated": "2025-11-27T10:15:23.124Z",
+    "street": "Holunderweg",
+    "houseNumber": "1",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Remus",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764238543254_ioi384kot",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T10:15:43.571Z",
+    "lastUpdated": "2025-11-27T10:16:01.111Z",
+    "street": "Ginsterweg",
+    "houseNumber": "15",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "neumann",
+        "status": "not_reached"
+      },
+      {
+        "name": "weber",
+        "status": "not_reached"
+      },
+      {
+        "name": "schnitzler",
+        "status": "not_reached"
+      },
+      {
+        "name": "schubert"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764238744385_l8uvybyuz",
+    "username": "David",
+    "firstSeen": "2025-11-27T10:19:04.678Z",
+    "lastUpdated": "2025-11-27T10:19:12.425Z",
+    "street": "Holunderweg",
+    "houseNumber": "15",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Vieth",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764238778158_ze5c67wqk",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T10:19:38.481Z",
+    "lastUpdated": "2025-11-27T10:19:54.879Z",
+    "street": "Ginsterweg",
+    "houseNumber": "24",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Reißner",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764238790011_xsusnbz5n",
+    "username": "Lisandra",
+    "firstSeen": "2025-11-27T10:19:50.298Z",
+    "lastUpdated": "2025-11-27T10:23:43.786Z",
+    "street": "Rolandstraße",
+    "houseNumber": "7",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "damon jie"
+      },
+      {
+        "name": "hartmann",
+        "status": "not_reached"
+      },
+      {
+        "name": "rux",
+        "status": "not_reached"
+      },
+      {
+        "name": "stella",
+        "status": "not_reached"
+      },
+      {
+        "name": "bober sonnenberg",
+        "status": "not_reached"
+      },
+      {
+        "name": "kalberlah",
+        "status": "not_reached"
+      },
+      {
+        "name": "fornito porca"
+      },
+      {
+        "name": "weber dittmann"
+      },
+      {
+        "name": "fischer"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764238942778_t89rjljea",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T10:22:23.063Z",
+    "lastUpdated": "2025-11-27T10:22:29.431Z",
+    "street": "Ginsterweg",
+    "houseNumber": "2",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Kehler",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764239019426_yfgz48ma8",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T10:23:39.721Z",
+    "lastUpdated": "2025-11-27T10:23:59.602Z",
+    "street": "Barbarastraße",
+    "houseNumber": "65",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "Laumen",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764239141274_vx2qvwcu3",
+    "username": "Stefan",
+    "firstSeen": "2025-11-27T10:25:41.557Z",
+    "lastUpdated": "2025-11-27T10:36:12.568Z",
+    "street": "Kantstraße",
+    "houseNumber": "4",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "tretyakov ebauer",
+        "status": "not_reached"
+      },
+      {
+        "name": "samoilenko",
+        "status": "no_interest"
+      },
+      {
+        "name": "bulpa"
+      },
+      {
+        "name": "daiber"
+      },
+      {
+        "name": "bruhy"
+      },
+      {
+        "name": "lindigrin"
+      },
+      {
+        "name": "simernickij"
+      },
+      {
+        "name": "erfling lüttgens"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764239141305_i4iy1ni0f",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T10:25:41.620Z",
+    "lastUpdated": "2025-11-27T10:29:42.866Z",
+    "street": "Barbarastraße",
+    "houseNumber": "59",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "konstanty",
+        "status": "not_reached"
+      },
+      {
+        "name": "horvath",
+        "status": "no_interest"
+      },
+      {
+        "name": "link",
+        "status": "not_reached"
+      },
+      {
+        "name": "weiss"
+      },
+      {
+        "name": "hingst"
+      },
+      {
+        "name": "neumann"
+      },
+      {
+        "name": "Tasdemir",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764239451259_y6kx9pp5c",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T10:30:51.606Z",
+    "lastUpdated": "2025-11-27T10:31:13.392Z",
+    "street": "Ginsterweg",
+    "houseNumber": "12a",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Josvanovis",
+        "status": "appointment"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764239590537_7cplbw0nx",
+    "username": "David",
+    "firstSeen": "2025-11-27T10:33:10.823Z",
+    "lastUpdated": "2025-11-27T10:33:26.408Z",
+    "street": "Hainbuchenweg",
+    "houseNumber": "17a",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Bergmanns",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764239590602_ri4se2p06",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T10:33:10.911Z",
+    "lastUpdated": "2025-11-27T10:33:17.745Z",
+    "street": "Gagelweg",
+    "houseNumber": "17",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Meyers",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764239623115_kp0c0twxm",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T10:33:43.423Z",
+    "lastUpdated": "2025-11-27T10:33:47.364Z",
+    "street": "Barbarastraße",
+    "houseNumber": "57",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "saint",
+        "status": "not_reached"
+      },
+      {
+        "name": "sawodschikov",
+        "status": "not_reached"
+      },
+      {
+        "name": "pierno"
+      },
+      {
+        "name": "gebbert"
+      },
+      {
+        "name": "müller"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764239767058_t7d0pkron",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T10:36:07.437Z",
+    "lastUpdated": "2025-11-27T10:36:36.749Z",
+    "street": "Barbarastraße",
+    "houseNumber": "53",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "Frank Schnell"
+      },
+      {
+        "name": "Heike Rodewald"
+      },
+      {
+        "name": "Wisniewska",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764239862539_h0pnsftni",
+    "username": "David",
+    "firstSeen": "2025-11-27T10:37:42.855Z",
+    "lastUpdated": "2025-11-27T10:38:35.925Z",
+    "street": "Hainbuchenweg",
+    "houseNumber": "11b",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Hoppe",
+        "status": "appointment"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764240081957_8slqulkyz",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T10:41:22.267Z",
+    "lastUpdated": "2025-11-27T10:41:34.892Z",
+    "street": "Gagelweg",
+    "houseNumber": "16",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Krieger",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764240082300_q3guuh3b5",
+    "username": "David",
+    "firstSeen": "2025-11-27T10:41:22.601Z",
+    "lastUpdated": "2025-11-27T10:41:34.188Z",
+    "street": "Hainbuchenweg",
+    "houseNumber": "1",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Ley",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764240167761_l5vw3z0fb",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T10:42:48.130Z",
+    "lastUpdated": "2025-11-27T10:42:54.046Z",
+    "street": "Gagelweg",
+    "houseNumber": "14",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Schmitz ",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764240221209_8uc0n04hp",
+    "username": "David",
+    "firstSeen": "2025-11-27T10:43:41.534Z",
+    "lastUpdated": "2025-11-27T10:44:00.362Z",
+    "street": "Hainbuchenweg",
+    "houseNumber": "4",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Noname",
+        "status": "no_interest"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764240287103_2p5o8wmru",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T10:44:47.570Z",
+    "lastUpdated": "2025-11-27T10:45:26.977Z",
+    "street": "Gagelweg",
+    "houseNumber": "6",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Mohr",
+        "status": "not_reached"
+      },
+      {
+        "name": "Krönig",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764240294426_6vdv9k6yp",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T10:44:54.705Z",
+    "lastUpdated": "2025-11-27T10:53:21.225Z",
+    "street": "Barbarastraße",
+    "houseNumber": "47a",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "Greus",
+        "status": "no_interest"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764240312210_edwrdr7j3",
+    "username": "David",
+    "firstSeen": "2025-11-27T10:45:12.486Z",
+    "lastUpdated": "2025-11-27T10:45:23.787Z",
+    "street": "Hainbuchenweg",
+    "houseNumber": "8",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Noname",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764240393364_9v2muzdhj",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T10:46:33.658Z",
+    "lastUpdated": "2025-11-27T10:46:42.628Z",
+    "street": "Gagelweg",
+    "houseNumber": "2",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Risteki",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764240393541_g2r6xl2yy",
+    "username": "David",
+    "firstSeen": "2025-11-27T10:46:33.897Z",
+    "lastUpdated": "2025-11-27T10:46:41.851Z",
+    "street": "Hainbuchenweg",
+    "houseNumber": "16",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Hildebrand ",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764240642167_wifdb5m40",
+    "username": "David",
+    "firstSeen": "2025-11-27T10:50:42.469Z",
+    "lastUpdated": "2025-11-27T10:51:01.978Z",
+    "street": "Hainbuchenweg",
+    "houseNumber": "22",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Nett",
+        "status": "appointment"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764240959795_zrjj9m835",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T10:56:00.085Z",
+    "lastUpdated": "2025-11-27T11:01:31.619Z",
+    "street": "Barbarastraße",
+    "houseNumber": "43",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "hartmann",
+        "status": "not_reached"
+      },
+      {
+        "name": "gasper",
+        "status": "not_reached"
+      },
+      {
+        "name": "loidl alilja",
+        "status": "not_reached"
+      },
+      {
+        "name": "Strate-Müller"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764241655304_4o88xf27a",
+    "username": "Lisandra",
+    "firstSeen": "2025-11-27T11:07:35.606Z",
+    "lastUpdated": "2025-11-27T11:10:31.073Z",
+    "street": "Rolandstraße",
+    "houseNumber": "2",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "bajrami hasani",
+        "status": "not_reached"
+      },
+      {
+        "name": "hallmann",
+        "status": "not_reached"
+      },
+      {
+        "name": "eroglu",
+        "status": "no_interest"
+      },
+      {
+        "name": "unalan",
+        "status": "no_interest"
+      },
+      {
+        "name": "Günes ",
+        "status": "no_interest"
+      },
+      {
+        "name": "poddig"
+      },
+      {
+        "name": "neumann linden"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764241728450_njb8ldnki",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T11:08:48.784Z",
+    "lastUpdated": "2025-11-27T11:09:19.219Z",
+    "street": "Grüner Weg",
+    "houseNumber": "50",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "knochel",
+        "status": "not_reached"
+      },
+      {
+        "name": "schikora",
+        "status": "not_reached"
+      },
+      {
+        "name": "bosch",
+        "status": "not_reached"
+      },
+      {
+        "name": "rosenfeld",
+        "status": "not_reached"
+      },
+      {
+        "name": "kaufmann"
+      },
+      {
+        "name": "kaufmann"
+      },
+      {
+        "name": "hennesen"
+      },
+      {
+        "name": "dörge"
+      },
+      {
+        "name": "kaufmann"
+      },
+      {
+        "name": "kaufmann"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764241850544_77xg9vgke",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T11:10:50.864Z",
+    "lastUpdated": "2025-11-27T11:11:06.245Z",
+    "street": "Grüner Weg",
+    "houseNumber": "48",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "dittrich esser",
+        "status": "not_reached"
+      },
+      {
+        "name": "hug",
+        "status": "not_reached"
+      },
+      {
+        "name": "kalengaur",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764241964163_gvbwys18h",
+    "username": "Lisandra",
+    "firstSeen": "2025-11-27T11:12:49.810Z",
+    "lastUpdated": "2025-11-27T11:13:53.765Z",
+    "street": "Rolandstraße",
+    "houseNumber": "4",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "shehni",
+        "status": "not_reached"
+      },
+      {
+        "name": "fatehl",
+        "status": "not_reached"
+      },
+      {
+        "name": "kobinger",
+        "status": "no_interest"
+      },
+      {
+        "name": "tocru",
+        "status": "not_reached"
+      },
+      {
+        "name": "pohl griebsch",
+        "status": "not_reached"
+      },
+      {
+        "name": "wirtz"
+      },
+      {
+        "name": "kierdorf baumann"
+      },
+      {
+        "name": "schiemann"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764242031454_3iyxe9qgh",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T11:13:56.637Z",
+    "lastUpdated": "2025-11-27T11:15:39.822Z",
+    "street": "Barbarastraße",
+    "houseNumber": "41",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "weinreich"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764242036961_an2zgqfqu",
+    "username": "Nic",
+    "firstSeen": "2025-11-27T11:14:05.145Z",
+    "lastUpdated": "2025-11-27T11:14:25.365Z",
+    "street": "Grüner Weg",
+    "houseNumber": "57",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Schröer",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764242084691_twd4ee9on",
+    "username": "Lisandra",
+    "firstSeen": "2025-11-27T11:14:54.014Z",
+    "lastUpdated": "2025-11-27T11:17:15.824Z",
+    "street": "Rolandstraße",
+    "houseNumber": "6",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "schulz",
+        "status": "not_reached"
+      },
+      {
+        "name": "außerehl",
+        "status": "not_reached"
+      },
+      {
+        "name": "paradies",
+        "status": "not_reached"
+      },
+      {
+        "name": "der ichs"
+      },
+      {
+        "name": "reuter"
+      },
+      {
+        "name": "klich"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764242149347_6s2x8jgrz",
+    "username": "Nic",
+    "firstSeen": "2025-11-27T11:15:58.876Z",
+    "lastUpdated": "2025-11-27T11:16:13.988Z",
+    "street": "Grüner Weg",
+    "houseNumber": "51",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Zada",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764242345205_c4kdicol4",
+    "username": "Lisandra",
+    "firstSeen": "2025-11-27T11:19:05.585Z",
+    "lastUpdated": "2025-11-27T11:19:05.585Z",
+    "street": "Rolandstraße",
+    "houseNumber": "8",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [],
+    "notes": "",
+    "actions": [
+      "dataset_create"
+    ]
+  },
+  {
+    "datasetId": "ds_1764242362578_z4q91zscj",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T11:19:22.875Z",
+    "lastUpdated": "2025-11-27T11:22:59.957Z",
+    "street": "Grüner Weg",
+    "houseNumber": "38",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "eulenburg",
+        "status": "no_interest"
+      },
+      {
+        "name": "becher",
+        "status": "no_interest"
+      },
+      {
+        "name": "lindner"
+      },
+      {
+        "name": "klaff"
+      },
+      {
+        "name": "wiebusch"
+      },
+      {
+        "name": "arndt"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764242512980_bqt8zoke7",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T11:21:53.392Z",
+    "lastUpdated": "2025-11-27T11:26:38.447Z",
+    "street": "Barbarastraße",
+    "houseNumber": "37",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "fuchs"
+      },
+      {
+        "name": "ott kaboth"
+      },
+      {
+        "name": "trelenberg"
+      },
+      {
+        "name": "möwes"
+      },
+      {
+        "name": "Ahmed",
+        "status": "no_interest"
+      },
+      {
+        "name": "Salam",
+        "status": "no_interest"
+      },
+      {
+        "name": "Kohl",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764242613971_jjknbc1vk",
+    "username": "Lisandra",
+    "firstSeen": "2025-11-27T11:23:34.279Z",
+    "lastUpdated": "2025-11-27T11:25:16.900Z",
+    "street": "Rolandstraße",
+    "houseNumber": "10",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "bartetzko",
+        "status": "not_reached"
+      },
+      {
+        "name": "schmitz",
+        "status": "not_reached"
+      },
+      {
+        "name": "klein",
+        "status": "not_reached"
+      },
+      {
+        "name": "stolley",
+        "status": "not_reached"
+      },
+      {
+        "name": "cnossen",
+        "status": "not_reached"
+      },
+      {
+        "name": "wissmach"
+      },
+      {
+        "name": "klich hürtgen"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764242786219_s7ukj7wai",
+    "username": "Lisandra",
+    "firstSeen": "2025-11-27T11:26:26.519Z",
+    "lastUpdated": "2025-11-27T11:26:29.469Z",
+    "street": "Rolandstraße",
+    "houseNumber": "12",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "glowczynski",
+        "status": "not_reached"
+      },
+      {
+        "name": "umarova"
+      },
+      {
+        "name": "foerster"
+      },
+      {
+        "name": "schneider"
+      },
+      {
+        "name": "maik jahn"
+      },
+      {
+        "name": "hetkamp"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764243048428_e7qabknw2",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T11:30:48.758Z",
+    "lastUpdated": "2025-11-27T11:31:03.474Z",
+    "street": "Grüner Weg",
+    "houseNumber": "34",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "burghardt",
+        "status": "not_reached"
+      },
+      {
+        "name": "jovanovic",
+        "status": "not_reached"
+      },
+      {
+        "name": "kovalevic"
+      },
+      {
+        "name": "granato"
+      },
+      {
+        "name": "granato"
+      },
+      {
+        "name": "stark"
+      },
+      {
+        "name": "granato bertini"
+      },
+      {
+        "name": "granato bertini"
+      },
+      {
+        "name": "kaminski"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764243125397_dn4x5rio2",
+    "username": "Lisandra",
+    "firstSeen": "2025-11-27T11:32:05.753Z",
+    "lastUpdated": "2025-11-27T11:32:10.144Z",
+    "street": "Rolandstraße",
+    "houseNumber": "14",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "müller",
+        "status": "not_reached"
+      },
+      {
+        "name": "umarova"
+      },
+      {
+        "name": "suleanscaia"
+      },
+      {
+        "name": "makl"
+      },
+      {
+        "name": "hoff"
+      },
+      {
+        "name": "kornivska"
+      },
+      {
+        "name": "kreutl"
+      },
+      {
+        "name": "suleanschii"
+      },
+      {
+        "name": "kristen"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764243153617_snoieluup",
+    "username": "Kiri",
+    "firstSeen": "2025-11-27T11:32:34.437Z",
+    "lastUpdated": "2025-11-27T11:32:34.437Z",
+    "street": "Am Heepsgarten",
+    "houseNumber": "18",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [],
+    "notes": "",
+    "actions": [
+      "dataset_create"
+    ]
+  },
+  {
+    "datasetId": "ds_1764243282000_09wjjzvr8",
+    "username": "Lisandra",
+    "firstSeen": "2025-11-27T11:34:42.929Z",
+    "lastUpdated": "2025-11-27T11:34:48.292Z",
+    "street": "Rolandstraße",
+    "houseNumber": "16",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "plumar",
+        "status": "not_reached"
+      },
+      {
+        "name": "doufrain",
+        "status": "not_reached"
+      },
+      {
+        "name": "nowak"
+      },
+      {
+        "name": "knobloch"
+      },
+      {
+        "name": "young oelschlägel"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764243459683_kgsmnfzgs",
+    "username": "Kiri",
+    "firstSeen": "2025-11-27T11:37:40.040Z",
+    "lastUpdated": "2025-11-27T11:37:47.099Z",
+    "street": "Am Wolfsgarten",
+    "houseNumber": "26",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "reichel",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764243597517_37s3qz3d7",
+    "username": "Kiri",
+    "firstSeen": "2025-11-27T11:39:57.886Z",
+    "lastUpdated": "2025-11-27T11:40:25.996Z",
+    "street": "Am Wolfsgarten",
+    "houseNumber": "16",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "steffens",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764243604522_avo92l2x3",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T11:40:04.882Z",
+    "lastUpdated": "2025-11-27T11:49:50.104Z",
+    "street": "Barbarastraße",
+    "houseNumber": "33",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "nikolai",
+        "status": "not_reached"
+      },
+      {
+        "name": "atabek"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764243734562_k9aza8jpf",
+    "username": "David",
+    "firstSeen": "2025-11-27T11:42:14.928Z",
+    "lastUpdated": "2025-11-27T11:43:40.960Z",
+    "street": "Wacholderweg",
+    "houseNumber": "1e",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Salz"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764243757461_w5dmtjmt7",
+    "username": "Kiri",
+    "firstSeen": "2025-11-27T11:42:37.774Z",
+    "lastUpdated": "2025-11-27T11:54:25.962Z",
+    "street": "Am Wolfsgarten",
+    "houseNumber": "4",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "slodwinsky",
+        "status": "interest_later"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764244000409_4r9pf0l3x",
+    "username": "David",
+    "firstSeen": "2025-11-27T11:46:41.225Z",
+    "lastUpdated": "2025-11-27T11:46:48.335Z",
+    "street": "Wacholderweg",
+    "houseNumber": "5",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Köktas",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764244031332_63jqxvlz5",
+    "username": "David",
+    "firstSeen": "2025-11-27T11:47:11.722Z",
+    "lastUpdated": "2025-11-27T11:47:33.266Z",
+    "street": "Wacholderweg",
+    "houseNumber": "7",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Farrenkopf ",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764244089410_ai3hxrfgc",
+    "username": "David",
+    "firstSeen": "2025-11-27T11:48:09.755Z",
+    "lastUpdated": "2025-11-27T11:48:16.232Z",
+    "street": "Wacholderweg",
+    "houseNumber": "9",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Raddatz ",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764244239015_tue6gowwx",
+    "username": "David",
+    "firstSeen": "2025-11-27T11:50:39.867Z",
+    "lastUpdated": "2025-11-27T11:50:49.448Z",
+    "street": "Wacholderweg",
+    "houseNumber": "14",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Tieves ",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764244269637_tayzio82c",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T11:51:09.988Z",
+    "lastUpdated": "2025-11-27T11:55:09.204Z",
+    "street": "Barbarastraße",
+    "houseNumber": "31",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "zager",
+        "status": "no_interest"
+      },
+      {
+        "name": "thomann",
+        "status": "not_reached"
+      },
+      {
+        "name": "tor boetzel",
+        "status": "not_reached"
+      },
+      {
+        "name": "haberscheid"
+      },
+      {
+        "name": "feriduni",
+        "status": "no_interest"
+      },
+      {
+        "name": "siedler"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764244271590_6c1iv9fh0",
+    "username": "Nic",
+    "firstSeen": "2025-11-27T11:51:11.893Z",
+    "lastUpdated": "2025-11-27T11:52:27.446Z",
+    "street": "Grüner Weg",
+    "houseNumber": "49",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Perk Özcan"
+      },
+      {
+        "name": "Runaj Klenath"
+      },
+      {
+        "name": "Runaj Klenth"
+      },
+      {
+        "name": "Runay Kleanth"
+      },
+      {
+        "name": "Qirjaj",
+        "status": "not_reached"
+      },
+      {
+        "name": "Sayik",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764244495521_s96usrlib",
+    "username": "David",
+    "firstSeen": "2025-11-27T11:54:55.842Z",
+    "lastUpdated": "2025-11-27T11:55:03.546Z",
+    "street": "Wacholderweg",
+    "houseNumber": "12",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Nebiung ",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764244506902_atwe0iafh",
+    "username": "Kiri",
+    "firstSeen": "2025-11-27T11:55:07.216Z",
+    "lastUpdated": "2025-11-27T11:55:12.258Z",
+    "street": "Am Wolfsgarten",
+    "houseNumber": "2",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "eckertz",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764244570796_gdv6z279y",
+    "username": "David",
+    "firstSeen": "2025-11-27T11:56:11.150Z",
+    "lastUpdated": "2025-11-27T11:56:29.662Z",
+    "street": "Wacholderweg",
+    "houseNumber": "8",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Porsch",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764244650164_l6cw9shje",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T11:57:30.499Z",
+    "lastUpdated": "2025-11-27T11:59:02.669Z",
+    "street": "Barbarastraße",
+    "houseNumber": "27",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "spiesecke",
+        "status": "not_reached"
+      },
+      {
+        "name": "gambus",
+        "status": "not_reached"
+      },
+      {
+        "name": "luft",
+        "status": "not_reached"
+      },
+      {
+        "name": "wagner",
+        "status": "not_reached"
+      },
+      {
+        "name": "olbert"
+      },
+      {
+        "name": "bruder"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764244776380_e3gi27sef",
+    "username": "Kiri",
+    "firstSeen": "2025-11-27T11:59:36.733Z",
+    "lastUpdated": "2025-11-27T11:59:38.773Z",
+    "street": "Am Büllesgarten",
+    "houseNumber": "26",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "bauer",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764244850271_y1zhvlshn",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T12:00:50.716Z",
+    "lastUpdated": "2025-11-27T12:00:54.217Z",
+    "street": "Barbarastraße",
+    "houseNumber": "25",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "drajewski",
+        "status": "not_reached"
+      },
+      {
+        "name": "weyers",
+        "status": "not_reached"
+      },
+      {
+        "name": "stiewe"
+      },
+      {
+        "name": "dorner"
+      },
+      {
+        "name": "reinhardt janzen"
+      },
+      {
+        "name": "heinz"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764244941537_yo2zlxgpo",
+    "username": "Kiri",
+    "firstSeen": "2025-11-27T12:02:22.445Z",
+    "lastUpdated": "2025-11-27T12:02:27.577Z",
+    "street": "Am Büllesgarten",
+    "houseNumber": "22",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "schneider",
+        "status": "not_reached"
+      },
+      {
+        "name": "przewieslik",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764244962062_r3if4nimw",
+    "username": "Nic",
+    "firstSeen": "2025-11-27T12:02:42.370Z",
+    "lastUpdated": "2025-11-27T12:02:54.787Z",
+    "street": "Grüner Weg",
+    "houseNumber": "43",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Gruber/ handke",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764244972975_0sdx4nb83",
+    "username": "Raphael",
+    "firstSeen": "2025-11-27T12:02:54.652Z",
+    "lastUpdated": "2025-11-27T12:03:10.185Z",
+    "street": "Barbarastraße",
+    "houseNumber": "23",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "rollmann",
+        "status": "no_interest"
+      },
+      {
+        "name": "müller",
+        "status": "not_reached"
+      },
+      {
+        "name": "schmitt"
+      },
+      {
+        "name": "berger"
+      },
+      {
+        "name": "beiden"
+      },
+      {
+        "name": "pfau"
+      },
+      {
+        "name": "pfau"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764245037769_lv4t71t3r",
+    "username": "Nic",
+    "firstSeen": "2025-11-27T12:03:58.114Z",
+    "lastUpdated": "2025-11-27T12:04:33.226Z",
+    "street": "Grüner Weg",
+    "houseNumber": "39",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Zehner",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764245119192_c5d9lnopk",
+    "username": "Nic",
+    "firstSeen": "2025-11-27T12:05:20.075Z",
+    "lastUpdated": "2025-11-27T12:05:20.075Z",
+    "street": "Grüner Weg",
+    "houseNumber": "35",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [],
+    "notes": "",
+    "actions": [
+      "dataset_create"
+    ]
+  },
+  {
+    "datasetId": "ds_1764245127656_f0ers0ypz",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T12:05:27.994Z",
+    "lastUpdated": "2025-11-27T12:05:27.994Z",
+    "street": "Grüner Weg",
+    "houseNumber": "16",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [],
+    "notes": "",
+    "actions": [
+      "dataset_create"
+    ]
+  },
+  {
+    "datasetId": "ds_1764245135921_p0g3bl4uh",
+    "username": "Nic",
+    "firstSeen": "2025-11-27T12:05:36.296Z",
+    "lastUpdated": "2025-11-27T12:05:59.269Z",
+    "street": "Grüner Weg",
+    "houseNumber": "35a",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Maassen",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764245201958_5616w77pa",
+    "username": "Kiri",
+    "firstSeen": "2025-11-27T12:06:42.332Z",
+    "lastUpdated": "2025-11-27T12:08:51.560Z",
+    "street": "Am Börschsgarten",
+    "houseNumber": "16",
+    "city": "Köln",
+    "postalCode": "51147",
+    "status": "",
+    "residents": [
+      {
+        "name": "Abele",
+        "status": "no_interest"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764245402733_c61wnkg8z",
+    "username": "Nic",
+    "firstSeen": "2025-11-27T12:10:03.322Z",
+    "lastUpdated": "2025-11-27T12:14:35.776Z",
+    "street": "Grüner Weg",
+    "houseNumber": "19",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Chudoba Susanne"
+      },
+      {
+        "name": "Jost Elena"
+      },
+      {
+        "name": "Neueinzug",
+        "status": "appointment"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764245403564_szlcb1uas",
+    "username": "David",
+    "firstSeen": "2025-11-27T12:10:05.441Z",
+    "lastUpdated": "2025-11-27T12:10:16.013Z",
+    "street": "Hagebuttenweg",
+    "houseNumber": "18",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Zimmermann",
+        "status": "no_interest"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764245507968_qvaubpyj1",
+    "username": "David",
+    "firstSeen": "2025-11-27T12:11:49.376Z",
+    "lastUpdated": "2025-11-27T12:12:12.481Z",
+    "street": "Hagebuttenweg",
+    "houseNumber": "16",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Roßkothen",
+        "status": "interest_later"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764245681178_bfgq0129j",
+    "username": "David",
+    "firstSeen": "2025-11-27T12:14:41.709Z",
+    "lastUpdated": "2025-11-27T12:14:49.016Z",
+    "street": "Hagebuttenweg",
+    "houseNumber": "2",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Mach",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764245893682_yxhl6619a",
+    "username": "David",
+    "firstSeen": "2025-11-27T12:18:15.267Z",
+    "lastUpdated": "2025-11-27T12:18:31.444Z",
+    "street": "Magnolienweg",
+    "houseNumber": "15",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Krumm",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764245911663_xnkby8g08",
+    "username": "Nic",
+    "firstSeen": "2025-11-27T12:18:32.244Z",
+    "lastUpdated": "2025-11-27T12:19:05.092Z",
+    "street": "Grüner Weg",
+    "houseNumber": "13",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Bolz Gudrun u. Peter"
+      },
+      {
+        "name": "Fröhlich Ingrid"
+      },
+      {
+        "name": "Dinslage",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764245964990_7k5yirz36",
+    "username": "Nic",
+    "firstSeen": "2025-11-27T12:19:26.099Z",
+    "lastUpdated": "2025-11-27T12:24:39.998Z",
+    "street": "Grüner Weg",
+    "houseNumber": "11",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Meyer",
+        "status": "interest_later"
+      },
+      {
+        "name": "Na",
+        "status": "not_reached"
+      },
+      {
+        "name": "Pettiti",
+        "status": "interest_later"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764245994433_wmmu8stbv",
+    "username": "David",
+    "firstSeen": "2025-11-27T12:19:55.510Z",
+    "lastUpdated": "2025-11-27T12:20:02.641Z",
+    "street": "Magnolienweg",
+    "houseNumber": "21",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Aubin ",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764246034820_aqk708k4v",
+    "username": "Eva",
+    "firstSeen": "2025-11-27T12:20:36.657Z",
+    "lastUpdated": "2025-11-27T12:20:36.657Z",
+    "street": "Grüner Weg",
+    "houseNumber": "2a",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [],
+    "notes": "",
+    "actions": [
+      "dataset_create"
+    ]
+  },
+  {
+    "datasetId": "ds_1764246040929_qznjfl6sl",
+    "username": "David",
+    "firstSeen": "2025-11-27T12:20:41.432Z",
+    "lastUpdated": "2025-11-27T12:21:16.099Z",
+    "street": "Magnolienweg",
+    "houseNumber": "25",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Gaspard",
+        "status": "not_reached"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764246517477_51n7owdn9",
+    "username": "Nic",
+    "firstSeen": "2025-11-27T12:28:38.754Z",
+    "lastUpdated": "2025-11-27T12:29:00.768Z",
+    "street": "Grüner Weg",
+    "houseNumber": "7",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Erz"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764246773764_e7ba8l48y",
+    "username": "David",
+    "firstSeen": "2025-11-27T12:32:54.970Z",
+    "lastUpdated": "2025-11-27T12:33:08.736Z",
+    "street": "Magnolienweg",
+    "houseNumber": "12",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "On name ",
+        "status": "no_interest"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  },
+  {
+    "datasetId": "ds_1764246848179_4l1iqx4uh",
+    "username": "David",
+    "firstSeen": "2025-11-27T12:34:09.271Z",
+    "lastUpdated": "2025-11-27T12:34:18.155Z",
+    "street": "Magnolienweg",
+    "houseNumber": "10",
+    "city": "Neuss",
+    "postalCode": "41468",
+    "status": "",
+    "residents": [
+      {
+        "name": "Karen ",
+        "status": "no_interest"
+      }
+    ],
+    "notes": "",
+    "actions": [
+      "dataset_create",
+      "bulk_residents_update"
+    ]
+  }
+]
