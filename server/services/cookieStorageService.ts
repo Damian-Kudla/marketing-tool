@@ -278,6 +278,7 @@ class CookieStorageService {
 
   /**
    * Sync cookies to Google Sheets (single "Cookies" sheet)
+   * Uses Flat Format compatible with systemDatabaseService
    */
   async syncToGoogleSheets(): Promise<void> {
     if (!this.sheetsClient) {
@@ -294,47 +295,30 @@ class CookieStorageService {
       // Ensure "Cookies" sheet exists
       await this.ensureSheetExists();
 
-      // Group cookies by user
-      const userCookiesMap = new Map<string, UserCookies>();
-
-      this.cookieStore.forEach((cookie, sessionId) => {
-        if (!userCookiesMap.has(cookie.userId)) {
-          userCookiesMap.set(cookie.userId, {
-            userId: cookie.userId,
-            username: cookie.username,
-            cookies: []
-          });
-        }
-
-        userCookiesMap.get(cookie.userId)!.cookies.push({
-          sessionId,
-          createdAt: getBerlinTimestamp(cookie.createdAt),
-          expiresAt: getBerlinTimestamp(cookie.expiresAt),
-          isAdmin: cookie.isAdmin,
-          deviceId: cookie.deviceInfo?.deviceId,
-          deviceName: cookie.deviceInfo?.deviceName,
-          platform: cookie.deviceInfo?.platform
-        });
-      });
-
-      // Prepare data for the sheet
+      // Prepare data for the sheet (Flat Format)
       const rows: any[][] = [
-        ['User ID', 'Username', 'Cookies (JSON)', 'Last Updated']
+        ['Session ID', 'User ID', 'Username', 'Is Admin', 'Created At', 'Expires At', 'Device ID', 'Device Name', 'Platform', 'User Agent']
       ];
 
-      userCookiesMap.forEach((userCookies) => {
+      this.cookieStore.forEach((cookie, sessionId) => {
         rows.push([
-          userCookies.userId,
-          userCookies.username,
-          JSON.stringify(userCookies.cookies),
-          getBerlinTimestamp()
+          sessionId,
+          cookie.userId,
+          cookie.username,
+          cookie.isAdmin ? '1' : '0',
+          cookie.createdAt.getTime().toString(),
+          cookie.expiresAt.getTime().toString(),
+          cookie.deviceInfo?.deviceId || '',
+          cookie.deviceInfo?.deviceName || '',
+          cookie.deviceInfo?.platform || '',
+          cookie.deviceInfo?.userAgent || ''
         ]);
       });
 
       // Clear existing data and write new data
       await this.sheetsClient.spreadsheets.values.clear({
         spreadsheetId: this.spreadsheetId,
-        range: `${this.sheetName}!A:D`
+        range: `${this.sheetName}!A:J`
       });
 
       // Write data to sheet
@@ -347,7 +331,7 @@ class CookieStorageService {
         }
       });
 
-      console.log(`[CookieStorage] Synced ${userCookiesMap.size} users to sheet: ${this.sheetName}`);
+      console.log(`[CookieStorage] Synced ${this.cookieStore.size} cookies to sheet: ${this.sheetName}`);
 
     } catch (error) {
       console.error('[CookieStorage] Error syncing to Google Sheets:', error);
@@ -402,68 +386,68 @@ class CookieStorageService {
       // Ensure "Cookies" sheet exists
       await this.ensureSheetExists();
 
-      // Read data from the sheet
+      // Read data from the sheet (Flat Format: A-J)
       const response = await this.sheetsClient.spreadsheets.values.get({
         spreadsheetId: this.spreadsheetId,
-        range: `${this.sheetName}!A2:D` // Skip header row
+        range: `${this.sheetName}!A2:J` // Skip header row
       });
 
       const rows = response.data.values || [];
       let mergedFromSheets = 0;
 
       rows.forEach((row: any[]) => {
-        if (row.length < 3) return;
+        if (row.length < 6) return; // Minimum required fields
 
-        const userId = row[0];
-        const username = row[1];
-        const cookiesJson = row[2];
+        const sessionId = row[0];
+        const userId = row[1];
+        const username = row[2];
+        const isAdmin = row[3] === '1' || row[3] === 'TRUE';
+        const createdAt = parseInt(row[4]);
+        const expiresAt = parseInt(row[5]);
+        
+        // Optional fields
+        const deviceId = row[6];
+        const deviceName = row[7];
+        const platform = row[8];
+        const userAgent = row[9];
 
-        try {
-          const cookies = JSON.parse(cookiesJson);
-
-          cookies.forEach((cookie: any) => {
-            const expiresAt = new Date(cookie.expiresAt);
-
-            // Only merge cookies that: 1) haven't expired, 2) don't already exist in RAM
-            if (expiresAt > new Date() && !this.cookieStore.has(cookie.sessionId)) {
-              this.cookieStore.set(cookie.sessionId, {
-                userId,
-                password: '', // Password not stored in sheets for security
-                username,
-                isAdmin: cookie.isAdmin || false,
-                createdAt: new Date(cookie.createdAt),
-                expiresAt,
-                deviceInfo: cookie.deviceId ? {
-                  deviceId: cookie.deviceId,
-                  deviceName: cookie.deviceName || 'Unknown Device',
-                  platform: cookie.platform || 'Unknown',
-                  userAgent: '',
-                  screenResolution: ''
-                } : undefined
-              });
-              
-              // Also persist to SQLite
-              try {
-                cookiesDB.upsert({
-                  sessionId: cookie.sessionId,
-                  userId,
-                  username,
-                  isAdmin: cookie.isAdmin || false,
-                  createdAt: new Date(cookie.createdAt).getTime(),
-                  expiresAt: expiresAt.getTime(),
-                  deviceId: cookie.deviceId,
-                  deviceName: cookie.deviceName,
-                  platform: cookie.platform
-                });
-              } catch (e) {
-                // Ignore SQLite errors during merge
-              }
-              
-              mergedFromSheets++;
-            }
+        // Only merge cookies that: 1) haven't expired, 2) don't already exist in RAM
+        if (expiresAt > Date.now() && !this.cookieStore.has(sessionId)) {
+          this.cookieStore.set(sessionId, {
+            userId,
+            password: '',
+            username,
+            isAdmin,
+            createdAt: new Date(createdAt),
+            expiresAt: new Date(expiresAt),
+            deviceInfo: deviceId ? {
+              deviceId,
+              deviceName: deviceName || 'Unknown Device',
+              platform: platform || 'Unknown',
+              userAgent: userAgent || '',
+              screenResolution: ''
+            } : undefined
           });
-        } catch (error) {
-          console.error(`[CookieStorage] Error parsing cookies for user ${username}:`, error);
+          
+          // Also persist to SQLite
+          try {
+            cookiesDB.upsert({
+              sessionId,
+              userId,
+              username,
+              isAdmin,
+              createdAt,
+              expiresAt,
+              deviceId,
+              deviceName,
+              platform,
+              userAgent
+            });
+          } catch (e) {
+            // Ignore SQLite errors during merge
+          }
+          
+          mergedFromSheets++;
         }
       });
 

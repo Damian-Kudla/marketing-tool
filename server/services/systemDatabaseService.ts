@@ -1828,6 +1828,13 @@ export const systemStartupSync = {
       console.log('\n[SystemSync] Phase 2: Bidirectional Sheets sync...');
       results.sheetsSynced = await systemSheetsSync.syncAll();
       
+      // Phase 3: Upload to Drive (Ensure we have a fresh backup after sync)
+      console.log('\n[SystemSync] Phase 3: Creating fresh Drive backup...');
+      const backupResults = await systemDriveBackup.backupAll();
+      if (backupResults.failed.length > 0) {
+        results.errors.push(`Failed to upload: ${backupResults.failed.join(', ')}`);
+      }
+
       const duration = ((Date.now() - startTime) / 1000).toFixed(2);
       
       console.log('\n========================================');
@@ -1841,6 +1848,8 @@ export const systemStartupSync = {
       for (const [name, result] of Object.entries(results.sheetsSynced)) {
         console.log(`   ${name}: ${result.synced} synced (${result.direction})`);
       }
+      console.log(`   Drive uploads: ${backupResults.success.length} success, ${backupResults.failed.length} failed`);
+      
       if (results.errors.length > 0) {
         console.log(`   Errors: ${results.errors.length}`);
         results.errors.forEach(e => console.log(`     - ${e}`));
