@@ -29,11 +29,39 @@ const SYSTEM_SHEET_ID = process.env.GOOGLE_SYSTEM_SHEET_ID || '1OsXBfxE2Pe7cPBGj
 const DRIVE_BACKUP_FOLDER_ID = process.env.GOOGLE_DRIVE_BACKUP_FOLDER_ID || '1Vhe5gnGCr8s_9xeXq71RHp5ucfhAPjxu';
 const WORKSHEET_NAME = 'EGON_Orders';
 
-// Database path
-const DATA_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH 
-  ? path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'system-dbs')
-  : path.join(process.cwd(), 'data', 'system-dbs');
+// Database path resolution
+function resolveDataDir() {
+  if (process.env.RAILWAY_VOLUME_MOUNT_PATH) {
+    return path.join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'system-dbs');
+  }
 
+  const cwd = process.cwd();
+  
+  // Check parent directory (if running from server/)
+  const parentDbPath = path.join(cwd, '..', 'data', 'system-dbs', 'egon_orders.db');
+  if (fs.existsSync(parentDbPath)) {
+    console.log('[EgonScraper] Found DB in parent directory, using that.');
+    return path.dirname(parentDbPath);
+  }
+
+  // Check current directory
+  const localDbPath = path.join(cwd, 'data', 'system-dbs', 'egon_orders.db');
+  if (fs.existsSync(localDbPath)) {
+    console.log('[EgonScraper] Found DB in current directory.');
+    return path.dirname(localDbPath);
+  }
+  
+  // Fallback: If we are in "server" directory, prefer parent "data" if it exists
+  if (cwd.endsWith('server') && fs.existsSync(path.join(cwd, '..', 'data'))) {
+     console.log('[EgonScraper] Running from server dir, using parent data dir.');
+     return path.join(cwd, '..', 'data', 'system-dbs');
+  }
+
+  console.log('[EgonScraper] Using local data dir.');
+  return path.join(cwd, 'data', 'system-dbs');
+}
+
+const DATA_DIR = resolveDataDir();
 const DB_PATH = path.join(DATA_DIR, 'egon_orders.db');
 const DB_FILENAME = 'egon_orders.db';
 
@@ -66,6 +94,9 @@ db.exec(`
 // Create index for faster lookups
 db.exec(`
   CREATE INDEX IF NOT EXISTS idx_egon_orders_timestamp ON egon_orders(timestamp)
+`);
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_egon_orders_order_no ON egon_orders(order_no)
 `);
 
 // =============================================================================
@@ -132,7 +163,8 @@ export const egonOrdersDB = {
   },
 
   existsOrderNo: (orderNo: string): boolean => {
-    const result = db.prepare('SELECT 1 FROM egon_orders WHERE order_no = ?').get(orderNo);
+    const cleanOrderNo = String(orderNo).trim();
+    const result = db.prepare('SELECT 1 FROM egon_orders WHERE order_no = ?').get(cleanOrderNo);
     return !!result;
   },
 
@@ -417,6 +449,8 @@ class EgonScraper {
     const limit = 50;
     let totalProcessed = 0;
     let shouldStop = false;
+    let consecutiveExisting = 0;
+    const STOP_THRESHOLD = 3; // Stop after finding 3 existing orders in a row
 
     while (!shouldStop) {
       const start = (page - 1) * limit;
@@ -468,10 +502,17 @@ class EgonScraper {
           // Optimization: Stop if order already exists
           const exists = egonOrdersDB.existsOrderNo(orderNo);
           if (orderNo && exists) {
-            console.log(`[EgonScraper] Order ${orderNo} already exists in DB. Stopping incremental scrape.`);
-            shouldStop = true;
-            break;
+            consecutiveExisting++;
+            console.log(`[EgonScraper] Order ${orderNo} already exists in DB (${consecutiveExisting}/${STOP_THRESHOLD}).`);
+            
+            if (consecutiveExisting >= STOP_THRESHOLD) {
+              console.log('[EgonScraper] Hit stop threshold. Stopping incremental scrape.');
+              shouldStop = true;
+              break;
+            }
+            continue;
           } else {
+             consecutiveExisting = 0; // Reset counter if we find a new order (gap)
              console.log(`[EgonScraper] Checking order ${orderNo}: Exists=${exists}`);
           }
 
