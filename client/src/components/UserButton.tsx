@@ -54,7 +54,7 @@ export function UserButton({ onDatasetLoad }: UserButtonProps) {
   const [showCallBacks, setShowCallBacks] = useState(false);
   const [showAppointments, setShowAppointments] = useState(false);
   const [showLeonFilter, setShowLeonFilter] = useState(false);
-  const [appVersion, setAppVersion] = useState('2.8.17');
+  const [appVersion, setAppVersion] = useState('2.9.0');
 
   // Load version from version.json
   useEffect(() => {
@@ -67,7 +67,7 @@ export function UserButton({ onDatasetLoad }: UserButtonProps) {
       })
       .catch(err => {
         console.error('Failed to fetch version:', err);
-        setAppVersion('2.8.10'); // Fallback
+        setAppVersion('2.9.0'); // Fallback
       });
   }, []);
 

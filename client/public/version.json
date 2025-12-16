@@ -1,7 +1,7 @@
 {
-  "version": "2.8.17",
-  "buildTime": "2025-12-07T16:20:54.954Z",
-  "buildNumber": "build-1765124454954",
+  "version": "2.9.0",
+  "buildTime": "2025-12-16T19:15:00.000Z",
+  "buildNumber": "build-1765912500000",
   "features": [
     "Fix: Multi-Image Scroll - Scrollen deaktiviert auch bei mehreren Bildern zuverlässig",
     "UX: Touch Drag - Verbessertes Drag & Drop auf Touch-Geräten (Offset + Vergrößerung)",
