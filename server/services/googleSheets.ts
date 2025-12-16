@@ -352,7 +352,15 @@ class DatasetCache {
             }
             return false; // No overlap
           }
-          // No house numbers to check, address matches
+
+          // FIX: If search has house number but dataset doesn't, this is NOT a match
+          // This prevents datasets without house numbers from matching all addresses in the street
+          if (searchHouseNumbers.length > 0 && datasetHouseNumbers.length === 0) {
+            console.warn(`[DatasetCache.getByAddress] ⚠️ Dataset ${ds.id} has no house number, skipping match for house number search`);
+            return false;
+          }
+
+          // No house numbers to check (search without house number), address matches
           return true;
         }
         
@@ -941,6 +949,13 @@ class AddressDatasetService implements AddressSheetsService {
   }
 
   async createAddressDataset(dataset: Omit<AddressDataset, 'id' | 'createdAt'>): Promise<AddressDataset> {
+    // DEFENSIVE VALIDATION: Ensure house number is provided
+    // This prevents the bug where datasets without house numbers match all addresses in the street
+    if (!dataset.houseNumber || !dataset.houseNumber.trim()) {
+      console.error(`[createAddressDataset] ❌ REJECTED: Attempted to create dataset without house number for ${dataset.normalizedAddress}`);
+      throw new Error('House number is required for dataset creation');
+    }
+
     const id = this.generateDatasetId();
     const createdAt = getBerlinTime(); // Use Berlin timezone
     const fullDataset: AddressDataset = {

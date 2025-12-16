@@ -723,15 +723,16 @@ export default function ScannerPage() {
       setOcrResult(null);
       setPhotoImageSrc(null);
       setEditableResidents([]);
-      
-      // Also clear dataset residents if dataset exists
-      if (currentDatasetId) {
-        try {
-          await datasetAPI.bulkUpdateResidents(currentDatasetId, []);
-        } catch (error) {
-          console.error('Error clearing dataset residents:', error);
-        }
-      }
+
+      // FIX: Do NOT clear dataset residents in backend when photos are removed!
+      // The dataset residents are already saved and should persist.
+      // Clearing them here was causing data loss when users navigated to new addresses.
+      // Old buggy code:
+      // if (currentDatasetId) {
+      //   await datasetAPI.bulkUpdateResidents(currentDatasetId, []);
+      // }
+
+      console.log('[handleRemovePhoto] All photos removed - local state cleared, backend dataset preserved');
 
       toast({
         title: 'Foto entfernt',
