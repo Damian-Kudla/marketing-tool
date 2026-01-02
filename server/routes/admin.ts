@@ -218,8 +218,9 @@ async function calculateBreaks(rawLogs: TrackingData[], contractTimestamps: numb
     return [];
   }
 
-  // Check if POI lookups are enabled
-  const poiEnabled = process.env.ENABLE_POI_LOOKUPS !== 'false';
+  // POI lookups DISABLED - caused race conditions and excessive API calls
+  // To re-enable, set ENABLE_POI_LOOKUPS=true in environment
+  const poiEnabled = process.env.ENABLE_POI_LOOKUPS === 'true';
   console.log('[calculateBreaks] 🔧 POI lookups enabled:', poiEnabled);
 
   // Filter to only NATIVE GPS logs (matching activeTime calculation)
